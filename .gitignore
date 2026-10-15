@@ -1,0 +1,11 @@
+# Rainmeter downloaded calendar cache
+DownloadFile/*.ics
+DownloadFile/calendar*.ics
+*.ics
+
+# OS & Editor files
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
