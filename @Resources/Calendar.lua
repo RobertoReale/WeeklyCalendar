@@ -768,9 +768,10 @@ local function readSettings()
   cfg.now = colStr(parseColor(V('NowColor', '234,67,53,255')))
   cfg.today = colStr(parseColor(V('TodayColor', '11,87,208,255')))
   cfg.todayText = colStr(parseColor(V('TodayTextColor', '255,255,255,255')))
+  cfg.dayNum = colStr(parseColor(V('DayNumColor', '31,31,31,255')))
   local cMuted = parseColor(V('MutedColor', '116,119,117,255'))
   cfg.muted = colStr(cMuted)
-  cfg.mutedDisabled = string.format('%d,%d,%d,%d', cMuted[1], cMuted[2], cMuted[3], math.floor((cMuted[4] or 255) * 0.25))
+  cfg.mutedDisabled = colStr(blend(cMuted, cfg.bg, 0.65))
   cfg.badgeBg = colStr(parseColor(V('BadgeBgColor', '239,241,241,255')))
   cfg.badgeText = colStr(parseColor(V('BadgeTextColor', '68,71,70,255')))
   cfg.border = colStr(parseColor(V('BorderColor', '218,220,224,255')))
@@ -999,7 +1000,7 @@ local function layout()
   local adH = maxAD > 0 and (maxAD * 22 + 8) or 0
   local gridTop = tb + hdr + adH
   local pad = 0
-  local gridBottom = H - 32
+  local gridBottom = H - 28
   local timeW = 64
   local dayW = (W - timeW - 14) / 7
   local hourH = (gridBottom - gridTop - pad) / hours
@@ -1103,10 +1104,11 @@ local function layout()
   -- Vertical hour scroll buttons in the time gutter
   local tipUp = 'Scroll up (earlier hours)'
   local tipDown = 'Scroll down (later hours)'
-  set('BtnUpHour', 'X', fmt(timeW / 2 - 12)); set('BtnUpHour', 'Y', fmt(gridTop - 27))
+  set('BtnUpHour', 'X', fmt(timeW / 2 - 12)); set('BtnUpHour', 'Y', fmt(gridTop - 25))
   set('BtnUpHour', 'W', 24); set('BtnUpHour', 'H', 18)
   set('BtnUpHour', 'Shape', 'Rectangle 0,0,24,18,4 | Fill Color 0,0,0,1 | StrokeWidth 0')
-  set('BtnUpHourTxt', 'X', fmt(timeW / 2)); set('BtnUpHourTxt', 'Y', fmt(gridTop - 18))
+  set('BtnUpHourTxt', 'X', fmt(timeW / 2)); set('BtnUpHourTxt', 'Y', fmt(gridTop - 16))
+  set('BtnUpHourTxt', 'Text', '[\x25B2]')
   if startH > 0 then
     set('BtnUpHourTxt', 'FontColor', cfg.muted)
     set('BtnUpHour', 'LeftMouseUpAction', '[!CommandMeasure MeasureScript "ScrollHours(-1)"]')
@@ -1122,10 +1124,11 @@ local function layout()
   end
   show('BtnUpHour'); show('BtnUpHourTxt')
 
-  set('BtnDownHour', 'X', fmt(timeW / 2 - 12)); set('BtnDownHour', 'Y', fmt(gridBottom + 9))
+  set('BtnDownHour', 'X', fmt(timeW / 2 - 12)); set('BtnDownHour', 'Y', fmt(gridBottom + 5))
   set('BtnDownHour', 'W', 24); set('BtnDownHour', 'H', 18)
   set('BtnDownHour', 'Shape', 'Rectangle 0,0,24,18,4 | Fill Color 0,0,0,1 | StrokeWidth 0')
-  set('BtnDownHourTxt', 'X', fmt(timeW / 2)); set('BtnDownHourTxt', 'Y', fmt(gridBottom + 18))
+  set('BtnDownHourTxt', 'X', fmt(timeW / 2)); set('BtnDownHourTxt', 'Y', fmt(gridBottom + 14))
+  set('BtnDownHourTxt', 'Text', '[\x25BC]')
   if startH < maxStartH then
     set('BtnDownHourTxt', 'FontColor', cfg.muted)
     set('BtnDownHour', 'LeftMouseUpAction', '[!CommandMeasure MeasureScript "ScrollHours(1)"]')

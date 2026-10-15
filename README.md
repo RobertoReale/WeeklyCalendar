@@ -75,7 +75,7 @@ AutoScrollHour=14
 ```ini
 ; Dimensions in pixels
 Width=1400
-Height=860
+Height=800
 
 ; Language: en (English) or it (Italian)
 Language=en
