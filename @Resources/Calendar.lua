@@ -55,7 +55,7 @@ local lastToday = nil
 local started = false
 local loadedAny = false
 local loadErr = nil
-local used = { ev = 0, ad = 0, hl = 0 }
+local used = { ev = EV_POOL, ad = AD_POOL, hl = HL_POOL }
 local skinPath, sep = '', '\\'
 
 ------------------------------------------------------------------------
@@ -849,8 +849,8 @@ local function wrapText(s, maxChars, maxLines)
     for i = 1, maxLines do t[i] = lines[i] end
     lines = t
     local last = lines[maxLines]
-    if ulen(last) >= maxChars then last = usub(last, 1, math.max(1, maxChars - 1)) end
-    lines[maxLines] = last .. '\226\128\166'   -- U+2026 ellipsis in UTF-8
+    if ulen(last) >= maxChars then last = usub(last, 1, math.max(1, maxChars - 3)) end
+    lines[maxLines] = last .. '...'
   end
   return lines
 end
@@ -1038,20 +1038,28 @@ local function layout()
   if cfg.toolbar then
     local cy = tb / 2
     local _, _, todayD = civilFromDays(todayDay)
-    set('CalLogo', 'Shape', 'Rectangle 20,' .. fmt(cy - 16) .. ',32,32,8 | Fill Color ' .. cfg.today .. ' | StrokeWidth 0')
+    set('CalLogo', 'X', 20); set('CalLogo', 'Y', fmt(cy - 16))
+    set('CalLogo', 'W', 32); set('CalLogo', 'H', 32)
+    set('CalLogo', 'Shape', 'Rectangle 0,0,32,32,8 | Fill Color ' .. cfg.today .. ' | StrokeWidth 0')
     set('CalLogoTxt', 'X', 36); set('CalLogoTxt', 'Y', fmt(cy)); set('CalLogoTxt', 'Text', todayD)
     set('CalAppTitle', 'X', 62); set('CalAppTitle', 'Y', fmt(cy)); set('CalAppTitle', 'Text', 'Calendar')
     set('CalAppTitle', 'FontColor', cfg.dayNum)
 
-    set('BtnToday', 'Shape', 'Rectangle 142,' .. fmt(cy - 16) .. ',72,32,16 | Fill Color 0,0,0,1 | StrokeWidth 1 | Stroke Color ' .. cfg.border)
+    set('BtnToday', 'X', 142); set('BtnToday', 'Y', fmt(cy - 16))
+    set('BtnToday', 'W', 72); set('BtnToday', 'H', 32)
+    set('BtnToday', 'Shape', 'Rectangle 0,0,72,32,16 | Fill Color 0,0,0,1 | StrokeWidth 1 | Stroke Color ' .. cfg.border)
     set('BtnTodayTxt', 'X', 178); set('BtnTodayTxt', 'Y', fmt(cy)); set('BtnTodayTxt', 'Text', lang.today)
     set('BtnTodayTxt', 'FontColor', cfg.dayNum)
 
-    set('BtnPrev', 'Shape', 'Ellipse 232,' .. fmt(cy) .. ',15 | Fill Color 0,0,0,1 | StrokeWidth 0')
+    set('BtnPrev', 'X', 217); set('BtnPrev', 'Y', fmt(cy - 15))
+    set('BtnPrev', 'W', 30); set('BtnPrev', 'H', 30)
+    set('BtnPrev', 'Shape', 'Ellipse 15,15,15 | Fill Color 0,0,0,1 | StrokeWidth 0')
     set('BtnPrevTxt', 'X', 232); set('BtnPrevTxt', 'Y', fmt(cy - 1)); set('BtnPrevTxt', 'Text', '<')
     set('BtnPrevTxt', 'FontColor', cfg.muted)
 
-    set('BtnNext', 'Shape', 'Ellipse 264,' .. fmt(cy) .. ',15 | Fill Color 0,0,0,1 | StrokeWidth 0')
+    set('BtnNext', 'X', 249); set('BtnNext', 'Y', fmt(cy - 15))
+    set('BtnNext', 'W', 30); set('BtnNext', 'H', 30)
+    set('BtnNext', 'Shape', 'Ellipse 15,15,15 | Fill Color 0,0,0,1 | StrokeWidth 0')
     set('BtnNextTxt', 'X', 264); set('BtnNextTxt', 'Y', fmt(cy - 1)); set('BtnNextTxt', 'Text', '>')
     set('BtnNextTxt', 'FontColor', cfg.muted)
 
@@ -1061,17 +1069,19 @@ local function layout()
     if y1 == y2 and m1 == m2 then
       title = lang.months[m1] .. ' ' .. y1
     elseif y1 == y2 then
-      title = usub(lang.months[m1], 1, 3) .. ' \226\128\147 ' .. usub(lang.months[m2], 1, 3) .. ' ' .. y1
+      title = usub(lang.months[m1], 1, 3) .. ' - ' .. usub(lang.months[m2], 1, 3) .. ' ' .. y1
     else
-      title = usub(lang.months[m1], 1, 3) .. ' ' .. y1 .. ' \226\128\147 ' .. usub(lang.months[m2], 1, 3) .. ' ' .. y2
+      title = usub(lang.months[m1], 1, 3) .. ' ' .. y1 .. ' - ' .. usub(lang.months[m2], 1, 3) .. ' ' .. y2
     end
-    set('TbTitle', 'X', 296); set('TbTitle', 'Y', fmt(cy)); set('TbTitle', 'Text', title .. ' \226\150\190')
+    set('TbTitle', 'X', 296); set('TbTitle', 'Y', fmt(cy)); set('TbTitle', 'Text', title)
     set('TbTitle', 'FontColor', cfg.dayNum)
     local titlePx = N('TitleFontSize', 16) * 4 / 3
-    local wkX = 296 + (ulen(title) + 2) * titlePx * 0.52 + 14
+    local wkX = 296 + ulen(title) * titlePx * 0.52 + 18
     local wk = lang.week .. ' ' .. isoWeek(ws + 3)
     local wkW = math.max(68, ulen(wk) * 7.5 + 20)
-    set('TbWeekBg', 'Shape', 'Rectangle ' .. fmt(wkX) .. ',' .. fmt(cy - 11) .. ',' .. fmt(wkW) .. ',22,11 | Fill Color ' .. cfg.badgeBg .. ' | StrokeWidth 0')
+    set('TbWeekBg', 'X', fmt(wkX)); set('TbWeekBg', 'Y', fmt(cy - 11))
+    set('TbWeekBg', 'W', fmt(wkW)); set('TbWeekBg', 'H', 22)
+    set('TbWeekBg', 'Shape', 'Rectangle 0,0,' .. fmt(wkW) .. ',22,11 | Fill Color ' .. cfg.badgeBg .. ' | StrokeWidth 0')
     set('TbWeek', 'X', fmt(wkX + wkW / 2)); set('TbWeek', 'Y', fmt(cy)); set('TbWeek', 'Text', wk)
     set('TbWeek', 'FontColor', cfg.badgeText)
 
@@ -1086,20 +1096,24 @@ local function layout()
     for _, m in ipairs(tbItems) do hide(m) end
   end
 
-  set('TzLabel', 'X', timeW - 12); set('TzLabel', 'Y', fmt(gridTop - 12))
+  set('TzLabel', 'X', timeW - 12); set('TzLabel', 'Y', fmt(tb + 20))
   set('TzLabel', 'Text', tzLabel(now))
 
   -- Vertical hour scroll buttons in the time gutter
   if startH > 0 then
-    set('BtnUpHour', 'Shape', 'Rectangle ' .. fmt(timeW / 2 - 12) .. ',' .. fmt(gridTop - 22) .. ',24,18,4 | Fill Color 0,0,0,1 | StrokeWidth 0')
-    set('BtnUpHourTxt', 'X', fmt(timeW / 2)); set('BtnUpHourTxt', 'Y', fmt(gridTop - 13))
+    set('BtnUpHour', 'X', fmt(timeW / 2 - 12)); set('BtnUpHour', 'Y', fmt(gridTop - 27))
+    set('BtnUpHour', 'W', 24); set('BtnUpHour', 'H', 18)
+    set('BtnUpHour', 'Shape', 'Rectangle 0,0,24,18,4 | Fill Color 0,0,0,1 | StrokeWidth 0')
+    set('BtnUpHourTxt', 'X', fmt(timeW / 2)); set('BtnUpHourTxt', 'Y', fmt(gridTop - 18))
     show('BtnUpHour'); show('BtnUpHourTxt')
   else
     hide('BtnUpHour'); hide('BtnUpHourTxt')
   end
 
   if startH < maxStartH then
-    set('BtnDownHour', 'Shape', 'Rectangle ' .. fmt(timeW / 2 - 12) .. ',' .. fmt(gridBottom - 20) .. ',24,18,4 | Fill Color 0,0,0,1 | StrokeWidth 0')
+    set('BtnDownHour', 'X', fmt(timeW / 2 - 12)); set('BtnDownHour', 'Y', fmt(gridBottom - 20))
+    set('BtnDownHour', 'W', 24); set('BtnDownHour', 'H', 18)
+    set('BtnDownHour', 'Shape', 'Rectangle 0,0,24,18,4 | Fill Color 0,0,0,1 | StrokeWidth 0')
     set('BtnDownHourTxt', 'X', fmt(timeW / 2)); set('BtnDownHourTxt', 'Y', fmt(gridBottom - 11))
     show('BtnDownHour'); show('BtnDownHourTxt')
   else
@@ -1154,18 +1168,27 @@ local function layout()
       local w = dayW - 12
       local label = it.title
       if r == 3 and n > 3 then label = '+' .. (n - 2) .. ' ' .. lang.more end
-      set('ADBg' .. adUsed, 'Shape', 'Rectangle ' .. fmt(x) .. ',' .. fmt(y) .. ',' .. fmt(w) .. ',20,' .. cfg.radius
+      set('ADBg' .. adUsed, 'X', fmt(x)); set('ADBg' .. adUsed, 'Y', fmt(y))
+      set('ADBg' .. adUsed, 'W', fmt(w)); set('ADBg' .. adUsed, 'H', 20)
+      set('ADBg' .. adUsed, 'Shape', 'Rectangle 0,0,' .. fmt(w) .. ',20,' .. cfg.radius
         .. ' | Fill Color ' .. colStr(cfg.colors[it.feed]) .. ' | StrokeWidth 0')
-      set('ADBg' .. adUsed, 'ToolTipText', safe(it.title))
+      local adTip = safe(it.title)
+      if it.loc ~= '' then adTip = adTip .. '#CRLF#' .. safe(it.loc) end
+      set('ADBg' .. adUsed, 'ToolTipText', adTip)
       show('ADBg' .. adUsed)
       local lines = wrapText(safe(label), (w - 16) / (px * 0.5), 1)
       set('ADTx' .. adUsed, 'X', fmt(x + 8)); set('ADTx' .. adUsed, 'Y', fmt(y + 10))
       set('ADTx' .. adUsed, 'W', fmt(w - 16)); set('ADTx' .. adUsed, 'H', 18)
       set('ADTx' .. adUsed, 'Text', lines[1] or '')
+      set('ADTx' .. adUsed, 'ToolTipText', adTip)
       show('ADTx' .. adUsed)
     end
   end
-  for idx = adUsed + 1, used.ad do hide('ADBg' .. idx); hide('ADTx' .. idx) end
+  for idx = adUsed + 1, used.ad do
+    set('ADBg' .. idx, 'ToolTipText', '')
+    set('ADTx' .. idx, 'ToolTipText', '')
+    hide('ADBg' .. idx); hide('ADTx' .. idx)
+  end
   used.ad = adUsed
 
   -- Timed events
@@ -1198,9 +1221,11 @@ local function layout()
           local fill = past and colStr(cfg.pastColors[it.feed]) or colStr(cfg.colors[it.feed])
           local tcol = past and cfg.pastText or cfg.evText
 
-          set('EvBg' .. idx, 'Shape', 'Rectangle ' .. fmt(x) .. ',' .. fmt(y) .. ',' .. fmt(w) .. ',' .. fmt(h) .. ','
+          set('EvBg' .. idx, 'X', fmt(x)); set('EvBg' .. idx, 'Y', fmt(y))
+          set('EvBg' .. idx, 'W', fmt(w)); set('EvBg' .. idx, 'H', fmt(h))
+          set('EvBg' .. idx, 'Shape', 'Rectangle 0,0,' .. fmt(w) .. ',' .. fmt(h) .. ','
             .. cfg.radius .. ' | Fill Color ' .. fill .. ' | StrokeWidth 0')
-          local tip = safe(it.title) .. '#CRLF#' .. hhmm(it.s) .. ' \226\128\147 ' .. hhmm(it.e)
+          local tip = safe(it.title) .. '#CRLF#' .. hhmm(it.s) .. ' - ' .. hhmm(it.e)
           if it.loc ~= '' then tip = tip .. '#CRLF#' .. safe(it.loc) end
           set('EvBg' .. idx, 'ToolTipText', tip)
           show('EvBg' .. idx)
@@ -1211,7 +1236,7 @@ local function layout()
           if avl < 1 then avl = 1 end
           local title = safe(it.title)
           local cpl = tw / (px * 0.54)
-          local range = hhmm(it.s) .. ' \226\128\147 ' .. hhmm(it.e)
+          local range = hhmm(it.s) .. ' - ' .. hhmm(it.e)
           local tl
           if avl == 1 then
             tl = wrapText(title .. ', ' .. hhmm(it.s), cpl, 1)
@@ -1230,21 +1255,29 @@ local function layout()
           set('EvT' .. idx, 'W', fmt(tw)); set('EvT' .. idx, 'H', fmt(#tl * lh + 1))
           set('EvT' .. idx, 'FontColor', tcol)
           set('EvT' .. idx, 'Text', table.concat(tl, '#CRLF#'))
+          set('EvT' .. idx, 'ToolTipText', tip)
           show('EvT' .. idx)
           if #detail > 0 then
             set('EvD' .. idx, 'X', fmt(x + padX)); set('EvD' .. idx, 'Y', fmt(y + padY + #tl * lh))
             set('EvD' .. idx, 'W', fmt(tw)); set('EvD' .. idx, 'H', fmt(#detail * lh + 1))
             set('EvD' .. idx, 'FontColor', tcol)
             set('EvD' .. idx, 'Text', table.concat(detail, '#CRLF#'))
+            set('EvD' .. idx, 'ToolTipText', tip)
             show('EvD' .. idx)
           else
+            set('EvD' .. idx, 'ToolTipText', '')
             hide('EvD' .. idx)
           end
         end
       end
     end
   end
-  for idx = evUsed + 1, used.ev do hide('EvBg' .. idx); hide('EvT' .. idx); hide('EvD' .. idx) end
+  for idx = evUsed + 1, used.ev do
+    set('EvBg' .. idx, 'ToolTipText', '')
+    set('EvT' .. idx, 'ToolTipText', '')
+    set('EvD' .. idx, 'ToolTipText', '')
+    hide('EvBg' .. idx); hide('EvT' .. idx); hide('EvD' .. idx)
+  end
   used.ev = evUsed
 
   -- Status messages
