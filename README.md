@@ -8,7 +8,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 
 ---
 
-## ✨ Features
+## Features
 
 - **Google Calendar Material 3 Design**: Clean typography, Google Calendar pastel color scheme, subtle borders, today indicator circle, and red live "now" line.
 - **Vertical Hour Scrolling**: Scroll the mouse wheel over the calendar grid or use the time-gutter buttons (▲ / ▼) to navigate through hours at any time.
@@ -25,7 +25,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 
 ---
 
-## 🚀 Installation
+## Installation
 
 1. Make sure you have **[Rainmeter](https://www.rainmeter.net/)** installed (version 4.5 or newer).
 2. Download or clone this repository into your Rainmeter skins directory:
@@ -38,13 +38,13 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 
 ---
 
-## ⚙️ Configuration (`@Resources\Settings.inc`)
+## Configuration (`@Resources\Settings.inc`)
 
 Right-click the skin on your desktop and select **Calendar settings** to open the configuration file.
 
 ### 1. Linking your Google Calendar
 1. Open [Google Calendar](https://calendar.google.com/) in your browser.
-2. Click the gear icon ⚙️ > **Settings**.
+2. Click the settings gear icon > **Settings**.
 3. Under *Settings for my calendars*, click your calendar name.
 4. Scroll down to the **Integrate calendar** section.
 5. Copy the **Secret address in iCal format** (`https://calendar.google.com/calendar/ical/.../basic.ics`).
@@ -54,7 +54,7 @@ Right-click the skin on your desktop and select **Calendar settings** to open th
    ```
 7. Save the file, right-click the skin, and choose **Refresh now**.
 
-> ⚠️ **Security Warning**: Keep your secret iCal address private! Anyone with that URL can view your schedule. Never commit your private URL to a public repository.
+> **Security Warning**: Keep your secret iCal address private! Anyone with that URL can view your schedule. Never commit your private URL to a public repository.
 
 ### 2. Visible Hours & Auto-Scroll
 ```ini
@@ -93,7 +93,7 @@ EventColor3=142,36,170,255
 
 ---
 
-## 🖱️ Controls & Shortcuts
+## Controls & Shortcuts
 
 | Action | Control |
 | :--- | :--- |
@@ -106,7 +106,7 @@ EventColor3=142,36,170,255
 
 ---
 
-## 🛠️ Project Structure
+## Project Structure
 
 ```plaintext
 WeeklyCalendar/
@@ -120,6 +120,6 @@ WeeklyCalendar/
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the [CC0 1.0 Universal (Public Domain)](LICENSE) license.
