@@ -2,7 +2,7 @@
 
 A sleek, modern, Google Calendar (Material 3) weekly planner skin for [Rainmeter](https://www.rainmeter.net/).
 
-Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), it expands recurring events (`RRULE`, `EXDATE`, `RECURRENCE-ID`), converts timezones (`VTIMEZONE`), and provides smooth interactive navigation on your desktop.
+Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), it expands recurring events (`RRULE`, `RDATE`, `EXDATE`, `RECURRENCE-ID`), converts timezones (`VTIMEZONE`, plus built-in rules for common zones), and provides smooth interactive navigation on your desktop.
 
 ![Rainmeter Weekly Calendar Preview](preview.png)
 
@@ -14,14 +14,18 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Vertical Hour Scrolling**: Scroll the mouse wheel over the calendar grid or use the time-gutter buttons (▲ / ▼) to navigate through hours at any time.
 - **Auto-Scroll for Evening Plans**: In the afternoon and evening (after 2:00 PM / 14:00 by default), the visible time window automatically shifts down so upcoming commitments after 19:00 (7 PM) through midnight are always in plain sight without manual scrolling.
 - **Multi-Calendar Support**: Sync up to 3 distinct iCal feeds simultaneously, each with custom colors and titles.
-- **Smart Recurrence & Overrides**: Full client-side parsing of RFC 5545 recurrence rules (`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`), exceptions (`EXDATE`), and modified occurrences (`RECURRENCE-ID`).
-- **All-Day Events & Timed Events**: Dedicated all-day events row at the top and column-packed overlapping timed events throughout the week.
-- **Past Event Fading**: Completed events fade gracefully just like in Google Calendar.
+- **Smart Recurrence & Overrides**: Client-side parsing of RFC 5545 recurrence rules (`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`, including `BYSETPOS` such as "last weekday of the month"), extra dates (`RDATE`), exceptions (`EXDATE`), and modified occurrences (`RECURRENCE-ID`).
+- **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
+- **Declined Invitations**: Invitations you declined are drawn outlined, like Google Calendar, or can be hidden (`ShowDeclined=0`).
+- **All-Day Events & Timed Events**: Dedicated all-day events row at the top (up to 3 per day; hover "+N more" to see the rest) and column-packed overlapping timed events throughout the week.
+- **Past Event Fading**: Events fade as soon as they end, just like in Google Calendar.
 - **Two-Zone Mouse Navigation**:
   - Scroll wheel over the **grid / events / time column**: scrolls hours up & down.
   - Scroll wheel over the **toolbar / day headers**: flips through weeks.
 - **Detailed Tooltips**: Hover over any event to see its full title, start/end time, and location.
-- **Dark & Light Themes**: Pre-configured light and dark themes matching Google Calendar.
+- **Dark & Light Themes**: `Theme=light` or `Theme=dark`, matching Google Calendar; any single color can still be overridden.
+- **English & Italian**: Labels, tooltips and the right-click menu follow `Language`.
+- **Unicode Titles**: Accented and non-Latin characters in event titles display correctly.
 
 ---
 
@@ -78,7 +82,7 @@ AutoScrollHour=14
 Width=1400
 Height=800
 
-; Language: en (English) or it (Italian)
+; Language: en (English) or it (Italian) - also used for tooltips and the right-click menu
 Language=en
 
 ; First day of the week: 1 = Monday, 0 = Sunday, 6 = Saturday
@@ -89,8 +93,19 @@ EventColor1=3,155,229,255
 EventColor2=11,128,67,255
 EventColor3=142,36,170,255
 
-; Dark theme: uncomment dark theme color values in Settings.inc
+; Theme: light or dark. Individual colors (BgColor, TodayColor, ...) can be
+; overridden by uncommenting them in Settings.inc
+Theme=light
+
+; Declined invitations: 1 = show outlined, 0 = hide
+ShowDeclined=1
+
+; Window position: -1 = Bottom (Explorer dialogs always on top), -2 = On Desktop
+ZPos=-1
 ```
+
+Declined invitations are recognized from the address in your Google iCal URL. For other
+providers, add your address to `MyEmail=` in `Private.inc`.
 
 ---
 
@@ -100,6 +115,7 @@ EventColor3=142,36,170,255
 | :--- | :--- |
 | **Scroll Hours** | Mouse wheel over calendar body / events / time column |
 | **Scroll Up / Down** | Click the ▲ / ▼ buttons in the time column gutter |
+| **Show Hidden Events** | Click a `▲ n` / `▼ n` badge in a day column |
 | **Navigate Weeks** | Click `<` / `>` buttons in the toolbar, or mouse wheel over the toolbar / day headers |
 | **Jump to Today** | Click the **Today** button in the toolbar (also resets hour scroll) |
 | **Sync Calendar Now** | Click the sync time in the top-right corner, or right-click > *Refresh now* |
@@ -116,8 +132,32 @@ WeeklyCalendar/
 │   ├── Calendar.lua          # Core calendar engine (iCal parser, recurrence, layout)
 │   ├── Settings.inc          # User preferences
 │   └── Private.inc           # Private calendar URLs (git-ignored, created on first load)
+├── tools/
+│   └── textconv-utf16.py     # Readable git diffs for the UTF-16 Calendar.lua
+├── tests/
+│   ├── run_tests.py          # Test suite (runs Calendar.lua against a mock Rainmeter)
+│   └── fixtures/             # Synthetic .ics feeds used by the tests
 ├── DownloadFile/             # Temporary folder where WebParser saves .ics files
 └── README.md                 # Documentation
+```
+
+---
+
+## Development
+
+`@Resources\Calendar.lua` must stay saved as **UTF-16 LE with BOM**: Rainmeter 4.5 only treats
+Lua strings as UTF-8 (accented titles, ▲ / ▼) in that encoding. Git stores it as-is, so GitHub
+ZIP downloads work too. To get readable diffs, run once in your clone:
+
+```plaintext
+git config diff.utf16.textconv "python tools/textconv-utf16.py"
+```
+
+Run the tests (requires Python 3 and [lupa](https://pypi.org/project/lupa/)):
+
+```plaintext
+pip install lupa
+python tests/run_tests.py
 ```
 
 ---

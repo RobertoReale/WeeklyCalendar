@@ -82,30 +82,25 @@ EventColor3=142,36,170,255
 
 ;  Past events fade amount (0 = no fade, 1 = invisible; 0.35 = subtle like Google Calendar)
 PastFade=0.35
-EventTextColor=255,255,255,255
 
-;  --- Light Theme (Google Calendar Material 3 - default) ---
-BgColor=255,255,255,255
-GridColor=224,227,231,255
-DayNumColor=31,31,31,255
-MutedColor=116,119,117,255
-TodayColor=11,87,208,255
-TodayTextColor=255,255,255,255
-NowColor=234,67,53,255
-PastTextColor=255,255,255,230
-BadgeBgColor=239,241,241,255
-BadgeTextColor=68,71,70,255
-BorderColor=218,220,224,255
+;  Invitations you declined: 1 = show them outlined (like Google Calendar), 0 = hide them.
+;  Your address is detected from the Google iCal URL; for other providers set MyEmail
+;  in Private.inc (right-click the skin > "Calendar addresses").
+ShowDeclined=1
 
-;  --- Dark Theme (Google Calendar Dark Mode: uncomment to enable) ---
-; BgColor=30,31,32,255
-; GridColor=68,71,70,255
-; DayNumColor=227,227,227,255
-; MutedColor=196,199,197,255
-; TodayColor=168,199,250,255
-; TodayTextColor=4,30,73,255
-; NowColor=242,139,130,255
-; PastTextColor=227,227,227,200
-; BadgeBgColor=45,47,49,255
-; BadgeTextColor=196,199,197,255
-; BorderColor=68,71,70,255
+;  Theme: light or dark (Google Calendar Material 3 colors).
+Theme=light
+
+;  Optional custom colors: uncomment a line to override the theme color.
+; BgColor=255,255,255,255
+; GridColor=224,227,231,255
+; DayNumColor=31,31,31,255
+; MutedColor=116,119,117,255
+; TodayColor=11,87,208,255
+; TodayTextColor=255,255,255,255
+; NowColor=234,67,53,255
+; EventTextColor=255,255,255,255
+; PastTextColor=255,255,255,230
+; BadgeBgColor=239,241,241,255
+; BadgeTextColor=68,71,70,255
+; BorderColor=218,220,224,255

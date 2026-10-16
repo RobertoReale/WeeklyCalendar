@@ -12,3 +12,7 @@ Desktop.ini
 
 # Private calendar addresses
 @Resources/Private.inc
+
+# Test fixtures are synthetic calendars, not personal data
+!tests/fixtures/*.ics
+tests/__pycache__/
