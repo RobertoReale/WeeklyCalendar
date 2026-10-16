@@ -2,3 +2,5 @@
 # UTF-8 in that encoding. It is stored as-is so GitHub ZIP downloads work too.
 # Readable diffs: git config diff.utf16.textconv "python tools/textconv-utf16.py"
 @Resources/Calendar.lua -text diff=utf16
+# cmd.exe needs CRLF line endings
+*.cmd text eol=crlf

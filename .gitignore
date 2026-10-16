@@ -16,3 +16,6 @@ Desktop.ini
 # Test fixtures are synthetic calendars, not personal data
 !tests/fixtures/*.ics
 tests/__pycache__/
+
+# z-order helper, built on first load from @Resources/ZOrder/ZOrderHelper.cs
+@Resources/ZOrder/*.exe

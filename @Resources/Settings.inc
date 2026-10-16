@@ -14,7 +14,12 @@
 ;  Google Calendar -> Settings (gear icon) -> (your calendar name)
 ;  -> "Integrate calendar" -> "Secret address in iCal format".
 ;  KEEP IT PRIVATE: anyone with this link can view your events.
-;  You can add up to 3 calendars (each rendered with its own color).
+;  You can add up to 3 calendars (each rendered with its own color), for example:
+;   - public holidays: Google Calendar -> Settings -> "Holidays in <country>" ->
+;     "Public address in iCal format" (Italy:
+;     https://calendar.google.com/calendar/ical/it.italian%23holiday%40group.v.calendar.google.com/public/basic.ics)
+;   - Google Tasks: they are not part of any iCal address; publish them with
+;     tools\GoogleTasksFeed.gs (see README, "Showing Google Tasks").
 ;  The empty values below are only fallbacks: do not paste your addresses here.
 IcalUrl1=
 IcalUrl2=
@@ -59,14 +64,19 @@ ShowToolbar=1
 
 ;  ZPos: window position of the skin (applied on every refresh).
 ;   -2 = On Desktop (recommended): always visible on the desktop. While Windows is in
-;        "Show desktop" mode Rainmeter keeps it above other windows, so a dialog such as
-;        "Empty Recycle Bin" can open behind it: the dialog still has the keyboard focus,
-;        so Enter confirms and Esc cancels.
+;        "Show desktop" mode Rainmeter keeps it above other windows; KeepDialogsOnTop
+;        (below) moves it under any window or dialog you open.
 ;   -1 = Bottom: never covers dialogs, but in "Show desktop" mode (Win+D, and on recent
 ;        Windows 11 builds often just after unlocking or clicking the desktop) the skin
 ;        falls behind the desktop and disappears until "Refresh all".
 ;    0 = Normal, 1 = Topmost, 2 = Always on top.
 ZPos=-2
+
+;  KeepDialogsOnTop=1: with ZPos=-2, windows and dialogs you open (e.g. "Empty Recycle Bin")
+;  always appear above the calendar, even in "Show desktop" mode. It starts a tiny helper
+;  (@Resources\ZOrder, built on first load with the C# compiler included in Windows) that
+;  closes by itself with Rainmeter. Set to 0 to turn it off.
+KeepDialogsOnTop=1
 
 ; ---------------------------------------------------------------------
 ;  4) APPEARANCE & STYLING

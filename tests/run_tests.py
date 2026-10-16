@@ -212,11 +212,15 @@ def test_utf8_text_and_unescape():
 # Layout tests (full skin cycle against the mock)
 # ---------------------------------------------------------------------------
 class Skin:
-    def __init__(self, ics='layout.ics', dir_prefix='wc_test_', **overrides):
+    def __init__(self, ics='layout.ics', dir_prefix='wc_test_', feeds=None, **overrides):
         self.dir = tempfile.mkdtemp(prefix=dir_prefix)
         os.makedirs(os.path.join(self.dir, 'DownloadFile'))
         os.makedirs(os.path.join(self.dir, '@Resources'))
         shutil.copy(os.path.join(FIXTURES, ics), os.path.join(self.dir, 'DownloadFile', 'calendar1.ics'))
+        # feeds: {2: 'holidays.ics', 3: 'tasks.ics'} - extra calendars, with a URL each
+        for i, name in (feeds or {}).items():
+            shutil.copy(os.path.join(FIXTURES, name), os.path.join(self.dir, 'DownloadFile', 'calendar%d.ics' % i))
+            overrides.setdefault('IcalUrl%d' % i, 'https://example.com/feed%d.ics' % i)
         variables = read_vars(SETTINGS_FILE)
         variables.update({
             'IcalUrl1': 'https://calendar.google.com/calendar/ical/me%40example.com/private-x/basic.ics',
@@ -247,6 +251,10 @@ class Skin:
         assert not self.mock.unknown, 'bangs to missing sections: %s' % self.mock.unknown
         errors = [l for l in self.mock.logs if l[-1] in ('Error',)]
         assert not errors, errors
+
+    def all_day(self):
+        """Shown all-day chips as {text: meter index}."""
+        return {self.mock.opt('ADTx%d' % i, 'Text'): i for i in range(1, 22) if self.mock.shown('ADTx%d' % i)}
 
     def event_titles(self):
         out = []
@@ -411,6 +419,116 @@ def test_many_weeks_without_errors(sk):
         sk.g.ShiftWeek(n)
     for d in [1] * 20 + [-1] * 20:
         sk.g.ScrollHours(d)
+
+
+def test_tasks_and_holidays():
+    sk = Skin(feeds={2: 'holidays.ics', 3: 'tasks.ics'}, Language='it')
+    try:
+        sk.start(2027, 3, 3, 12)  # Wednesday
+        m, ad = sk.mock, sk.all_day()
+        purple = '142,36,170,255'
+        # Open task due today: circle, full color, after the holiday of the same day
+        i = [v for k, v in ad.items() if k.startswith('○ Simulazione')][0]  # truncated to fit
+        assert i > ad['Festa di prova'], ad
+        assert 'Fill Color ' + purple in m.opt('ADBg%d' % i, 'Shape')
+        assert m.opt('ADTx%d' % i, 'InlineSetting') == ''
+        assert 'Attività' in m.opt('ADBg%d' % i, 'ToolTipText')
+        # Completed task: check mark, title struck through, faded, escaped comma restored
+        i = ad['✓ Esercizi, parte 2']
+        assert m.opt('ADTx%d' % i, 'InlineSetting') == 'Strikethrough'
+        assert m.opt('ADTx%d' % i, 'InlinePattern') == r'^\S+ (.*)$'
+        assert 'Fill Color ' + purple not in m.opt('ADBg%d' % i, 'Shape')
+        assert 'Attività completata' in m.opt('ADBg%d' % i, 'ToolTipText')
+        # Open task on a past day: faded, not struck through
+        i = ad['○ Ripasso']
+        assert 'Fill Color ' + purple not in m.opt('ADBg%d' % i, 'Shape')
+        assert m.opt('ADTx%d' % i, 'InlineSetting') == ''
+        # Holiday: its own color
+        assert 'Fill Color 11,128,67,255' in m.opt('ADBg%d' % ad['Festa di prova'], 'Shape')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+@with_skin
+def test_past_all_day_events_fade(sk):
+    sk.start(2027, 3, 5, 12)  # Friday: Thursday's all-day events are over
+    m = sk.mock
+    i = sk.all_day()['All day 1']
+    assert 'Fill Color 3,155,229,255' not in m.opt('ADBg%d' % i, 'Shape'), m.opt('ADBg%d' % i, 'Shape')
+    sk.at(2027, 3, 4, 12)     # the same week seen on Thursday: not faded yet
+    sk.g.GoToday()
+    i = sk.all_day()['All day 1']
+    assert 'Fill Color 3,155,229,255' in m.opt('ADBg%d' % i, 'Shape')
+
+
+def test_unreadable_feed_is_reported():
+    sk = Skin(feeds={3: 'not_ical.html'})
+    try:
+        sk.start(2027, 3, 3, 12)
+        sk.g.Reload(3)
+        m = sk.mock
+        assert 'feed error' in m.opt('TbSync', 'Text'), m.opt('TbSync', 'Text')
+        assert 'calendar 3' in m.opt('TbSync', 'ToolTipText')
+        assert sk.event_titles(), 'the working feed must still be shown'
+    finally:
+        sk.close()
+
+
+def test_helper_started_only_when_enabled():
+    for value, expected in (('1', True), ('0', False)):
+        sk = Skin(KeepDialogsOnTop=value)
+        try:
+            sk.start(2027, 3, 3, 12)
+            calls = []
+            sk.mock.Bang = lambda *a: calls.append(sk.mock._args(a))
+            sk.g.StartHelper()
+            assert (['!CommandMeasure', 'MeasureZOrderHelper', 'Run'] in calls) == expected, (value, calls)
+        finally:
+            sk.close()
+
+
+def test_google_tasks_script_output():
+    """Runs tools/GoogleTasksFeed.gs under Node with a fake Tasks API and parses the result."""
+    node = shutil.which('node')
+    if not node:
+        print('      (skipped: node not installed)')
+        return
+    import json
+    import subprocess
+    script = open(os.path.join(ROOT, 'tools', 'GoogleTasksFeed.gs'), encoding='utf-8').read()
+    harness = script + r"""
+var calls = [];
+var Utilities = { formatDate: function () { return '20270301T080000Z'; } };
+var Tasks = {
+  Tasklists: { list: function (a) { calls.push(['lists', a]); return { items: [{ id: 'L1', title: 'Le mie attività' }] }; } },
+  Tasks: { list: function (id, a) {
+    calls.push(['tasks', a]);
+    if (!a.pageToken) return { nextPageToken: 'p2', items: [
+      { id: 'a', title: 'Esame; parte 1, scritto', status: 'needsAction', due: '2027-03-03T00:00:00.000Z' },
+      { id: 'b', title: 'Senza data', status: 'needsAction' } ] };
+    return { items: [
+      { id: 'c', title: 'Fatto', status: 'completed', due: '2027-03-02T00:00:00.000Z', notes: 'riga 1\nriga 2' },
+      { id: 'd', title: 'Cancellato', status: 'needsAction', due: '2027-03-02T00:00:00.000Z', deleted: true } ] };
+  } }
+};
+process.stdout.write(JSON.stringify({ ics: buildFeed(), calls: calls }));
+"""
+    res = subprocess.run([node, '-e', harness], capture_output=True, encoding='utf-8')
+    assert res.returncode == 0, res.stderr
+    out = json.loads(res.stdout)
+    assert 'pageToken' not in out['calls'][1][1] and out['calls'][2][1]['pageToken'] == 'p2'
+    assert out['calls'][1][1]['showHidden'] is True and out['calls'][1][1]['showCompleted'] is True
+    lua = new_runtime(MockSkin({}, ini_sections()))
+    wc = lua.globals()._WC
+    wc.cfg.lang = wc.LANGS.en
+    wc.cfg.showDeclined = True
+    wc.parseICS(out['ics'], 3)
+    wc.buildOverrides()
+    first = wc.daysFromCivil(2027, 3, 1)
+    inst = wc.buildInstances(first, first + 7)
+    got = sorted((inst[i].title, inst[i].task, inst[i].sDay - first) for i in range(1, len(inst) + 1))
+    assert got == [('Esame; parte 1, scritto', 'open', 2), ('Fatto', 'done', 1)], got
 
 
 def test_latin1_path_conversion():

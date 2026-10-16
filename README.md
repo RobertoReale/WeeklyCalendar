@@ -18,6 +18,8 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
 - **Declined Invitations**: Invitations you declined are drawn outlined, like Google Calendar, or can be hidden (`ShowDeclined=0`).
 - **All-Day Events & Timed Events**: Dedicated all-day events row at the top (up to 3 per day; hover "+N more" to see the rest) and column-packed overlapping timed events throughout the week.
+- **Google Tasks & Holidays**: Tasks with a due date appear in the all-day row like in Google Calendar (○ open, ✓ completed and struck through), via a small Google Apps Script; public holidays come from Google's holiday calendars.
+- **Dialogs Always on Top**: Windows and dialogs you open (e.g. "Empty Recycle Bin") always appear above the calendar, even in Windows' "Show desktop" mode.
 - **Past Event Fading**: Events fade as soon as they end, just like in Google Calendar.
 - **Two-Zone Mouse Navigation**:
   - Scroll wheel over the **grid / events / time column**: scrolls hours up & down.
@@ -61,6 +63,36 @@ Your private calendar addresses live in a separate file, `@Resources\Private.inc
 
 > **Security Warning**: Keep your secret iCal address private! Anyone with that URL can view your schedule. `Private.inc` is listed in `.gitignore` so the address is never committed; do not paste it into `Settings.inc`.
 
+### Public holidays
+Google's holiday calendars have a public iCal address. For Italy, add to `Private.inc`:
+```ini
+IcalUrl2=https://calendar.google.com/calendar/ical/it.italian%23holiday%40group.v.calendar.google.com/public/basic.ics
+```
+For another country: Google Calendar > Settings > the "Holidays in ..." calendar > **Public address in iCal format**.
+
+### Showing Google Tasks
+Google never includes tasks in iCal addresses, so a tiny Google Apps Script (free, runs on your
+own Google account) publishes them as a private iCal address. One-time setup, about 3 minutes:
+
+1. Open [script.google.com](https://script.google.com/) and click **New project**.
+2. Delete the sample code and paste the whole content of `tools\GoogleTasksFeed.gs`. Save (Ctrl+S).
+3. In the left sidebar, click the **+** icon next to **Services**, pick **Google Tasks API**, click **Add**.
+   If that dialog does not open: **Project Settings** (gear icon) > tick *Show "appsscript.json"
+   manifest file in editor*, open `appsscript.json` and add inside the outer braces:
+   `"dependencies": { "enabledAdvancedServices": [ { "userSymbol": "Tasks", "version": "v1", "serviceId": "tasks" } ] },`
+4. In the toolbar, select the function `test` and click **Run**. Google asks for permission: choose
+   your account, then *Advanced* > *Go to (project name)* > **Allow**. The log shows your tasks.
+5. Click **Deploy** > **New deployment** > gear icon > **Web app**, then set
+   *Execute as*: **Me** and *Who has access*: **Anyone**. Click **Deploy** and copy the **Web app URL**
+   (`https://script.google.com/macros/s/.../exec`).
+6. Paste it in `Private.inc` after `IcalUrl3=` (or any free slot), save and refresh the skin.
+
+Tasks with a due date appear in the all-day row of that day; the Tasks API keeps only the date, not
+the time. Their color is the `EventColor` of the slot you used. Like the secret iCal address, keep
+the web app URL private: anyone who has it can read your task titles. If you edit the script later,
+use **Deploy** > **Manage deployments** > edit > *Version: New version* so the URL stays the same.
+If the address is wrong, the toolbar shows "feed error" (hover it for details).
+
 ### 2. Visible Hours & Auto-Scroll
 ```ini
 ; Base visible time range (whole hours, 0-24)
@@ -102,7 +134,17 @@ ShowDeclined=1
 
 ; Window position: -2 = On Desktop (always visible), -1 = Bottom (hidden in "Show desktop" mode)
 ZPos=-2
+
+; 1 = windows and dialogs you open always appear above the calendar (see below)
+KeepDialogsOnTop=1
 ```
+
+In "Show desktop" mode (which recent Windows 11 builds also enter just by clicking the desktop)
+Rainmeter keeps *On Desktop* skins above every window, so a dialog such as "Empty Recycle Bin"
+could open behind the calendar. With `KeepDialogsOnTop=1` the skin starts a tiny helper
+(`@Resources\ZOrder`, compiled on first load with the C# compiler included in Windows) that moves
+the calendar just below whatever window you activate and puts it back when you return to the
+desktop. It uses no CPU while idle and closes by itself when Rainmeter exits.
 
 Declined invitations are recognized from the address in your Google iCal URL. For other
 providers, add your address to `MyEmail=` in `Private.inc`.
@@ -131,8 +173,10 @@ WeeklyCalendar/
 ├── @Resources/
 │   ├── Calendar.lua          # Core calendar engine (iCal parser, recurrence, layout)
 │   ├── Settings.inc          # User preferences
-│   └── Private.inc           # Private calendar URLs (git-ignored, created on first load)
+│   ├── Private.inc           # Private calendar URLs (git-ignored, created on first load)
+│   └── ZOrder/               # Helper that keeps dialogs above the skin (C# source + launcher)
 ├── tools/
+│   ├── GoogleTasksFeed.gs    # Google Apps Script that publishes Google Tasks as an iCal feed
 │   └── textconv-utf16.py     # Readable git diffs for the UTF-16 Calendar.lua
 ├── tests/
 │   ├── run_tests.py          # Test suite (runs Calendar.lua against a mock Rainmeter)
@@ -159,6 +203,9 @@ Run the tests (requires Python 3 and [lupa](https://pypi.org/project/lupa/)):
 pip install lupa
 python tests/run_tests.py
 ```
+
+If [Node.js](https://nodejs.org/) is installed, the tests also run `tools/GoogleTasksFeed.gs`
+against a fake Tasks API.
 
 ---
 
