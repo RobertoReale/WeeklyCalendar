@@ -58,12 +58,15 @@ AutoScrollHour=14
 ShowToolbar=1
 
 ;  ZPos: window position of the skin (applied on every refresh).
-;   -1 = Bottom: behind all windows; Explorer dialogs (e.g. "Empty Recycle Bin")
-;        always appear above it, but the skin is hidden by Show Desktop (Win+D).
-;   -2 = On Desktop: stays visible with Show Desktop, but while Show Desktop is
-;        active Rainmeter keeps it above other windows, so dialogs may open behind it.
+;   -2 = On Desktop (recommended): always visible on the desktop. While Windows is in
+;        "Show desktop" mode Rainmeter keeps it above other windows, so a dialog such as
+;        "Empty Recycle Bin" can open behind it: the dialog still has the keyboard focus,
+;        so Enter confirms and Esc cancels.
+;   -1 = Bottom: never covers dialogs, but in "Show desktop" mode (Win+D, and on recent
+;        Windows 11 builds often just after unlocking or clicking the desktop) the skin
+;        falls behind the desktop and disappears until "Refresh all".
 ;    0 = Normal, 1 = Topmost, 2 = Always on top.
-ZPos=-1
+ZPos=-2
 
 ; ---------------------------------------------------------------------
 ;  4) APPEARANCE & STYLING

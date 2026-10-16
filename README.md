@@ -100,8 +100,8 @@ Theme=light
 ; Declined invitations: 1 = show outlined, 0 = hide
 ShowDeclined=1
 
-; Window position: -1 = Bottom (Explorer dialogs always on top), -2 = On Desktop
-ZPos=-1
+; Window position: -2 = On Desktop (always visible), -1 = Bottom (hidden in "Show desktop" mode)
+ZPos=-2
 ```
 
 Declined invitations are recognized from the address in your Google iCal URL. For other
