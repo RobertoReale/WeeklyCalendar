@@ -20,8 +20,8 @@ local LANGS = {
     more = 'more',
     noTitle = '(no title)',
     noUrl = { 'No calendar configured.',
-              'Right-click the skin > Calendar settings,',
-              'paste your secret iCal address into IcalUrl1 and save.' },
+              'Right-click the skin > Calendar addresses,',
+              'paste your secret iCal address into IcalUrl1, save and refresh.' },
     loading = { 'Downloading calendar...' },
   },
   it = {
@@ -32,8 +32,8 @@ local LANGS = {
     more = 'altri',
     noTitle = '(senza titolo)',
     noUrl = { 'Nessun calendario configurato.',
-              'Tasto destro sulla skin > Impostazioni calendario,',
-              'incolla l\'indirizzo segreto iCal in IcalUrl1 e salva.' },
+              'Tasto destro sulla skin > Calendar addresses,',
+              'incolla l\'indirizzo segreto iCal in IcalUrl1, salva e aggiorna.' },
     loading = { 'Scarico il calendario...' },
   },
 }
@@ -748,11 +748,27 @@ end
 ------------------------------------------------------------------------
 local function validUrl(u) return u and u:match('^https?://') ~= nil end
 
+-- Creates an empty Private.inc (calendar addresses, ignored by git) on first load
+local function ensurePrivateFile()
+  local res = SKIN:GetVariable('@')
+  if not res or res == '' then return end
+  local path = res .. 'Private.inc'
+  local f = io.open(path, 'rb')
+  if f then f:close(); return end
+  f = io.open(path, 'wb')
+  if not f then return end
+  f:write('; WeeklyCalendar - private calendar addresses (not tracked by git)\r\n',
+          '; Google Calendar -> Settings -> (your calendar) -> "Integrate calendar"\r\n',
+          '; -> "Secret address in iCal format". Paste it after the "=" sign.\r\n',
+          '; KEEP IT PRIVATE: anyone with this link can view your events.\r\n\r\n',
+          '[Variables]\r\nIcalUrl1=\r\nIcalUrl2=\r\nIcalUrl3=\r\n')
+  f:close()
+end
+
 local function readSettings()
   cfg.lang = LANGS[V('Language', 'en'):lower()] or LANGS.en
   cfg.W, cfg.H = N('Width', 1400), N('Height', 860)
   cfg.startHour, cfg.endHour = N('StartHour', 8), N('EndHour', 20)
-  cfg.autoRange = N('AutoRange', 1) == 1
   cfg.autoScroll = N('AutoScroll', 1) == 1
   cfg.autoScrollHour = N('AutoScrollHour', 14)
   cfg.firstDay = N('FirstDay', 1) % 7
@@ -918,7 +934,9 @@ end
 
 local function setStatus(lines)
   if lines and #lines > 0 then
-    set('Status', 'Text', table.concat(lines, '#CRLF#'))
+    local t = {}
+    for i, l in ipairs(lines) do t[i] = safe(l) end
+    set('Status', 'Text', table.concat(t, '#CRLF#'))
     show('Status')
   else
     hide('Status')
@@ -1216,6 +1234,7 @@ local function layout()
   -- Timed events
   local evUsed = 0
   local overflow = 0
+  local nextFade = nil -- earliest end time of a drawn event that is not yet past
   local colPad = 4
   local dayInnerW = dayW - colPad * 2
   for i = 0, 6 do
@@ -1240,6 +1259,7 @@ local function layout()
           local h = math.min(maxAvailH, math.max(16, rawH))
           if h < 10 then h = 10 end
           local past = it.e < now
+          if not past and (not nextFade or it.e < nextFade) then nextFade = it.e end
           local fill = past and colStr(cfg.pastColors[it.feed]) or colStr(cfg.colors[it.feed])
           local tcol = past and cfg.pastText or cfg.evText
 
@@ -1314,7 +1334,7 @@ local function layout()
 
   -- Geometry cache for now line
   cfg.geo = { timeW = timeW, dayW = dayW, gridTop = gridTop, pad = pad, hourH = hourH,
-              startH = startH, endH = endH, ws = ws }
+              startH = startH, endH = endH, ws = ws, nextFade = nextFade }
   lastNow = nil
   SKIN:Bang('!UpdateMeterGroup', 'Cal')
   SKIN:Bang('!Redraw')
@@ -1355,6 +1375,7 @@ end
 ------------------------------------------------------------------------
 function Initialize()
   readSettings()
+  ensurePrivateFile()
   for i = 1, 3 do
     if not validUrl(cfg.urls[i]) then
       SKIN:Bang('!DisableMeasure', 'MeasureICS' .. i)
@@ -1401,16 +1422,19 @@ function Update()
     end
   end
 
+  -- Redraw once an event ends so it fades without waiting for a new download
+  if cfg.geo and cfg.geo.nextFade and now > cfg.geo.nextFade then needLayout = true end
+
   if needLayout then safeLayout() end
   updateNowLine()
   return 0
 end
 
--- Called when WebParser download finishes
-function Reload()
+-- Called when WebParser download of feed i finishes
+function Reload(i)
   finishSeen = true
   lastSync = os.time()
-  netErrs = {}
+  if i then netErrs[i] = nil else netErrs = {} end
   pollFiles()
   safeLayout()
   updateNowLine()

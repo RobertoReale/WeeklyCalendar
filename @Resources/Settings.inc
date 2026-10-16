@@ -9,11 +9,13 @@
 ; ---------------------------------------------------------------------
 ;  1) iCAL CALENDAR ADDRESSES (REQUIRED)
 ; ---------------------------------------------------------------------
+;  The addresses are stored in @Resources\Private.inc (ignored by git, created
+;  automatically on first load). Right-click the skin > "Calendar addresses".
 ;  Google Calendar -> Settings (gear icon) -> (your calendar name)
 ;  -> "Integrate calendar" -> "Secret address in iCal format".
-;  Copy and paste it below after the "=" sign, without quotes or spaces.
 ;  KEEP IT PRIVATE: anyone with this link can view your events.
 ;  You can add up to 3 calendars (each rendered with its own color).
+;  The empty values below are only fallbacks: do not paste your addresses here.
 IcalUrl1=
 IcalUrl2=
 IcalUrl3=
@@ -37,7 +39,7 @@ FirstDay=1
 ;  Tip: if your Windows display scaling is 125% or 150%, reduce Width and Height
 ;  (for example, 1500 x 900 on 1080p).
 Width=1400
-Height=860
+Height=800
 
 ;  Base visible time range (whole hours, 0-24).
 ;  The number of visible hours displayed on screen is: EndHour - StartHour (e.g. 20 - 8 = 12 hours).
@@ -52,12 +54,16 @@ AutoScroll=1
 ;  AutoScrollHour: the hour of the day (0-23) after which the view automatically shifts down (default: 14 = 2:00 PM).
 AutoScrollHour=14
 
-;  AutoRange=1: automatically expands the visible range if events fall outside
-;  StartHour/EndHour (can be scrolled vertically anytime).
-AutoRange=1
-
 ;  ShowToolbar=1: shows the top toolbar (Today button, navigation arrows, month, week badge, sync status)
 ShowToolbar=1
+
+;  ZPos: window position of the skin (applied on every refresh).
+;   -1 = Bottom: behind all windows; Explorer dialogs (e.g. "Empty Recycle Bin")
+;        always appear above it, but the skin is hidden by Show Desktop (Win+D).
+;   -2 = On Desktop: stays visible with Show Desktop, but while Show Desktop is
+;        active Rainmeter keeps it above other windows, so dialogs may open behind it.
+;    0 = Normal, 1 = Topmost, 2 = Always on top.
+ZPos=-1
 
 ; ---------------------------------------------------------------------
 ;  4) APPEARANCE & STYLING

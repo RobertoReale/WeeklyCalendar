@@ -32,15 +32,16 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
    ```plaintext
    C:\Users\<YourUsername>\Documents\Rainmeter\Skins\WeeklyCalendar
    ```
-3. Open `@Resources\Settings.inc` in a text editor (e.g. Notepad) and configure your calendar feed (see below).
-4. Right-click the Rainmeter tray icon > **Refresh all**.
-5. Open Rainmeter **Manage**, expand `WeeklyCalendar`, select `WeeklyCalendar.ini`, and click **Load**.
+3. Open Rainmeter **Manage**, expand `WeeklyCalendar`, select `WeeklyCalendar.ini`, and click **Load**.
+   On first load the skin creates `@Resources\Private.inc`, where your calendar addresses go.
+4. Link your calendar feed (see below).
 
 ---
 
 ## Configuration (`@Resources\Settings.inc`)
 
 Right-click the skin on your desktop and select **Calendar settings** to open the configuration file.
+Your private calendar addresses live in a separate file, `@Resources\Private.inc` (see below).
 
 ### 1. Linking your Google Calendar
 1. Open [Google Calendar](https://calendar.google.com/) in your browser.
@@ -48,13 +49,13 @@ Right-click the skin on your desktop and select **Calendar settings** to open th
 3. Under *Settings for my calendars*, click your calendar name.
 4. Scroll down to the **Integrate calendar** section.
 5. Copy the **Secret address in iCal format** (`https://calendar.google.com/calendar/ical/.../basic.ics`).
-6. In `Settings.inc`, paste it directly after `IcalUrl1=`:
+6. Right-click the skin > **Calendar addresses** (opens `@Resources\Private.inc`) and paste it directly after `IcalUrl1=`:
    ```ini
    IcalUrl1=https://calendar.google.com/calendar/ical/your_address_here/basic.ics
    ```
-7. Save the file, right-click the skin, and choose **Refresh now**.
+7. Save the file, then right-click the skin > **Refresh skin**.
 
-> **Security Warning**: Keep your secret iCal address private! Anyone with that URL can view your schedule. Never commit your private URL to a public repository.
+> **Security Warning**: Keep your secret iCal address private! Anyone with that URL can view your schedule. `Private.inc` is listed in `.gitignore` so the address is never committed; do not paste it into `Settings.inc`.
 
 ### 2. Visible Hours & Auto-Scroll
 ```ini
@@ -113,7 +114,8 @@ WeeklyCalendar/
 ├── WeeklyCalendar.ini        # Main Rainmeter skin definition
 ├── @Resources/
 │   ├── Calendar.lua          # Core calendar engine (iCal parser, recurrence, layout)
-│   └── Settings.inc          # User preferences and calendar URLs
+│   ├── Settings.inc          # User preferences
+│   └── Private.inc           # Private calendar URLs (git-ignored, created on first load)
 ├── DownloadFile/             # Temporary folder where WebParser saves .ics files
 └── README.md                 # Documentation
 ```

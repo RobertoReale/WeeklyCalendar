@@ -9,3 +9,6 @@ Desktop.ini
 .DS_Store
 .vscode/
 .idea/
+
+# Private calendar addresses
+@Resources/Private.inc
