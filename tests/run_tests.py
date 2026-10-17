@@ -559,6 +559,74 @@ def test_lua_file_is_utf16_with_bom():
     assert open(LUA_FILE, 'rb').read(2) == b'\xff\xfe', 'Calendar.lua must be saved as UTF-16 LE with BOM'
 
 
+@with_skin
+def test_pixel_snapped_coordinates_and_sharp_grid(sk):
+    sk.start(2027, 3, 3, 12)
+    m = sk.mock
+    # All string and shape meter positions/dimensions are integer-snapped (no fractional blur)
+    for (meter, opt), val in m.options.items():
+        if opt in ('X', 'Y', 'W', 'H'):
+            assert re.match(r'^-?\d+$', str(val)), (meter, opt, val)
+    # 1px grid lines sit on exact .5 coordinates so Direct2D renders crisp 1-pixel strokes
+    for k in range(1, 20):
+        key = 'Shape' if k == 1 else ('Shape%d' % k)
+        s = m.opt('Grid', key) or ''
+        if s.startswith('Line '):
+            coords = s.split('|')[0].replace('Line ', '').strip().split(',')
+            assert any(c.endswith('.5') for c in coords), (key, s)
+
+
+def test_overrides_are_scoped_per_feed():
+    ics1 = (
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+        "BEGIN:VEVENT\r\nUID:shared@test\r\nDTSTART:20270301T090000Z\r\nDTEND:20270301T100000Z\r\n"
+        "RRULE:FREQ=DAILY;COUNT=2\r\nSUMMARY:Feed1 Daily\r\nEND:VEVENT\r\n"
+        "BEGIN:VEVENT\r\nUID:shared@test\r\nRECURRENCE-ID:20270302T090000Z\r\n"
+        "DTSTART:20270302T140000Z\r\nDTEND:20270302T150000Z\r\nSUMMARY:Feed1 Moved\r\nEND:VEVENT\r\n"
+        "END:VCALENDAR\r\n"
+    )
+    ics2 = (
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+        "BEGIN:VEVENT\r\nUID:shared@test\r\nDTSTART:20270301T090000Z\r\nDTEND:20270301T100000Z\r\n"
+        "RRULE:FREQ=DAILY;COUNT=2\r\nSUMMARY:Feed2 Daily\r\nEND:VEVENT\r\n"
+        "END:VCALENDAR\r\n"
+    )
+    lua = new_runtime(MockSkin({}, ini_sections()))
+    wc = lua.globals()._WC
+    wc.cfg.lang = wc.LANGS.en
+    wc.cfg.showDeclined = True
+    wc.parseICS(ics1, 1)
+    wc.parseICS(ics2, 2)
+    wc.buildOverrides()
+    first = wc.daysFromCivil(2027, 3, 1)
+    inst = wc.buildInstances(first, first + 7)
+    f2 = [inst[i].s for i in range(1, len(inst) + 1) if inst[i].title == 'Feed2 Daily']
+    assert f2 == [utc(2027, 3, 1, 9), utc(2027, 3, 2, 9)], f2
+
+
+def test_event_conference_url_and_Empty_task():
+    ics = (
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+        "BEGIN:VEVENT\r\nUID:u1\r\nDTSTART:20270303T100000Z\r\nDTEND:20270303T120000Z\r\n"
+        "SUMMARY:Call\r\nDESCRIPTION:Join at https://meet.google.com/abc-defg-hij now\r\nEND:VEVENT\r\n"
+        "BEGIN:VEVENT\r\nUID:u2\r\nDTSTART;VALUE=DATE:20270303\r\nSUMMARY:   \r\n"
+        "X-WC-TASK:COMPLETED\r\nEND:VEVENT\r\n"
+        "END:VCALENDAR\r\n"
+    )
+    sk = Skin()
+    try:
+        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8').write(ics)
+        sk.start(2027, 3, 3, 12)
+        m = sk.mock
+        idx = [i for i in range(1, 81) if m.opt('EvT%d' % i, 'Text') == 'Call'][0]
+        assert m.opt('EvBg%d' % idx, 'LeftMouseUpAction') == '["https://meet.google.com/abc-defg-hij"]'
+        ad = sk.all_day()
+        assert '✓ (no title)' in ad, ad
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def main():
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith('test_') and callable(f)]
     failed = 0
