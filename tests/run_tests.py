@@ -75,7 +75,9 @@ class MockSkin:
         self.visible = {}
         self.logs = []
         self.bang_count = 0
+        self.bangs = []
         self.unknown = set()
+        self.measure_values = {}
 
     def _args(self, args):
         return list(args[1:]) if args and isinstance(args[0], MockSkin) else list(args)
@@ -87,6 +89,7 @@ class MockSkin:
         a = self._args(args)
         self.bang_count += 1
         name = a[0]
+        self.bangs.append(a)
         if name in ('!SetOption', '!HideMeter', '!ShowMeter', '!UpdateMeter',
                     '!DisableMeasure', '!EnableMeasure', '!CommandMeasure'):
             if a[1] not in self.sections:
@@ -99,6 +102,14 @@ class MockSkin:
             self.visible[a[1]] = False
         elif name == '!Log':
             self.logs.append(tuple(a[1:]))
+
+    def GetMeasure(self, *args):
+        value = self.measure_values.get(self._args(args)[0], '')
+
+        class Measure:
+            def GetStringValue(self, *a):
+                return value
+        return Measure()
 
     def opt(self, meter, option):
         return self.options.get((meter, option))
@@ -519,6 +530,7 @@ process.stdout.write(JSON.stringify({ ics: buildFeed(), calls: calls }));
     res = subprocess.run([node, '-e', harness], capture_output=True, encoding='utf-8')
     assert res.returncode == 0, res.stderr
     out = json.loads(res.stdout)
+    assert 'X-WC-TASKLIST:L1\r\nX-WC-TASKID:a\r\n' in out['ics'], out['ics']
     assert 'pageToken' not in out['calls'][1][1] and out['calls'][2][1]['pageToken'] == 'p2'
     assert out['calls'][1][1]['showHidden'] is True and out['calls'][1][1]['showCompleted'] is True
     lua = new_runtime(MockSkin({}, ini_sections()))
@@ -531,6 +543,28 @@ process.stdout.write(JSON.stringify({ ics: buildFeed(), calls: calls }));
     inst = wc.buildInstances(first, first + 7)
     got = sorted((inst[i].title, inst[i].task, inst[i].sDay - first) for i in range(1, len(inst) + 1))
     assert got == [('Esame; parte 1, scritto', 'open', 2), ('Fatto', 'done', 1)], got
+
+    # doGet(?action=complete|reopen&list=..&task=..) patches the task and answers OK
+    harness = script + r"""
+var patches = [];
+var ContentService = { MimeType: { ICAL: 'ical' }, createTextOutput: function (s) {
+  return { text: s, setMimeType: function () { return this; } }; } };
+var Tasks = { Tasks: { patch: function (res, list, task) {
+  if (task === 'missing') throw new Error('Not Found');
+  patches.push([res, list, task]); } } };
+process.stdout.write(JSON.stringify({
+  done: doGet({ parameter: { action: 'complete', list: 'L1', task: 'a' } }).text,
+  open: doGet({ parameter: { action: 'reopen', list: 'L1', task: 'c' } }).text,
+  bad: doGet({ parameter: { action: 'complete', list: 'L1', task: 'missing' } }).text,
+  patches: patches }));
+"""
+    res = subprocess.run([node, '-e', harness], capture_output=True, encoding='utf-8')
+    assert res.returncode == 0, res.stderr
+    out = json.loads(res.stdout)
+    assert out['done'] == 'OK' and out['open'] == 'OK', out
+    assert out['bad'].startswith('ERROR'), out
+    assert out['patches'] == [[{'status': 'completed'}, 'L1', 'a'],
+                              [{'status': 'needsAction', 'completed': None}, 'L1', 'c']], out['patches']
 
 
 def test_latin1_path_conversion():
@@ -621,9 +655,139 @@ def test_event_conference_url_and_Empty_task():
         sk.start(2027, 3, 3, 12)
         m = sk.mock
         idx = [i for i in range(1, 81) if m.opt('EvT%d' % i, 'Text') == 'Call'][0]
-        assert m.opt('EvBg%d' % idx, 'LeftMouseUpAction') == '["https://meet.google.com/abc-defg-hij"]'
+        # Not a Google event id: the left click opens its day in Google Calendar, the middle click the link
+        assert m.opt('EvBg%d' % idx, 'LeftMouseUpAction') == \
+            '["https://calendar.google.com/calendar/r/day/2027/3/3?authuser=me%40example.com"]'
+        assert m.opt('EvBg%d' % idx, 'MiddleMouseUpAction') == '["https://meet.google.com/abc-defg-hij"]'
+        assert m.opt('EvBg%d' % idx, 'ToolTipText').endswith('#CRLF##CRLF#Middle-click: open the link')
         ad = sk.all_day()
         assert '✓ (no title)' in ad, ad
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+GOOGLE_ICS = (
+    "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+    "BEGIN:VEVENT\r\nUID:abc123@google.com\r\nDTSTART:20270303T100000Z\r\nDTEND:20270303T110000Z\r\n"
+    "SUMMARY:Lezione\r\n"
+    "DESCRIPTION:<b>Aula</b> 3.0.3<br>Portare il <a href=\"https://example.com/x\">libro</a> &amp; appunti"
+    "\\n\\n-::~:~::~:~:~:~:~:~::~:~::-\\nJoin with Google Meet: https://meet.google.com/abc-defg-hij"
+    "\\nPlease do not edit this section.\\n-::~:~::~:~:~:~:~:~::~:~::-\r\n"
+    "END:VEVENT\r\n"
+    "BEGIN:VEVENT\r\nUID:rec@google.com\r\nDTSTART:20270301T090000Z\r\nDTEND:20270301T093000Z\r\n"
+    "RRULE:FREQ=DAILY;COUNT=5\r\nSUMMARY:Daily\r\nEND:VEVENT\r\n"
+    "END:VCALENDAR\r\n"
+)
+
+
+def google_skin(**overrides):
+    sk = Skin(**overrides)
+    open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8').write(GOOGLE_ICS)
+    sk.start(2027, 3, 3, 8)
+    return sk
+
+
+def event_meter(sk, title):
+    return [i for i in range(1, 81) if sk.mock.shown('EvT%d' % i)
+            and sk.mock.opt('EvT%d' % i, 'Text').startswith(title)][0]
+
+
+def eid_link(event_id, cal='me@example.com'):
+    import base64
+    from urllib.parse import quote
+    eid = base64.b64encode(('%s %s' % (event_id, cal)).encode()).decode().rstrip('=')
+    return 'https://calendar.google.com/calendar/event?eid=%s&authuser=me%%40example.com' % quote(eid, safe='')
+
+
+def test_event_description_tooltip_is_cleaned():
+    sk = google_skin()
+    try:
+        tip = sk.mock.opt('EvBg%d' % event_meter(sk, 'Lezione'), 'ToolTipText')
+        # HTML turned into lines, entities decoded, Google Meet block left out
+        assert tip.startswith('Lezione#CRLF#'), tip
+        assert '#CRLF##CRLF#Aula 3.0.3#CRLF#Portare il libro & appunti' in tip, tip
+        assert 'Meet' not in tip and '::' not in tip and '<' not in tip, tip
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_click_opens_event_in_google_calendar():
+    sk = google_skin()
+    try:
+        m = sk.mock
+        i = event_meter(sk, 'Lezione')
+        assert m.opt('EvBg%d' % i, 'LeftMouseUpAction') == '["%s"]' % eid_link('abc123')
+        assert m.opt('EvT%d' % i, 'LeftMouseUpAction') == '["%s"]' % eid_link('abc123')
+        # The Meet link found in the description: middle click
+        assert m.opt('EvBg%d' % i, 'MiddleMouseUpAction') == '["https://meet.google.com/abc-defg-hij"]'
+        # Occurrence of a recurring event: "<id>_<original start in UTC>"
+        i = event_meter(sk, 'Daily')
+        assert m.opt('EvBg%d' % i, 'LeftMouseUpAction') == '["%s"]' % eid_link('rec_20270301T090000Z')
+        assert m.opt('EvBg%d' % i, 'MiddleMouseUpAction') == ''
+        sk.check_clean()
+    finally:
+        sk.close()
+    sk = google_skin(ClickAction='link')
+    try:
+        m = sk.mock
+        i = event_meter(sk, 'Lezione')
+        assert m.opt('EvBg%d' % i, 'LeftMouseUpAction') == '["https://meet.google.com/abc-defg-hij"]'
+        assert m.opt('EvBg%d' % i, 'MiddleMouseUpAction') == '["%s"]' % eid_link('abc123')
+        assert 'Middle-click: open in Google Calendar' in m.opt('EvBg%d' % i, 'ToolTipText')
+        # Without a link the left click still opens Google Calendar
+        i = event_meter(sk, 'Daily')
+        assert m.opt('EvBg%d' % i, 'LeftMouseUpAction') == '["%s"]' % eid_link('rec_20270301T090000Z')
+    finally:
+        sk.close()
+
+
+def test_task_check_button():
+    sk = Skin(feeds={3: 'tasks.ics'})
+    try:
+        sk.start(2027, 3, 3, 12)
+        m = sk.mock
+        ad = sk.all_day()
+        i = [v for k, v in ad.items() if k.startswith('○ Simulazione')][0]
+        # The chip opens the task's day in Google Calendar, the circle checks it
+        assert m.opt('ADBg%d' % i, 'LeftMouseUpAction') == \
+            '["https://calendar.google.com/calendar/r/day/2027/3/3?authuser=me%40example.com"]'
+        assert m.shown('ADChk%d' % i) and m.opt('ADChk%d' % i, 'ToolTipText') == 'Mark complete'
+        assert m.opt('ADChk%d' % i, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "ToggleTask(%d)"]' % i
+        assert 'Ellipse' in m.opt('ADChk%d' % i, 'MouseOverAction')
+        # Tasks from an older script (no list id) have no button
+        assert not m.shown('ADChk%d' % ad['○ Ripasso'])
+
+        m.bangs.clear()
+        sk.g.ToggleTask(i)
+        assert ['!SetOption', 'MeasureTaskAction', 'Parameter',
+                '-s -f -L -m 30 https://example.com/feed3.ics?action=complete&list=L1&task=t-open'] in m.bangs, m.bangs
+        assert ['!CommandMeasure', 'MeasureTaskAction', 'Run'] in m.bangs
+        # Shown as completed at once
+        i = [v for k, v in sk.all_day().items() if k.startswith('✓ Simulazione')][0]
+        assert m.opt('ADTx%d' % i, 'InlineSetting') == 'Strikethrough'
+        assert m.opt('ADChk%d' % i, 'ToolTipText') == 'Mark uncompleted'
+
+        # Google confirms: the tasks feed is downloaded again
+        m.bangs.clear()
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        sk.g.TaskResult()
+        assert ['!CommandMeasure', 'MeasureICS3', 'Update'] in m.bangs, m.bangs
+        feed = os.path.join(sk.dir, 'DownloadFile', 'calendar3.ics')
+        text = open(feed, encoding='utf-8', newline='').read()
+        open(feed, 'w', encoding='utf-8', newline='').write(text.replace('NEEDS-ACTION', 'COMPLETED', 1))
+        sk.g.Reload(3)
+        assert any(k.startswith('✓ Simulazione') for k in sk.all_day())
+
+        # A change Google does not confirm (e.g. the old script answers with the feed) is undone
+        i = [v for k, v in sk.all_day().items() if k.startswith('✓ Simulazione')][0]
+        sk.g.ToggleTask(i)
+        assert any(k.startswith('○ Simulazione') for k in sk.all_day())
+        m.measure_values['MeasureTaskAction'] = 'BEGIN:VCALENDAR'
+        sk.g.TaskResult()
+        assert any(k.startswith('✓ Simulazione') for k in sk.all_day()), sk.all_day()
+        assert 'task not saved' in m.opt('TbSync', 'Text'), m.opt('TbSync', 'Text')
         sk.check_clean()
     finally:
         sk.close()

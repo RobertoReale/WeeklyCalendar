@@ -18,13 +18,14 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
 - **Declined Invitations**: Invitations you declined are drawn outlined, like Google Calendar, or can be hidden (`ShowDeclined=0`).
 - **All-Day Events & Timed Events**: Dedicated all-day events row at the top (up to 3 per day; hover "+N more" to see the rest) and column-packed overlapping timed events throughout the week.
-- **Google Tasks & Holidays**: Tasks with a due date appear in the all-day row like in Google Calendar (○ open, ✓ completed and struck through), via a small Google Apps Script; public holidays come from Google's holiday calendars.
+- **Google Tasks & Holidays**: Tasks with a due date appear in the all-day row like in Google Calendar (○ open, ✓ completed and struck through), via a small Google Apps Script; click the circle to mark a task completed (or the check mark to reopen it). Public holidays come from Google's holiday calendars.
+- **Open in Google Calendar**: Click an event to open it in Google Calendar (a task opens its day); middle-click opens the event's video call or link (Meet, Zoom, Teams...). `ClickAction=link` swaps the two.
 - **Dialogs Always on Top**: Windows and dialogs you open (e.g. "Empty Recycle Bin") always appear above the calendar, even in Windows' "Show desktop" mode.
 - **Past Event Fading**: Events fade as soon as they end, just like in Google Calendar.
 - **Two-Zone Mouse Navigation**:
   - Scroll wheel over the **grid / events / time column**: scrolls hours up & down.
   - Scroll wheel over the **toolbar / day headers**: flips through weeks.
-- **Detailed Tooltips**: Hover over any event to see its full title, start/end time, and location.
+- **Detailed Tooltips**: Hover over any event or task to see its full title, start/end time, location and description (rich text and Google Meet details are cleaned up).
 - **Dark & Light Themes**: `Theme=light` or `Theme=dark`, matching Google Calendar; any single color can still be overridden.
 - **English & Italian**: Labels, tooltips and the right-click menu follow `Language`.
 - **Unicode Titles**: Accented and non-Latin characters in event titles display correctly.
@@ -90,9 +91,24 @@ own Google account) publishes them as a private iCal address. One-time setup, ab
 Tasks with a due date appear in the all-day row of that day; the Tasks API keeps only the date, not
 the time. Hover a task to see its description (notes). Their color is the `EventColor` of the slot
 you used. Like the secret iCal address, keep the web app URL private: anyone who has it can read
-your task titles and notes. If you edit the script later,
+your task titles and notes, and mark your tasks completed or not completed. If you edit the script later,
 use **Deploy** > **Manage deployments** > edit > *Version: New version* so the URL stays the same.
 If the address is wrong, the toolbar shows "feed error" (hover it for details).
+
+### Completing tasks
+Click the circle ○ at the start of a task to mark it completed, or the check mark ✓ to mark it
+not completed: the skin shows the change at once, and Google Tasks saves it through the same web
+app (it needs `curl.exe`, included in Windows 10 and 11). If Google does not confirm, the task goes
+back to how it was and the toolbar shows "task not saved".
+
+The circle is a button only with the current `tools\GoogleTasksFeed.gs`. If you set up the script
+before this feature, update it once:
+
+1. Open your project on [script.google.com](https://script.google.com/), replace the code with the
+   new `tools\GoogleTasksFeed.gs` and save.
+2. Select `test` and click **Run**: if Google asks for permission again, allow it.
+3. **Deploy** > **Manage deployments** > pencil icon > *Version*: **New version** > **Deploy**.
+   The web app URL does not change.
 
 ### 2. Visible Hours & Auto-Scroll
 ```ini
@@ -161,6 +177,8 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Show Hidden Events** | Click a `▲ n` / `▼ n` badge in a day column |
 | **Navigate Weeks** | Click `<` / `>` buttons in the toolbar, or mouse wheel over the toolbar / day headers |
 | **Jump to Today** | Click the **Today** button in the toolbar (also resets hour scroll) |
+| **Open an Event** | Click it: opens it in Google Calendar (a task or "+N more": that day). Middle-click: its Meet / Zoom / Teams link |
+| **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it) |
 | **Sync Calendar Now** | Click the sync time in the top-right corner, or right-click > *Refresh now* |
 | **Context Menu** | Right-click the skin for quick access to weeks, hour scrolling, refresh, and settings |
 

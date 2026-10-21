@@ -101,6 +101,13 @@ PastFade=0.35
 ;  in Private.inc (right-click the skin > "Calendar addresses").
 ShowDeclined=1
 
+;  ClickAction: what a left click on an event or task opens.
+;   calendar = the event in Google Calendar (a task: its day); the middle click opens
+;              the event's link (Meet, Zoom, Teams...) when it has one.
+;   link     = the event's link when it has one, otherwise Google Calendar; the middle
+;              click opens Google Calendar.
+ClickAction=calendar
+
 ;  Theme: light or dark (Google Calendar Material 3 colors).
 Theme=light
 

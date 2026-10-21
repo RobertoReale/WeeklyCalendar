@@ -7,13 +7,34 @@
  *
  * Tasks with a due date become all-day entries (the Tasks API only stores the date,
  * not the time). Completed tasks are marked with X-WC-TASK:COMPLETED.
+ *
+ * The same address also marks a task completed or not completed when the skin's
+ * circle / check mark is clicked: ?action=complete|reopen&list=<list id>&task=<task id>
+ * (README, "Completing tasks").
  */
 
 var DAYS_BACK = 60;    // completed/overdue tasks older than this are left out
 var DAYS_AHEAD = 400;  // and so are tasks due further ahead than this
 
-function doGet() {
+function doGet(e) {
+  var p = (e && e.parameter) || {};
+  if (p.action === 'complete' || p.action === 'reopen') {
+    return ContentService.createTextOutput(setCompleted(p.list, p.task, p.action === 'complete'));
+  }
   return ContentService.createTextOutput(buildFeed()).setMimeType(ContentService.MimeType.ICAL);
+}
+
+// Answers "OK", or "ERROR <reason>" (the skin then shows the task as it was)
+function setCompleted(listId, taskId, done) {
+  if (!listId || !taskId) return 'ERROR missing list or task';
+  try {
+    // "completed" holds the completion time: it must be cleared to reopen a task
+    Tasks.Tasks.patch(done ? { status: 'completed' } : { status: 'needsAction', completed: null },
+                      listId, taskId);
+    return 'OK';
+  } catch (err) {
+    return 'ERROR ' + err.message;
+  }
 }
 
 // Run this once from the editor (Run > test) to grant access and preview the feed.
@@ -52,7 +73,10 @@ function buildFeed() {
                'DTSTART;VALUE=DATE:' + t.due.substring(0, 10).replace(/-/g, ''),
                'SUMMARY:' + esc(t.title || ''),
                'CATEGORIES:' + esc(list.title || 'Tasks'),
-               'X-WC-TASK:' + (t.status === 'completed' ? 'COMPLETED' : 'NEEDS-ACTION'));
+               'X-WC-TASK:' + (t.status === 'completed' ? 'COMPLETED' : 'NEEDS-ACTION'),
+               // used by the skin to mark the task (un)completed
+               'X-WC-TASKLIST:' + list.id,
+               'X-WC-TASKID:' + t.id);
       if (t.notes) out.push('DESCRIPTION:' + esc(t.notes));
       out.push('END:VEVENT');
     });
