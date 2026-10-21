@@ -441,6 +441,8 @@ def test_tasks_and_holidays():
         assert 'Attività completata' in m.opt('ADBg%d' % i, 'ToolTipText')
         # Open task on a past day: faded, not struck through
         i = ad['○ Ripasso']
+        # Task notes after a blank line, one tooltip line per line of the notes
+        assert m.opt('ADBg%d' % i, 'ToolTipText').endswith('#CRLF##CRLF#capitoli 1-3#CRLF#esercizi 4, 5 ( x)')
         assert 'Fill Color ' + purple not in m.opt('ADBg%d' % i, 'Shape')
         assert m.opt('ADTx%d' % i, 'InlineSetting') == ''
         # Holiday: its own color

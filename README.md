@@ -88,8 +88,9 @@ own Google account) publishes them as a private iCal address. One-time setup, ab
 6. Paste it in `Private.inc` after `IcalUrl3=` (or any free slot), save and refresh the skin.
 
 Tasks with a due date appear in the all-day row of that day; the Tasks API keeps only the date, not
-the time. Their color is the `EventColor` of the slot you used. Like the secret iCal address, keep
-the web app URL private: anyone who has it can read your task titles. If you edit the script later,
+the time. Hover a task to see its description (notes). Their color is the `EventColor` of the slot
+you used. Like the secret iCal address, keep the web app URL private: anyone who has it can read
+your task titles and notes. If you edit the script later,
 use **Deploy** > **Manage deployments** > edit > *Version: New version* so the URL stays the same.
 If the address is wrong, the toolbar shows "feed error" (hover it for details).
 
