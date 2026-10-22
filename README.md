@@ -17,7 +17,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Smart Recurrence & Overrides**: Client-side parsing of RFC 5545 recurrence rules (`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`, including `BYSETPOS` such as "last weekday of the month"), extra dates (`RDATE`), exceptions (`EXDATE`), and modified occurrences (`RECURRENCE-ID`).
 - **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
 - **Declined Invitations**: Invitations you declined are drawn outlined, like Google Calendar, or can be hidden (`ShowDeclined=0`).
-- **All-Day Events & Timed Events**: Dedicated all-day events row at the top (up to 3 per day; hover "+N more" to see the rest) and column-packed overlapping timed events throughout the week.
+- **All-Day Events & Timed Events**: Dedicated all-day events row at the top (3 rows by default, `AllDayRows`; click "+N more" to expand the row like Google Calendar, ▲ to collapse it) and column-packed overlapping timed events throughout the week.
 - **Google Tasks & Holidays**: Tasks with a due date appear in the all-day row like in Google Calendar (○ open, ✓ completed and struck through), via a small Google Apps Script; click the circle to mark a task completed (or the check mark to reopen it). Public holidays come from Google's holiday calendars.
 - **Open in Google Calendar**: Click an event to open it in Google Calendar (a task opens its day); middle-click opens the event's video call or link (Meet, Zoom, Teams...). `ClickAction=link` swaps the two.
 - **Dialogs Always on Top**: Windows and dialogs you open (e.g. "Empty Recycle Bin") always appear above the calendar, even in Windows' "Show desktop" mode.
@@ -136,6 +136,9 @@ AutoScroll=1
 
 ; Hour of the day (0-23) after which the view automatically shifts down (default: 14 = 2:00 PM)
 AutoScrollHour=14
+
+; Rows of all-day events and tasks (1-10); "+N more" expands the row
+AllDayRows=3
 ```
 
 ### 3. Dimensions & Appearance
@@ -194,6 +197,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Navigate Weeks** | Click `<` / `>` buttons in the toolbar, or mouse wheel over the toolbar / day headers |
 | **Jump to Today** | Click the **Today** button in the toolbar (also resets hour scroll) |
 | **Open an Event** | Click it: opens it in Google Calendar (a task or "+N more": that day). Middle-click: its Meet / Zoom / Teams link |
+| **All-Day Row** | Click `+N more` to show every all-day item (middle-click: open that day in Google Calendar); click ▲ at the left of the row to collapse it |
 | **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it) |
 | **Sync Calendar Now** | Click the sync time in the top-right corner, or right-click > *Refresh now* |
 | **Context Menu** | Right-click the skin for quick access to weeks, hour scrolling, refresh, and settings |

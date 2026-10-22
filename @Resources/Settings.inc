@@ -62,6 +62,11 @@ AutoScroll=1
 ;  AutoScrollHour: the hour of the day (0-23) after which the view automatically shifts down (default: 14 = 2:00 PM).
 AutoScrollHour=14
 
+;  AllDayRows: rows of all-day events and tasks shown above the hours (1-10, default 3).
+;  A busier day ends with "+N more": click it to show every item, then the arrow at the
+;  left of the row to collapse it again.
+AllDayRows=3
+
 ;  ShowToolbar=1: shows the top toolbar (Today button, navigation arrows, month, week badge, sync status)
 ShowToolbar=1
 

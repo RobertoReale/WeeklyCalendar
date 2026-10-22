@@ -265,7 +265,7 @@ class Skin:
 
     def all_day(self):
         """Shown all-day chips as {text: meter index}."""
-        return {self.mock.opt('ADTx%d' % i, 'Text'): i for i in range(1, 22) if self.mock.shown('ADTx%d' % i)}
+        return {self.mock.opt('ADTx%d' % i, 'Text'): i for i in range(1, 71) if self.mock.shown('ADTx%d' % i)}
 
     def event_titles(self):
         out = []
@@ -311,10 +311,69 @@ def test_layout_hidden_event_indicators(sk):
 def test_layout_more_all_day_tooltip(sk):
     sk.start(2027, 3, 3, 12)
     m = sk.mock
-    texts = [m.opt('ADTx%d' % i, 'Text') for i in range(1, 22) if m.shown('ADTx%d' % i)]
+    texts = [m.opt('ADTx%d' % i, 'Text') for i in range(1, 71) if m.shown('ADTx%d' % i)]
     assert texts == ['All day 1', 'All day 2', '+3 more'], texts
-    more = [i for i in range(1, 22) if m.opt('ADTx%d' % i, 'Text') == '+3 more'][0]
-    assert m.opt('ADTx%d' % more, 'ToolTipText') == 'All day 3#CRLF#All day 4#CRLF#All day 5'
+    more = [i for i in range(1, 71) if m.opt('ADTx%d' % i, 'Text') == '+3 more'][0]
+    assert m.opt('ADTx%d' % more, 'ToolTipText') == ('All day 3#CRLF#All day 4#CRLF#All day 5'
+                                                    '#CRLF##CRLF#Click: show all#CRLF#Middle-click: open in Google Calendar')
+    assert m.opt('ADTx%d' % more, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "ExpandAllDay()"]'
+    assert m.opt('ADTx%d' % more, 'MiddleMouseUpAction').startswith('["https://calendar.google.com/calendar/r/day/2027/3/4')
+
+
+def ad_texts(sk):
+    return [sk.mock.opt('ADTx%d' % i, 'Text') for i in range(1, 71) if sk.mock.shown('ADTx%d' % i)]
+
+
+def test_all_day_rows_setting():
+    sk = Skin(AllDayRows=2)
+    ref = Skin()
+    try:
+        sk.start(2027, 3, 3, 12)
+        ref.start(2027, 3, 3, 12)
+        assert ad_texts(sk) == ['All day 1', '+4 more'], ad_texts(sk)
+        assert int(sk.mock.opt('HL1', 'Y')) < int(ref.mock.opt('HL1', 'Y'))
+        sk.check_clean()
+    finally:
+        sk.close()
+        ref.close()
+
+
+@with_skin
+def test_all_day_row_expands_and_collapses(sk):
+    sk.start(2027, 3, 3, 12)
+    m = sk.mock
+    y0 = int(m.opt('HL1', 'Y'))
+    assert not m.shown('AdCollapse')
+    sk.g.ExpandAllDay()
+    assert ad_texts(sk) == ['All day %d' % k for k in range(1, 6)], ad_texts(sk)
+    assert m.shown('AdCollapse') and m.shown('AdCollapseTxt')
+    assert m.opt('AdCollapse', 'ToolTipText') == 'Show fewer'
+    assert int(m.opt('HL1', 'Y')) == y0 + 2 * 22
+    sk.g.CollapseAllDay()
+    assert ad_texts(sk) == ['All day 1', 'All day 2', '+3 more']
+    assert not m.shown('AdCollapse') and m.opt('AdCollapse', 'ToolTipText') == ''
+    assert int(m.opt('HL1', 'Y')) == y0
+    # Still expanded in a week without all-day items: no band, no button
+    sk.g.ExpandAllDay()
+    sk.g.ShiftWeek(1)
+    assert ad_texts(sk) == [] and not m.shown('AdCollapse')
+    assert int(m.opt('HL1', 'Y')) == 56 + 68  # gridTop right under the day headers
+    sk.g.ShiftWeek(-1)
+    assert len(ad_texts(sk)) == 5
+
+
+def test_expanded_all_day_row_is_capped():
+    sk = Skin(Height=400)
+    try:
+        sk.start(2027, 3, 3, 12)
+        sk.g.ExpandAllDay()  # (400 - 152) * 0.4 / 22 = 4 rows
+        assert ad_texts(sk) == ['All day 1', 'All day 2', 'All day 3', '+2 more'], ad_texts(sk)
+        more = [i for i in range(1, 71) if sk.mock.opt('ADTx%d' % i, 'Text') == '+2 more'][0]
+        # Expanding again would not show more: the click opens the day instead
+        assert sk.mock.opt('ADTx%d' % more, 'LeftMouseUpAction').startswith('["https://calendar.google.com/')
+        sk.check_clean()
+    finally:
+        sk.close()
 
 
 @with_skin
