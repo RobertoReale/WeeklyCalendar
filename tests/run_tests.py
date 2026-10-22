@@ -488,6 +488,45 @@ def test_unreadable_feed_is_reported():
         sk.close()
 
 
+def test_sixth_calendar_keeps_its_color_and_tasks():
+    sk = Skin(feeds={6: 'tasks.ics'})
+    try:
+        sk.start(2027, 3, 3, 12)
+        m = sk.mock
+        i = [v for k, v in sk.all_day().items() if k.startswith('○ Simulazione')][0]
+        assert 'Fill Color 97,97,97,255' in m.opt('ADBg%d' % i, 'Shape'), m.opt('ADBg%d' % i, 'Shape')
+        sk.g.ToggleTask(i)
+        m.bangs.clear()
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        sk.g.TaskResult()
+        assert ['!CommandMeasure', 'MeasureICS6', 'Update'] in m.bangs, m.bangs
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+@with_skin
+def test_empty_slots_are_disabled(sk):
+    sk.start(2027, 3, 3, 12)
+    for i in (2, 3, 4, 5, 6):
+        assert ['!DisableMeasure', 'MeasureICS%d' % i] in sk.mock.bangs, i
+    assert ['!EnableMeasure', 'MeasureICS1'] in sk.mock.bangs
+    text = open(os.path.join(sk.dir, '@Resources', 'Private.inc'), encoding='utf-8').read()
+    assert 'IcalUrl6=' in text
+
+
+def test_unreadable_fifth_feed_is_reported():
+    sk = Skin(feeds={5: 'not_ical.html'})
+    try:
+        sk.start(2027, 3, 3, 12)
+        sk.g.Reload(5)
+        assert 'feed error' in sk.mock.opt('TbSync', 'Text')
+        assert 'calendar 5' in sk.mock.opt('TbSync', 'ToolTipText')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_helper_started_only_when_enabled():
     for value, expected in (('1', True), ('0', False)):
         sk = Skin(KeepDialogsOnTop=value)

@@ -13,7 +13,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Google Calendar Material 3 Design**: Clean typography, Google Calendar pastel color scheme, subtle borders, today indicator circle, and red live "now" line.
 - **Vertical Hour Scrolling**: Scroll the mouse wheel over the calendar grid or use the time-gutter buttons (▲ / ▼) to navigate through hours at any time.
 - **Auto-Scroll for Evening Plans**: In the afternoon and evening (after 2:00 PM / 14:00 by default), the visible time window automatically shifts down so upcoming commitments after 19:00 (7 PM) through midnight are always in plain sight without manual scrolling.
-- **Multi-Calendar Support**: Sync up to 3 distinct iCal feeds simultaneously, each with custom colors and titles.
+- **Multi-Calendar Support**: Sync up to 6 distinct iCal feeds simultaneously, each with custom colors and titles.
 - **Smart Recurrence & Overrides**: Client-side parsing of RFC 5545 recurrence rules (`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`, including `BYSETPOS` such as "last weekday of the month"), extra dates (`RDATE`), exceptions (`EXDATE`), and modified occurrences (`RECURRENCE-ID`).
 - **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
 - **Declined Invitations**: Invitations you declined are drawn outlined, like Google Calendar, or can be hidden (`ShowDeclined=0`).
@@ -61,6 +61,10 @@ Your private calendar addresses live in a separate file, `@Resources\Private.inc
    IcalUrl1=https://calendar.google.com/calendar/ical/your_address_here/basic.ics
    ```
 7. Save the file, then right-click the skin > **Refresh skin**.
+
+Up to 6 calendars can be shown, each in its own color: put the other addresses after `IcalUrl2=` ...
+`IcalUrl6=`. A `Private.inc` created by an older version only lists `IcalUrl1..3`: add the lines
+`IcalUrl4=`, `IcalUrl5=` and `IcalUrl6=` by hand when you need them.
 
 > **Security Warning**: Keep your secret iCal address private! Anyone with that URL can view your schedule. `Private.inc` is listed in `.gitignore` so the address is never committed; do not paste it into `Settings.inc`.
 
@@ -150,6 +154,9 @@ FirstDay=1
 EventColor1=3,155,229,255
 EventColor2=11,128,67,255
 EventColor3=142,36,170,255
+EventColor4=244,81,30,255
+EventColor5=121,134,203,255
+EventColor6=97,97,97,255
 
 ; Theme: light or dark. Individual colors (BgColor, TodayColor, ...) can be
 ; overridden by uncommenting them in Settings.inc

@@ -14,7 +14,7 @@
 ;  Google Calendar -> Settings (gear icon) -> (your calendar name)
 ;  -> "Integrate calendar" -> "Secret address in iCal format".
 ;  KEEP IT PRIVATE: anyone with this link can view your events.
-;  You can add up to 3 calendars (each rendered with its own color), for example:
+;  You can add up to 6 calendars (each rendered with its own color), for example:
 ;   - public holidays: Google Calendar -> Settings -> "Holidays in <country>" ->
 ;     "Public address in iCal format" (Italy:
 ;     https://calendar.google.com/calendar/ical/it.italian%23holiday%40group.v.calendar.google.com/public/basic.ics)
@@ -24,6 +24,9 @@
 IcalUrl1=
 IcalUrl2=
 IcalUrl3=
+IcalUrl4=
+IcalUrl5=
+IcalUrl6=
 
 ; Sync interval in minutes (how often to redownload the calendar feed)
 RefreshMinutes=10
@@ -88,10 +91,14 @@ EventRadius=8
 BgRadius=16
 
 ;  Colors: R,G,B,A (0-255) format or hex RRGGBB / RRGGBBAA.
-;  Event colors for calendars 1, 2, and 3 (Default: Google Calendar Peacock: 3,155,229,255)
+;  Event colors for calendars 1 to 6 (defaults from Google Calendar: Peacock, Basil, Grape,
+;  Tangerine, Lavender, Graphite)
 EventColor1=3,155,229,255
 EventColor2=11,128,67,255
 EventColor3=142,36,170,255
+EventColor4=244,81,30,255
+EventColor5=121,134,203,255
+EventColor6=97,97,97,255
 
 ;  Past events fade amount (0 = no fade, 1 = invisible; 0.35 = subtle like Google Calendar)
 PastFade=0.35
