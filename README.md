@@ -106,9 +106,18 @@ before this feature, update it once:
 
 1. Open your project on [script.google.com](https://script.google.com/), replace the code with the
    new `tools\GoogleTasksFeed.gs` and save.
-2. Select `test` and click **Run**: if Google asks for permission again, allow it.
+2. Select `authorize` and click **Run**. Google asks for access to your tasks again: allow it
+   (if the screen has checkboxes, tick the one about *editing* your tasks). The log must end with
+   `OK: the skin can now mark tasks completed`.
 3. **Deploy** > **Manage deployments** > pencil icon > *Version*: **New version** > **Deploy**.
    The web app URL does not change.
+
+If the toolbar says **"allow editing tasks"**, the script was authorized for reading only: repeat
+steps 2 and 3. If Google does not ask for permission and `authorize` fails, declare the scope by
+hand: **Project Settings** (gear icon) > tick *Show "appsscript.json" manifest file in editor*,
+open `appsscript.json`, add inside the outer braces
+`"oauthScopes": ["https://www.googleapis.com/auth/tasks"],`, save, then run `authorize` again
+and deploy a new version.
 
 ### 2. Visible Hours & Auto-Scroll
 ```ini

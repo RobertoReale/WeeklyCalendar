@@ -42,6 +42,20 @@ function test() {
   Logger.log(buildFeed().slice(0, 2000));
 }
 
+// Run this from the editor (Run > authorize) if the skin says "allow editing tasks":
+// Google asks again for access to your tasks, then a change that leaves a task as it
+// is checks that the script may now edit them.
+function authorize() {
+  var lists = Tasks.Tasklists.list({ maxResults: 1 }).items || [];
+  var tasks = lists.length ? (Tasks.Tasks.list(lists[0].id, { maxResults: 1 }).items || []) : [];
+  if (!tasks.length) {
+    Logger.log('No task to check with: create one, then run authorize again.');
+    return;
+  }
+  Tasks.Tasks.patch({ status: tasks[0].status }, lists[0].id, tasks[0].id);
+  Logger.log('OK: the skin can now mark tasks completed. Deploy a new version if you have not yet.');
+}
+
 function buildFeed() {
   var now = new Date();
   var stamp = Utilities.formatDate(now, 'UTC', "yyyyMMdd'T'HHmmss'Z'");

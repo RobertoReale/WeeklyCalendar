@@ -756,8 +756,13 @@ def test_task_check_button():
         assert m.shown('ADChk%d' % i) and m.opt('ADChk%d' % i, 'ToolTipText') == 'Mark complete'
         assert m.opt('ADChk%d' % i, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "ToggleTask(%d)"]' % i
         assert 'Ellipse' in m.opt('ADChk%d' % i, 'MouseOverAction')
-        # Tasks from an older script (no list id) have no button
-        assert not m.shown('ADChk%d' % ad['○ Ripasso'])
+        # Tasks from an older script (no list id): the button says to update the script
+        old = ad['○ Ripasso']
+        assert 'GoogleTasksFeed.gs' in m.opt('ADChk%d' % old, 'ToolTipText')
+        m.bangs.clear()
+        sk.g.ToggleTask(old)
+        assert ['!CommandMeasure', 'MeasureTaskAction', 'Run'] not in m.bangs
+        assert 'update the Tasks script' in m.opt('TbSync', 'Text'), m.opt('TbSync', 'Text')
 
         m.bangs.clear()
         sk.g.ToggleTask(i)
@@ -788,6 +793,22 @@ def test_task_check_button():
         sk.g.TaskResult()
         assert any(k.startswith('✓ Simulazione') for k in sk.all_day()), sk.all_day()
         assert 'task not saved' in m.opt('TbSync', 'Text'), m.opt('TbSync', 'Text')
+
+        # Script authorized for reading only: say how to allow editing, with Google's reason
+        sk.g.ToggleTask(i)
+        m.measure_values['MeasureTaskAction'] = (
+            "ERROR Non disponi dell'autorizzazione necessaria per chiamare tasks.tasks.patch. "
+            "Autorizzazioni obbligatorie: https://www.googleapis.com/auth/tasks.\n")
+        sk.g.TaskResult()
+        assert any(k.startswith('✓ Simulazione') for k in sk.all_day()), sk.all_day()
+        assert m.opt('TbSync', 'Text').endswith('allow editing tasks'), m.opt('TbSync', 'Text')
+        tip = m.opt('TbSync', 'ToolTipText')
+        assert 'run the function authorize' in tip and 'Google: Non disponi' in tip, tip
+        # A confirmed change clears the notice
+        sk.g.ToggleTask(i)
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        sk.g.TaskResult()
+        assert 'allow editing' not in m.opt('TbSync', 'Text'), m.opt('TbSync', 'Text')
         sk.check_clean()
     finally:
         sk.close()
