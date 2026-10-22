@@ -11,6 +11,7 @@ independent and ships on its own):
 | 7b | [Month view](07-views.md#phase-b-month-view) | large | new layout mode and meter pools |
 | 8 | [Drag a task to another day](08-drag-tasks.md) | medium (+ 30 min spike) | all-day chips, drop zones, task pipeline, Apps Script |
 | 9 | [Create tasks and events](09-create-items.md) | large | click zones, quick-create card (InputText), task pipeline, Apps Script + Calendar permission |
+| 10 | [Edit and delete tasks and events](10-edit-delete.md) | large | right-click detail card, undo snackbar, local changes, Apps Script (Calendar API) |
 
 ## Conventions that apply to every plan
 

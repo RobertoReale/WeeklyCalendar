@@ -172,10 +172,12 @@ New actions in `doGet`. All of them answer `OK <id>` or `ERROR <reason>`:
 - `action=createevent&cal=<id or empty>&title=…&start=<ISO UTC>&end=<ISO UTC>` → timed event.
 - `action=createevent&cal=…&title=…&date=YYYY-MM-DD&days=1` → all-day event.
 
-For events, use `CalendarApp.getCalendarById(cal)` or `CalendarApp.getDefaultCalendar()`,
-then `createEvent(title, new Date(start), new Date(end))` /
-`createAllDayEvent(title, date, endDate)`, answering `OK ` + `event.getId()`. That id is the
-iCal UID, e.g. `abc123@google.com`.
+For events, use the **advanced Calendar service** (`Calendar`, "Google Calendar API" v3,
+enabled like the Tasks service). Plan 10 (edit and delete) needs it to handle single
+occurrences of recurring events, so both plans share one API:
+`Calendar.Events.insert({ summary: title, start: { dateTime: start }, end: { dateTime: end } }, cal || 'primary')`,
+or `{ start: { date }, end: { date: date + days } }` for all-day events. Answer
+`OK ` + `event.iCalUID` (e.g. `abc123@google.com`), which is the UID the iCal feed will show.
 
 Validation:
 - title: 1-500 characters;
@@ -183,9 +185,11 @@ Validation:
 - `end > start`;
 - unknown calendar → `ERROR calendar not found`.
 
-`authorize()` also calls `CalendarApp.getDefaultCalendar().getName()`, so Google asks for the
-Calendar permission. Update the README's manual scopes line to add
-`https://www.googleapis.com/auth/calendar`.
+`authorize()` also calls `Calendar.Calendars.get('primary')`, so Google asks for the Calendar
+permission. In the README:
+- add a step to enable the **Google Calendar API** service (+ next to Services), with the
+  manifest fallback `{ "userSymbol": "Calendar", "version": "v3", "serviceId": "calendar" }`;
+- add `https://www.googleapis.com/auth/calendar` to the manual scopes line.
 
 **Security:** with this change, anyone who has the web app URL can **create events**, not
 only read tasks. Add an optional shared secret:
@@ -264,7 +268,7 @@ Document it in the README as recommended.
   than `EvBg1`. Assert it on the section order from `ini_sections()` (read the file in order).
 - **Script under Node:**
   - `createtask` calls `Tasks.Tasks.insert` with the right body and answers `OK <id>`;
-  - `createevent` calls a fake `CalendarApp` (timed and all-day) and answers
+  - `createevent` calls a fake `Calendar.Events.insert` (timed and all-day) and answers
     `OK <id>@google.com`;
   - a wrong token, an empty title or `end <= start` give `ERROR`.
 - `check_clean()` and the pixel snapping test pass.
