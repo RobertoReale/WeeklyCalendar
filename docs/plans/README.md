@@ -1,13 +1,14 @@
 # Implementation plans
 
 Plans for features that are designed but not built yet. Recommended order (each one is
-independent and ships on its own):
+independent and ships on its own). Plans 5, 4 and 7a are implemented (version 1.7.0); the
+others are still open.
 
 | # | Plan | Size | Touches |
 | :--- | :--- | :--- | :--- |
-| 5 | [More calendars (3 → 6)](05-more-calendars.md) | small | Lua loops, ini measures, Settings.inc, README |
-| 4 | [Taller all-day row, expandable](04-all-day-rows.md) | medium | all-day layout, ini pools, one new button |
-| 7a | [Day and 3-day views + view switcher](07-views.md#phase-a-day-3-day-and-week) | medium-large | layout generalised from 7 to N days, toolbar |
+| 5 | [More calendars (3 → 6)](05-more-calendars.md) **(done)** | small | Lua loops, ini measures, Settings.inc, README |
+| 4 | [Taller all-day row, expandable](04-all-day-rows.md) **(done)** | medium | all-day layout, ini pools, one new button |
+| 7a | [Day and 3-day views + view switcher](07-views.md#phase-a-day-3-day-and-week) **(done)** | medium-large | layout generalised from 7 to N days, toolbar |
 | 7b | [Month view](07-views.md#phase-b-month-view) | large | new layout mode and meter pools |
 | 8 | [Drag a task to another day](08-drag-tasks.md) | medium (+ 30 min spike) | all-day chips, drop zones, task pipeline, Apps Script |
 | 9 | [Create tasks and events](09-create-items.md) | large | click zones, quick-create card (InputText), task pipeline, Apps Script + Calendar permission |

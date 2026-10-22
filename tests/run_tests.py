@@ -436,6 +436,84 @@ def test_week_navigation_survives_week_rollover(sk):
     assert sk.mock.opt('DayNum0', 'Text') == '8'
 
 
+def day_nums(sk):
+    return [sk.mock.opt('DayNum%d' % i, 'Text') for i in range(7) if sk.mock.shown('DayNum%d' % i)]
+
+
+def test_day_view():
+    sk = Skin(View='day')
+    try:
+        sk.start(2027, 3, 3, 12)  # Wednesday
+        m = sk.mock
+        assert day_nums(sk) == ['3'], day_nums(sk)
+        assert m.opt('DayName0', 'Text') == 'WED'
+        assert m.opt('TbTitle', 'Text') == 'March 3, 2027', m.opt('TbTitle', 'Text')
+        assert m.opt('TodayCircle', 'Shape').startswith('Ellipse 98,'), m.opt('TodayCircle', 'Shape')
+        widths = [int(m.opt('EvBg%d' % i, 'W')) for i in range(1, 81) if m.shown('EvBg%d' % i)]
+        assert widths and min(widths) > 1000, widths
+        assert m.opt('BtnPrev', 'ToolTipText') == 'Previous day'
+        assert m.opt('ViewSeg1', 'FontColor') == '4,30,73,255'   # selected segment
+        assert m.opt('ViewSeg3', 'FontColor') == '31,31,31,255'
+        assert m.shown('HidDn0') and not m.shown('HidDn1')        # "Late dinner", only today's column
+        sk.g.ShiftWeek(1)                                         # the wheel moves one day
+        assert day_nums(sk) == ['4'] and len(sk.all_day()) == 3
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+@with_skin
+def test_three_day_view_and_switching(sk):
+    sk.start(2027, 3, 3, 12)
+    m = sk.mock
+    assert day_nums(sk) == [str(d) for d in range(1, 8)]
+    sk.g.SetView('3day')
+    assert day_nums(sk) == ['3', '4', '5'], day_nums(sk)
+    assert ['!WriteKeyValue', 'Variables', 'View', '3day',
+            os.path.join(sk.dir, '@Resources') + os.sep + 'Private.inc'] in m.bangs
+    assert m.opt('TbTitle', 'Text') == 'March 2027'
+    assert sk.all_day() and m.shown('HidDn0')  # all-day row and hidden-hour badges work here too
+    sk.g.ShiftView(1)
+    assert day_nums(sk) == ['6', '7', '8'], day_nums(sk)
+    assert m.opt('TbTitle', 'Text') == 'March 2027' and not m.shown('TodayCircle')
+    # Another range shown: switching keeps its first day
+    sk.g.SetView('day')
+    assert day_nums(sk) == ['6']
+    sk.g.GoToday()
+    assert day_nums(sk) == ['3']
+    sk.g.SetView('week')
+    assert day_nums(sk) == [str(d) for d in range(1, 8)]
+    for n in [-1] * 5 + [1] * 10:
+        sk.g.ShiftView(n)
+    sk.g.SetView('bogus')
+    assert day_nums(sk) == [str(d) for d in range(5, 12)], day_nums(sk)  # 5 weeks on: 5-11 April
+
+
+def test_view_switcher_short_labels_and_description_line():
+    sk = Skin(Width=700)
+    try:
+        sk.start(2027, 3, 3, 12)
+        assert [sk.mock.opt('ViewSeg%d' % k, 'Text') for k in (1, 2, 3)] == ['D', '3D', 'W']
+        assert sk.mock.opt('ViewHit1', 'ToolTipText') == 'View: Day'
+        sk.check_clean()
+    finally:
+        sk.close()
+    ics = ("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+           "BEGIN:VEVENT\r\nUID:long\r\nDTSTART:20270303T090000\r\nDTEND:20270303T120000\r\n"
+           "SUMMARY:Workshop\r\nDESCRIPTION:\\n  Bring the slides\\nand a laptop\r\nEND:VEVENT\r\n"
+           "END:VCALENDAR\r\n")
+    for view, expected in (('day', True), ('week', False)):
+        sk = Skin(View=view)
+        try:
+            open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8').write(ics)
+            sk.start(2027, 3, 3, 8)
+            i = event_meter(sk, 'Workshop')
+            detail = sk.mock.opt('EvD%d' % i, 'Text')
+            assert ('Bring the slides' in detail) == expected, (view, detail)
+        finally:
+            sk.close()
+
+
 def test_italian_translation_and_context_menu():
     sk = Skin(Language='it')
     try:

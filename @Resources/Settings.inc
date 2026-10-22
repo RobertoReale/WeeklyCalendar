@@ -62,12 +62,17 @@ AutoScroll=1
 ;  AutoScrollHour: the hour of the day (0-23) after which the view automatically shifts down (default: 14 = 2:00 PM).
 AutoScrollHour=14
 
+;  View: day, 3day or week (default) - the view shown when the skin starts. The view picked
+;  with the switcher in the toolbar is saved in Private.inc and wins over this value.
+View=week
+
 ;  AllDayRows: rows of all-day events and tasks shown above the hours (1-10, default 3).
 ;  A busier day ends with "+N more": click it to show every item, then the arrow at the
 ;  left of the row to collapse it again.
 AllDayRows=3
 
-;  ShowToolbar=1: shows the top toolbar (Today button, navigation arrows, month, week badge, sync status)
+;  ShowToolbar=1: shows the top toolbar (Today button, navigation arrows, month, week badge, sync status,
+;  view switcher)
 ShowToolbar=1
 
 ;  ZPos: window position of the skin (applied on every refresh).
@@ -124,6 +129,7 @@ ClickAction=calendar
 Theme=light
 
 ;  Optional custom colors: uncomment a line to override the theme color.
+;  SelBgColor / SelTextColor: the selected view in the toolbar switcher.
 ; BgColor=255,255,255,255
 ; GridColor=224,227,231,255
 ; DayNumColor=31,31,31,255
@@ -136,3 +142,5 @@ Theme=light
 ; BadgeBgColor=239,241,241,255
 ; BadgeTextColor=68,71,70,255
 ; BorderColor=218,220,224,255
+; SelBgColor=211,227,253,255
+; SelTextColor=4,30,73,255

@@ -110,6 +110,16 @@ toolbar (`cy = tb / 2`):
 
 ## Phase B: month view
 
+**State after Phase A (v1.7.0).** The switcher is generic: `VIEWS = { 'day', '3day', 'week' }`
+and `VIEW_DAYS` in the Lua drive the segments, and the `.ini` has `ViewSegBg`, `ViewSeg1..3` and
+`ViewHit1..3` (hit shapes above the labels, with the `SetView` action and the tooltip). For month:
+append `'month'` to `VIEWS`, add `ViewSeg4` / `ViewHit4` (`SetView('month')`), the `month` labels in
+`lang.views`, `lang.viewsShort`, `tips.prev` and `tips.next`, and give `shownRange` / `ShiftView` /
+`setAnchor` a month branch (`VIEW_DAYS` has no entry for it). `ViewSegBg` resets `Shape..Shape5`;
+four segments need up to 6 shapes (fill ×2, 3 dividers, border). The "+N more" chip opens the
+day when the expanded all-day row cannot grow further (plan 4), so `SetView('day', day)` fits
+there too.
+
 ### Layout
 
 ```

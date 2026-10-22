@@ -13,6 +13,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Google Calendar Material 3 Design**: Clean typography, Google Calendar pastel color scheme, subtle borders, today indicator circle, and red live "now" line.
 - **Vertical Hour Scrolling**: Scroll the mouse wheel over the calendar grid or use the time-gutter buttons (▲ / ▼) to navigate through hours at any time.
 - **Auto-Scroll for Evening Plans**: In the afternoon and evening (after 2:00 PM / 14:00 by default), the visible time window automatically shifts down so upcoming commitments after 19:00 (7 PM) through midnight are always in plain sight without manual scrolling.
+- **Day, 3-Day and Week Views**: A segmented switcher in the toolbar (Day / 3 days / Week, like Google Calendar) changes the view at once and remembers it; wide day columns also show the first line of each event's description.
 - **Multi-Calendar Support**: Sync up to 6 distinct iCal feeds simultaneously, each with custom colors and titles.
 - **Smart Recurrence & Overrides**: Client-side parsing of RFC 5545 recurrence rules (`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`, including `BYSETPOS` such as "last weekday of the month"), extra dates (`RDATE`), exceptions (`EXDATE`), and modified occurrences (`RECURRENCE-ID`).
 - **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
@@ -139,6 +140,9 @@ AutoScrollHour=14
 
 ; Rows of all-day events and tasks (1-10); "+N more" expands the row
 AllDayRows=3
+
+; Startup view: day, 3day or week (the switcher in the toolbar saves its choice in Private.inc)
+View=week
 ```
 
 ### 3. Dimensions & Appearance
@@ -194,7 +198,8 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Scroll Hours** | Mouse wheel over calendar body / events / time column |
 | **Scroll Up / Down** | Click the ▲ / ▼ buttons in the time column gutter |
 | **Show Hidden Events** | Click a `▲ n` / `▼ n` badge in a day column |
-| **Navigate Weeks** | Click `<` / `>` buttons in the toolbar, or mouse wheel over the toolbar / day headers |
+| **Change View** | Click **Day**, **3 days** or **Week** in the toolbar (saved in `Private.inc`) |
+| **Navigate** | Click `<` / `>` buttons in the toolbar, or mouse wheel over the toolbar / day headers: one day, three days or a week, depending on the view |
 | **Jump to Today** | Click the **Today** button in the toolbar (also resets hour scroll) |
 | **Open an Event** | Click it: opens it in Google Calendar (a task or "+N more": that day). Middle-click: its Meet / Zoom / Teams link |
 | **All-Day Row** | Click `+N more` to show every all-day item (middle-click: open that day in Google Calendar); click ▲ at the left of the row to collapse it |
