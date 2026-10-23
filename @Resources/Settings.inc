@@ -62,7 +62,7 @@ AutoScroll=1
 ;  AutoScrollHour: the hour of the day (0-23) after which the view automatically shifts down (default: 14 = 2:00 PM).
 AutoScrollHour=14
 
-;  View: day, 3day or week (default) - the view shown when the skin starts. The view picked
+;  View: day, 3day, week (default) or month - the view shown when the skin starts. The view picked
 ;  with the switcher in the toolbar is saved in Private.inc and wins over this value.
 View=week
 

@@ -110,6 +110,13 @@ toolbar (`cy = tb / 2`):
 
 ## Phase B: month view
 
+**Built in v1.9.0** as designed below, with these differences: cells have no tooltip of their own
+beyond "Click: open this day" (all tooltips go through `[Tip]`, see the conventions), the grid
+has no outer border, and the bottom margin is 14 px (no hour buttons). `layoutMonth()` shares
+`layoutToolbar()`, `setGrid()`, `allDayTip()` / `timedTip()` and `finishLayout()` with the week
+layout. Measured on the real skin: changing month takes about 150-190 ms, switching to the month
+the first time about 200 ms.
+
 **State after Phase A (v1.7.0).** The switcher is generic: `VIEWS = { 'day', '3day', 'week' }`
 and `VIEW_DAYS` in the Lua drive the segments, and the `.ini` has `ViewSegBg`, `ViewSeg1..3` and
 `ViewHit1..3` (hit shapes above the labels, with the `SetView` action and the tooltip). For month:

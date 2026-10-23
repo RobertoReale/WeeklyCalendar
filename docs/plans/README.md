@@ -2,14 +2,14 @@
 
 Plans for features that are designed but not built yet. Recommended order (each one is
 independent and ships on its own). Plans 5, 4 and 7a are implemented (version 1.7.0), plan 8
-in version 1.8.0; the others are still open.
+in version 1.8.0 and 7b in 1.9.0; plans 9 and 10 are still open.
 
 | # | Plan | Size | Touches |
 | :--- | :--- | :--- | :--- |
 | 5 | [More calendars (3 → 6)](05-more-calendars.md) **(done)** | small | Lua loops, ini measures, Settings.inc, README |
 | 4 | [Taller all-day row, expandable](04-all-day-rows.md) **(done)** | medium | all-day layout, ini pools, one new button |
 | 7a | [Day and 3-day views + view switcher](07-views.md#phase-a-day-3-day-and-week) **(done)** | medium-large | layout generalised from 7 to N days, toolbar |
-| 7b | [Month view](07-views.md#phase-b-month-view) | large | new layout mode and meter pools |
+| 7b | [Month view](07-views.md#phase-b-month-view) **(done)** | large | new layout mode and meter pools |
 | 8 | [Drag a task to another day](08-drag-tasks.md) **(done)** | medium (+ 30 min spike) | all-day chips, drop zones, task pipeline, Apps Script |
 | 9 | [Create tasks and events](09-create-items.md) | large | click zones, quick-create card (InputText), task pipeline, Apps Script + Calendar permission |
 | 10 | [Edit and delete tasks and events](10-edit-delete.md) | large | right-click detail card, undo snackbar, local changes, Apps Script (Calendar API) |
@@ -37,8 +37,17 @@ These are the traps of this codebase. Each one has already caused a bug once.
   never by hand. Z-order is file order: a meter later in the file is drawn above and gets
   the mouse first.
 - **Bangs are cached.** `set()`, `show()` and `hide()` skip unchanged values. When a pool item
-  is not used, clear its mouse actions and tooltip (`''`) and hide it, as the cleanup loops
-  after each pool do. Otherwise a hidden meter keeps acting on stale data.
+  is not used, clear its mouse actions and tooltip and hide it (`clearMeter()`), as the cleanup
+  loops after each pool do. Otherwise a hidden meter keeps acting on stale data.
+- **Never set `ToolTipText` on a meter.** Rainmeter creates a window for every meter with a
+  tooltip (about 50 ms each, measured), and every update refreshes all of them. Register the
+  text and the item's rectangle with `setTip(meter, text, x, y, w, h, z)` and add `StyTip` to the
+  meter's `MeterStyle`: the single `[Tip]` meter carries the tooltip of the topmost item (highest
+  `z`) under the cursor. `test_one_tooltip_carrier` checks that no other meter has one.
+- **Measure on the real skin.** Each meter whose options change costs Rainmeter about 0.5 ms
+  on the next update, and a redraw about 20-40 ms; the Lua mock does not show this. Time a
+  change with `os.clock()` from `!CommandMeasure MeasureScript "..."` (it measures wall time).
+  `layout()` and `layoutMonth()` must redraw once (`finishLayout()`).
 - **Text into options goes through `safe()`.** `#` starts a Rainmeter variable, `[` `]` are
   section references, and `"` breaks bang quoting. Links drop their `#fragment` (see
   `expandEvent`).

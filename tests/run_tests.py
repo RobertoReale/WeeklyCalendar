@@ -263,6 +263,13 @@ class Skin:
         errors = [l for l in self.mock.logs if l[-1] in ('Error',)]
         assert not errors, errors
 
+    def tip(self, meter):
+        """Tooltip shown while the cursor rests on meter ('' when it has none)."""
+        self.g.TipOver(meter)
+        text = self.mock.opt('Tip', 'ToolTipText') if self.mock.shown('Tip') else ''
+        self.g.TipLeave(meter)
+        return text
+
     def all_day(self):
         """Shown all-day chips as {text: meter index}."""
         return {self.mock.opt('ADTx%d' % i, 'Text'): i for i in range(1, 71) if self.mock.shown('ADTx%d' % i)}
@@ -294,7 +301,7 @@ def test_layout_hidden_event_indicators(sk):
     # Tuesday (index 1): "Early run" 06:00 is above the view
     assert m.shown('HidUp1') and m.opt('HidUp1', 'Text') == '▲ 1', m.opt('HidUp1', 'Text')
     assert 'ScrollToHour(6)' in m.opt('HidUp1', 'LeftMouseUpAction')
-    assert 'Early run' in m.opt('HidUp1', 'ToolTipText')
+    assert 'Early run' in sk.tip('HidUp1')
     # Wednesday (index 2): "Late dinner" 22:00-23:00 is below the view
     assert m.shown('HidDn2') and m.opt('HidDn2', 'Text') == '▼ 1'
     assert 'ScrollToHour(11)' in m.opt('HidDn2', 'LeftMouseUpAction')
@@ -314,7 +321,7 @@ def test_layout_more_all_day_tooltip(sk):
     texts = [m.opt('ADTx%d' % i, 'Text') for i in range(1, 71) if m.shown('ADTx%d' % i)]
     assert texts == ['All day 1', 'All day 2', '+3 more'], texts
     more = [i for i in range(1, 71) if m.opt('ADTx%d' % i, 'Text') == '+3 more'][0]
-    assert m.opt('ADTx%d' % more, 'ToolTipText') == ('All day 3#CRLF#All day 4#CRLF#All day 5'
+    assert sk.tip('ADTx%d' % more) == ('All day 3#CRLF#All day 4#CRLF#All day 5'
                                                     '#CRLF##CRLF#Click: show all#CRLF#Middle-click: open in Google Calendar')
     assert m.opt('ADTx%d' % more, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "ExpandAllDay()"]'
     assert m.opt('ADTx%d' % more, 'MiddleMouseUpAction').startswith('["https://calendar.google.com/calendar/r/day/2027/3/4')
@@ -347,11 +354,11 @@ def test_all_day_row_expands_and_collapses(sk):
     sk.g.ExpandAllDay()
     assert ad_texts(sk) == ['All day %d' % k for k in range(1, 6)], ad_texts(sk)
     assert m.shown('AdCollapse') and m.shown('AdCollapseTxt')
-    assert m.opt('AdCollapse', 'ToolTipText') == 'Show fewer'
+    assert sk.tip('AdCollapse') == 'Show fewer'
     assert int(m.opt('HL1', 'Y')) == y0 + 2 * 22
     sk.g.CollapseAllDay()
     assert ad_texts(sk) == ['All day 1', 'All day 2', '+3 more']
-    assert not m.shown('AdCollapse') and m.opt('AdCollapse', 'ToolTipText') == ''
+    assert not m.shown('AdCollapse') and sk.tip('AdCollapse') == ''
     assert int(m.opt('HL1', 'Y')) == y0
     # Still expanded in a week without all-day items: no band, no button
     sk.g.ExpandAllDay()
@@ -383,7 +390,7 @@ def test_layout_declined_is_outlined(sk):
     idx = [i for i in range(1, 81) if m.opt('EvT%d' % i, 'Text') == 'Declined meeting'][0]
     shape = m.opt('EvBg%d' % idx, 'Shape')
     assert 'Fill Color 255,255,255,255' in shape and 'Stroke Color 3,155,229,255' in shape, shape
-    assert 'Declined' in m.opt('EvBg%d' % idx, 'ToolTipText')
+    assert 'Declined' in sk.tip('EvBg%d' % idx)
     assert 'Attività università' in sk.event_titles()
 
 
@@ -451,7 +458,7 @@ def test_day_view():
         assert m.opt('TodayCircle', 'Shape').startswith('Ellipse 98,'), m.opt('TodayCircle', 'Shape')
         widths = [int(m.opt('EvBg%d' % i, 'W')) for i in range(1, 81) if m.shown('EvBg%d' % i)]
         assert widths and min(widths) > 1000, widths
-        assert m.opt('BtnPrev', 'ToolTipText') == 'Previous day'
+        assert sk.tip('BtnPrev') == 'Previous day'
         assert m.opt('ViewSeg1', 'FontColor') == '4,30,73,255'   # selected segment
         assert m.opt('ViewSeg3', 'FontColor') == '31,31,31,255'
         assert m.shown('HidDn0') and not m.shown('HidDn1')        # "Late dinner", only today's column
@@ -494,7 +501,7 @@ def test_view_switcher_short_labels_and_description_line():
     try:
         sk.start(2027, 3, 3, 12)
         assert [sk.mock.opt('ViewSeg%d' % k, 'Text') for k in (1, 2, 3)] == ['D', '3D', 'W']
-        assert sk.mock.opt('ViewHit1', 'ToolTipText') == 'View: Day'
+        assert sk.tip('ViewHit1') == 'View: Day'
         sk.check_clean()
     finally:
         sk.close()
@@ -522,7 +529,7 @@ def test_italian_translation_and_context_menu():
         assert m.opt('Rainmeter', 'ContextTitle') == 'Aggiorna ora'
         assert m.opt('Rainmeter', 'ContextTitle7') == 'Indirizzi calendario'
         assert m.opt('CalAppTitle', 'Text') == 'Calendario'
-        assert m.opt('BtnPrev', 'ToolTipText') == 'Settimana precedente'
+        assert sk.tip('BtnPrev') == 'Settimana precedente'
         assert int(m.opt('BtnToday', 'X')) > 142  # moved right of the longer title
         sk.check_clean()
     finally:
@@ -580,17 +587,17 @@ def test_tasks_and_holidays():
         assert i > ad['Festa di prova'], ad
         assert 'Fill Color ' + purple in m.opt('ADBg%d' % i, 'Shape')
         assert m.opt('ADTx%d' % i, 'InlineSetting') == ''
-        assert 'Attività' in m.opt('ADBg%d' % i, 'ToolTipText')
+        assert 'Attività' in sk.tip('ADBg%d' % i)
         # Completed task: check mark, title struck through, faded, escaped comma restored
         i = ad['✓ Esercizi, parte 2']
         assert m.opt('ADTx%d' % i, 'InlineSetting') == 'Strikethrough'
         assert m.opt('ADTx%d' % i, 'InlinePattern') == r'^\S+ (.*)$'
         assert 'Fill Color ' + purple not in m.opt('ADBg%d' % i, 'Shape')
-        assert 'Attività completata' in m.opt('ADBg%d' % i, 'ToolTipText')
+        assert 'Attività completata' in sk.tip('ADBg%d' % i)
         # Open task on a past day: faded, not struck through
         i = ad['○ Ripasso']
         # Task notes after a blank line, one tooltip line per line of the notes
-        assert m.opt('ADBg%d' % i, 'ToolTipText').endswith('#CRLF##CRLF#capitoli 1-3#CRLF#esercizi 4, 5 ( x)')
+        assert sk.tip('ADBg%d' % i).endswith('#CRLF##CRLF#capitoli 1-3#CRLF#esercizi 4, 5 ( x)')
         assert 'Fill Color ' + purple not in m.opt('ADBg%d' % i, 'Shape')
         assert m.opt('ADTx%d' % i, 'InlineSetting') == ''
         # Holiday: its own color
@@ -619,7 +626,7 @@ def test_unreadable_feed_is_reported():
         sk.g.Reload(3)
         m = sk.mock
         assert 'feed error' in m.opt('TbSync', 'Text'), m.opt('TbSync', 'Text')
-        assert 'calendar 3' in m.opt('TbSync', 'ToolTipText')
+        assert 'calendar 3' in sk.tip('TbSync')
         assert sk.event_titles(), 'the working feed must still be shown'
     finally:
         sk.close()
@@ -658,7 +665,7 @@ def test_unreadable_fifth_feed_is_reported():
         sk.start(2027, 3, 3, 12)
         sk.g.Reload(5)
         assert 'feed error' in sk.mock.opt('TbSync', 'Text')
-        assert 'calendar 5' in sk.mock.opt('TbSync', 'ToolTipText')
+        assert 'calendar 5' in sk.tip('TbSync')
         sk.check_clean()
     finally:
         sk.close()
@@ -835,7 +842,7 @@ def test_event_conference_url_and_Empty_task():
         assert m.opt('EvBg%d' % idx, 'LeftMouseUpAction') == \
             '["https://calendar.google.com/calendar/r/day/2027/3/3?authuser=me%40example.com"]'
         assert m.opt('EvBg%d' % idx, 'MiddleMouseUpAction') == '["https://meet.google.com/abc-defg-hij"]'
-        assert m.opt('EvBg%d' % idx, 'ToolTipText').endswith('#CRLF##CRLF#Middle-click: open the link')
+        assert sk.tip('EvBg%d' % idx).endswith('#CRLF##CRLF#Middle-click: open the link')
         ad = sk.all_day()
         assert '✓ (no title)' in ad, ad
         sk.check_clean()
@@ -879,7 +886,7 @@ def eid_link(event_id, cal='me@example.com'):
 def test_event_description_tooltip_is_cleaned():
     sk = google_skin()
     try:
-        tip = sk.mock.opt('EvBg%d' % event_meter(sk, 'Lezione'), 'ToolTipText')
+        tip = sk.tip('EvBg%d' % event_meter(sk, 'Lezione'))
         # HTML turned into lines, entities decoded, Google Meet block left out
         assert tip.startswith('Lezione#CRLF#'), tip
         assert '#CRLF##CRLF#Aula 3.0.3#CRLF#Portare il libro & appunti' in tip, tip
@@ -911,7 +918,7 @@ def test_click_opens_event_in_google_calendar():
         i = event_meter(sk, 'Lezione')
         assert m.opt('EvBg%d' % i, 'LeftMouseUpAction') == '["https://meet.google.com/abc-defg-hij"]'
         assert m.opt('EvBg%d' % i, 'MiddleMouseUpAction') == '["%s"]' % eid_link('abc123')
-        assert 'Middle-click: open in Google Calendar' in m.opt('EvBg%d' % i, 'ToolTipText')
+        assert 'Middle-click: open in Google Calendar' in sk.tip('EvBg%d' % i)
         # Without a link the left click still opens Google Calendar
         i = event_meter(sk, 'Daily')
         assert m.opt('EvBg%d' % i, 'LeftMouseUpAction') == '["%s"]' % eid_link('rec_20270301T090000Z')
@@ -930,12 +937,12 @@ def test_task_check_button():
         # the circle checks it
         assert m.opt('ADBg%d' % i, 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragStart(%d)"]' % i
         assert m.opt('ADChk%d' % i, 'LeftMouseDownAction') == '[!UpdateMeter ADChk%d]' % i
-        assert m.shown('ADChk%d' % i) and m.opt('ADChk%d' % i, 'ToolTipText') == 'Mark complete'
+        assert m.shown('ADChk%d' % i) and sk.tip('ADChk%d' % i) == 'Mark complete'
         assert m.opt('ADChk%d' % i, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "ToggleTask(%d)"]' % i
         assert 'Ellipse' in m.opt('ADChk%d' % i, 'MouseOverAction')
         # Tasks from an older script (no list id): the button says to update the script
         old = ad['○ Ripasso']
-        assert 'GoogleTasksFeed.gs' in m.opt('ADChk%d' % old, 'ToolTipText')
+        assert 'GoogleTasksFeed.gs' in sk.tip('ADChk%d' % old)
         m.bangs.clear()
         sk.g.ToggleTask(old)
         assert ['!CommandMeasure', 'MeasureTaskAction', 'Run'] not in m.bangs
@@ -949,7 +956,7 @@ def test_task_check_button():
         # Shown as completed at once
         i = [v for k, v in sk.all_day().items() if k.startswith('✓ Simulazione')][0]
         assert m.opt('ADTx%d' % i, 'InlineSetting') == 'Strikethrough'
-        assert m.opt('ADChk%d' % i, 'ToolTipText') == 'Mark uncompleted'
+        assert sk.tip('ADChk%d' % i) == 'Mark uncompleted'
 
         # Google confirms: the tasks feed is downloaded again
         m.bangs.clear()
@@ -983,7 +990,7 @@ def test_task_check_button():
         sk.g.TaskResult()
         assert any(k.startswith('✓ Simulazione') for k in sk.all_day()), sk.all_day()
         assert m.opt('TbSync', 'Text').endswith('allow editing tasks'), m.opt('TbSync', 'Text')
-        tip = m.opt('TbSync', 'ToolTipText')
+        tip = sk.tip('TbSync')
         assert 'run the function authorize' in tip and 'Google: Non disponi' in tip, tip
         # A confirmed change clears the notice
         sk.g.ToggleTask(i)
@@ -1029,7 +1036,7 @@ def test_drag_chip_actions():
         for meter in ('ADBg%d' % i, 'ADTx%d' % i):
             assert m.opt(meter, 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragStart(%d)"]' % i
             assert m.opt(meter, 'LeftMouseUpAction') == '' and m.opt(meter, 'MouseActionCursorName') == 'SizeAll'
-        assert m.opt('ADBg%d' % i, 'ToolTipText').endswith('#CRLF##CRLF#Drag to another day to move it')
+        assert sk.tip('ADBg%d' % i).endswith('#CRLF##CRLF#Drag to another day to move it')
         # Not draggable: tasks of an older script (no ids) and events
         for title in ('○ Ripasso', 'All day 1'):
             j = sk.all_day()[title]
@@ -1211,8 +1218,192 @@ process.stdout.write(JSON.stringify({
     assert out['patches'] == [[{'due': '2027-03-05T00:00:00.000Z'}, 'L1', 'a']], out['patches']
 
 
+# ---------------------------------------------------------------------------
+# Month view (plan 7b)
+# ---------------------------------------------------------------------------
+def epoch_day(y, mo, d):
+    return (date(y, mo, d) - date(1970, 1, 1)).days
+
+
+def month_lines(sk):
+    """Shown month lines as [(cell number, text, meter)]."""
+    m, out = sk.mock, []
+    boxes = [(c, int(m.opt('MHit%d' % c, 'X')), int(m.opt('MHit%d' % c, 'Y')),
+              int(m.opt('MHit%d' % c, 'W')), int(m.opt('MHit%d' % c, 'H')))
+             for c in range(1, 43) if m.shown('MHit%d' % c)]
+    for i in range(1, 211):
+        if m.shown('MLn%d' % i):
+            x, y = int(m.opt('MLn%d' % i, 'X')), int(m.opt('MLn%d' % i, 'Y'))
+            cell = [c for c, bx, by, bw, bh in boxes if bx <= x < bx + bw and by <= y < by + bh]
+            out.append((cell[0], m.opt('MLn%d' % i, 'Text'), 'MLn%d' % i))
+    return out
+
+
+def cells_shown(sk):
+    return [c for c in range(1, 43) if sk.mock.shown('MHit%d' % c)]
+
+
+def test_month_view_grid():
+    sk = Skin(View='month', feeds={3: 'tasks.ics'})
+    try:
+        sk.start(2027, 3, 3, 12)  # March 2027 starts on a Monday: 5 weeks
+        m = sk.mock
+        assert cells_shown(sk) == list(range(1, 36)), cells_shown(sk)
+        assert m.opt('TbTitle', 'Text') == 'March 2027' and not m.shown('TbWeek')
+        assert m.opt('ViewSeg4', 'Text') == 'Month' and m.opt('ViewSeg4', 'FontColor') == '4,30,73,255'
+        assert sk.tip('BtnNext') == 'Next month'
+        assert [m.opt('DayName%d' % c, 'Text') for c in range(7)] == ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+        # Today: white number on the blue circle; the next month's days are muted
+        assert m.opt('MNum3', 'Text') == '3' and m.opt('MNum3', 'FontColor') == '255,255,255,255'
+        assert m.opt('TodayCircle', 'Shape').startswith('Ellipse %s,%s,12' % (m.opt('MNum3', 'X'), m.opt('MNum3', 'Y')))
+        assert m.shown('TodayCircle')
+        assert m.opt('MNum1', 'Text') == '1 Mar' and m.opt('MNum2', 'FontColor') == '31,31,31,255'
+        assert m.opt('MNum32', 'Text') == '1 Apr' and m.opt('MNum32', 'FontColor') == '116,119,117,255'
+        # A day opens in the day view; the middle click opens it in Google Calendar
+        mar4 = epoch_day(2027, 3, 4)
+        assert m.opt('MHit4', 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "SetView(\'day\', %d)"]' % mar4
+        assert m.opt('MNum4', 'MiddleMouseUpAction').startswith('["https://calendar.google.com/calendar/r/day/2027/3/4')
+        assert sk.tip('MHit4').startswith('March 4, 2027#CRLF#Click: open this day')
+        # Only the month's meters: the week view's are hidden, the now line too
+        for meter in ('EvBg1', 'ADBg1', 'HL1', 'TzLabel', 'DayNum0', 'BtnUpHour', 'NowLine', 'HidDn2'):
+            assert not m.shown(meter), meter
+        # Tasks: same chip as in the week view, struck through when completed
+        lines = month_lines(sk)
+        done = [l for l in lines if l[1].startswith('✓ Esercizi')][0]
+        assert done[0] == 2 and m.opt(done[2], 'InlineSetting') == 'Strikethrough'
+        task = [l for l in lines if l[1].startswith('○ Simulazione')][0]
+        assert task[0] == 3 and m.opt(task[2], 'InlineSetting') == ''
+        # The wheel and the arrows change the month: February 2027 has 4 weeks, August 6
+        sk.g.ScrollHours(-1)
+        assert m.opt('TbTitle', 'Text') == 'February 2027' and cells_shown(sk) == list(range(1, 29))
+        assert not m.shown('MLn%d' % (len(month_lines(sk)) + 1))
+        for _ in range(6):
+            sk.g.ShiftView(1)
+        assert m.opt('TbTitle', 'Text') == 'August 2027' and cells_shown(sk) == list(range(1, 43))
+        assert m.opt('MNum1', 'Text') == '26' and m.opt('MNum7', 'Text') == '1 Aug'
+        assert not m.shown('TodayCircle')
+        sk.g.GoToday()
+        assert m.opt('TbTitle', 'Text') == 'March 2027'
+        # December -> January of the next year
+        for _ in range(10):
+            sk.g.ShiftView(1)
+        assert m.opt('TbTitle', 'Text') == 'January 2028', m.opt('TbTitle', 'Text')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_month_view_more_and_items():
+    sk = Skin(View='month', Height=500)  # small cells: two lines each
+    try:
+        sk.start(2027, 3, 3, 12)
+        m = sk.mock
+        thu = [l for l in month_lines(sk) if l[0] == 4]
+        assert len(thu) == 2 and thu[0][1] == 'All day 1' and thu[1][1].startswith('+'), thu
+        more = thu[1][2]
+        mar4 = epoch_day(2027, 3, 4)
+        assert m.opt(more, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "SetView(\'day\', %d)"]' % mar4
+        tip = sk.tip(more)
+        assert tip.startswith('All day 2#CRLF#All day 3'), tip
+        assert tip.endswith('Click: open this day#CRLF#Middle-click: open in Google Calendar'), tip
+        assert m.opt(more, 'FontColor') == '116,119,117,255'
+        # From the month to that day
+        sk.g.SetView('day', mar4)
+        assert day_nums(sk) == ['4'] and not m.shown('MHit1') and not m.shown('MLn1')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_month_view_lines_match_the_week_view():
+    sk = google_skin()
+    try:
+        m = sk.mock
+        i = event_meter(sk, 'Lezione')
+        week_tip, week_act = sk.tip('EvBg%d' % i), m.opt('EvBg%d' % i, 'LeftMouseUpAction')
+        sk.g.SetView('month')
+        assert ['!WriteKeyValue', 'Variables', 'View', 'month',
+                os.path.join(sk.dir, '@Resources') + os.sep + 'Private.inc'] in m.bangs
+        line = [l for l in month_lines(sk) if l[1].endswith('Lezione')][0]
+        assert line[0] == 3 and re.match(r'^\d\d:\d\d Lezione$', line[1]), line
+        assert sk.tip(line[2]) == week_tip
+        assert m.opt(line[2], 'LeftMouseUpAction') == week_act
+        assert m.opt(line[2], 'Padding') == '14,0,4,0'   # after the dot
+        # The daily event: one line per day, with its feed's color in the dot (faded once over)
+        daily = [l for l in month_lines(sk) if l[1].endswith('Daily')]
+        assert [l[0] for l in daily] == [1, 2, 3, 4, 5], daily
+        shp = m.opt('MShp4', 'Shape')
+        assert shp.startswith('Ellipse 10,') and '3,155,229,255' in shp, shp
+        assert '3,155,229,255' not in m.opt('MShp1', 'Shape')
+        # Back to the week: the month's meters are hidden again
+        sk.g.SetView('week')
+        assert not any(m.shown('MLn%d' % k) for k in range(1, 211)) and not m.shown('MHit1')
+        assert m.shown('TzLabel') and event_meter(sk, 'Lezione')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_month_view_pixel_snapping_and_dark_theme():
+    sk = Skin(View='month', Theme='dark', feeds={2: 'holidays.ics', 3: 'tasks.ics'})
+    try:
+        sk.start(2027, 3, 3, 12)
+        m = sk.mock
+        for (meter, opt), val in m.options.items():
+            if opt in ('X', 'Y', 'W', 'H'):
+                assert re.match(r'^-?\d+$', str(val)), (meter, opt, val)
+        for k in range(1, 12):
+            s = m.opt('Grid', 'Shape' if k == 1 else 'Shape%d' % k)
+            assert s.startswith('Line ') and '.5' in s, (k, s)
+        assert m.opt('MNum10', 'FontColor') == '227,227,227,255'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_one_tooltip_carrier():
+    sk = Skin(View='month', feeds={3: 'tasks.ics'})
+    try:
+        sk.start(2027, 3, 3, 12)
+        m, g = sk.mock, sk.g
+        # No meter has a tooltip of its own: Rainmeter would create a window for each
+        assert [k for k in m.options if k[1] == 'ToolTipText' and k[0] != 'Tip'] == []
+        assert not m.shown('Tip')
+        task = [l for l in month_lines(sk) if l[1].startswith('○ Simulazione')][0][2]
+        # Entering the cell, then a line in it: the line (on top) wins, whatever the order
+        g.TipOver('MHit3')
+        assert m.shown('Tip') and m.opt('Tip', 'ToolTipText').startswith('March 3, 2027')
+        assert m.opt('Tip', 'X') == m.opt('MHit3', 'X') and m.opt('Tip', 'W') == m.opt('MHit3', 'W')
+        g.TipOver(task)
+        assert m.opt('Tip', 'ToolTipText').startswith('○ Simulazione Tema di Esame#CRLF#Task')
+        assert m.opt('Tip', 'H') == '16' and m.opt('Tip', 'Y') == str(int(m.opt(task, 'Y')) - 8)
+        g.TipLeave('MHit3'); g.TipOver('MHit3')
+        assert m.opt('Tip', 'ToolTipText').startswith('○ Simulazione')
+        # Back on the cell background, then out of the skin
+        g.TipLeave(task)
+        assert m.opt('Tip', 'ToolTipText').startswith('March 3, 2027')
+        g.TipLeave('MHit3')
+        assert not m.shown('Tip')
+        # A layout under a resting cursor: the carrier follows, or hides when the item is gone
+        g.TipOver(task)
+        g.SetView('week')
+        assert not m.shown('Tip')
+        i = task_chip(sk)
+        g.TipOver('ADTx%d' % i)
+        assert m.opt('Tip', 'ToolTipText').startswith('○ Simulazione')
+        g.TipOver('ADChk%d' % i)
+        assert m.opt('Tip', 'ToolTipText') == 'Mark complete'
+        assert "TipLeave('ADChk%d')" % i in m.opt('ADChk%d' % i, 'MouseLeaveAction')
+        g.TipLeave('ADChk%d' % i)
+        g.ShiftView(1)                             # the chip's slot now holds another item
+        assert not m.shown('Tip') or not m.opt('Tip', 'ToolTipText').startswith('○ Simulazione')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def main():
-    tests =[(n, f) for n, f in sorted(globals().items()) if n.startswith('test_') and callable(f)]
+    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith('test_') and callable(f)]
     failed = 0
     for name, fn in tests:
         try:
