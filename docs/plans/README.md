@@ -41,9 +41,15 @@ These are the traps of this codebase. Each one has already caused a bug once.
   loops after each pool do. Otherwise a hidden meter keeps acting on stale data.
 - **Never set `ToolTipText` on a meter.** Rainmeter creates a window for every meter with a
   tooltip (about 50 ms each, measured), and every update refreshes all of them. Register the
-  text and the item's rectangle with `setTip(meter, text, x, y, w, h, z)` and add `StyTip` to the
+  text and the item's rectangle with `setTip(meter, text, x, y, w, h, z)` and add `StyItem` to the
   meter's `MeterStyle`: the single `[Tip]` meter carries the tooltip of the topmost item (highest
   `z`) under the cursor. `test_one_tooltip_carrier` checks that no other meter has one.
+- **Every clickable meter needs a `LeftMouseDownAction`** (`StyItem` gives a harmless one,
+  `NO_DRAG` in the Lua): Rainmeter moves the whole skin when the button is pressed where no meter
+  has one. `test_pressing_an_item_does_not_move_the_skin` checks the `.ini`.
+- **Check interactions with real input:** `tools\LiveTest.ps1` moves the real mouse, presses,
+  drags, scrolls and takes screenshots with tooltips (see its header). Use it for anything the
+  Lua mock cannot show: tooltips, drag and drop, what a press does.
 - **Measure on the real skin.** Each meter whose options change costs Rainmeter about 0.5 ms
   on the next update, and a redraw about 20-40 ms; the Lua mock does not show this. Time a
   change with `os.clock()` from `!CommandMeasure MeasureScript "..."` (it measures wall time).

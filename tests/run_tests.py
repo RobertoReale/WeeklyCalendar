@@ -61,6 +61,10 @@ def ini_sections():
     return set(re.findall(r'^\[([^\]]+)\]', text, re.M))
 
 
+# Harmless press action of every item: without one, Rainmeter drags the whole skin
+NO_DRAG = '[!SetVariable WCPressed 1]'
+
+
 def utc(y, mo, d, h=0, mi=0):
     return calendar.timegm((y, mo, d, h, mi, 0))
 
@@ -773,6 +777,22 @@ def test_skin_folder_with_accented_name():
         sk.close()
 
 
+def test_pressing_an_item_does_not_move_the_skin():
+    # Rainmeter drags the whole skin when the button is pressed where no meter has a
+    # LeftMouseDownAction: every clickable meter gets one (StyItem), except the drop layer,
+    # which is shown only while a task is dragged
+    text = open(INI_FILE, encoding='utf-8-sig').read()
+    style = re.search(r'(?ms)^\[StyItem\]\n(.*?)\n\n', text).group(1)
+    assert 'LeftMouseDownAction=' in style
+    bad = []
+    for sec in re.split(r'(?m)^(?=\[)', text):
+        m = re.match(r'\[([^\]]+)\]', sec)
+        if m and re.search(r'(?m)^LeftMouseUpAction=', sec) and not m.group(1).startswith('Drag') \
+                and not re.search(r'(?m)^LeftMouseDownAction=', sec) and 'StyItem' not in sec:
+            bad.append(m.group(1))
+    assert bad == [], bad
+
+
 def test_lua_file_is_utf16_with_bom():
     # Rainmeter 4.5 only treats Lua strings as UTF-8 when the script is UTF-16 LE with BOM
     assert open(LUA_FILE, 'rb').read(2) == b'\xff\xfe', 'Calendar.lua must be saved as UTF-16 LE with BOM'
@@ -936,7 +956,7 @@ def test_task_check_button():
         # The chip is pressed to drag it (a click opens the task's day through DragDrop),
         # the circle checks it
         assert m.opt('ADBg%d' % i, 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragStart(%d)"]' % i
-        assert m.opt('ADChk%d' % i, 'LeftMouseDownAction') == '[!UpdateMeter ADChk%d]' % i
+        assert m.opt('ADChk%d' % i, 'LeftMouseDownAction') == NO_DRAG
         assert m.shown('ADChk%d' % i) and sk.tip('ADChk%d' % i) == 'Mark complete'
         assert m.opt('ADChk%d' % i, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "ToggleTask(%d)"]' % i
         assert 'Ellipse' in m.opt('ADChk%d' % i, 'MouseOverAction')
@@ -1040,7 +1060,7 @@ def test_drag_chip_actions():
         # Not draggable: tasks of an older script (no ids) and events
         for title in ('○ Ripasso', 'All day 1'):
             j = sk.all_day()[title]
-            assert m.opt('ADBg%d' % j, 'LeftMouseDownAction') == '', title
+            assert m.opt('ADBg%d' % j, 'LeftMouseDownAction') == NO_DRAG, title
             assert m.opt('ADBg%d' % j, 'LeftMouseUpAction') != '' and m.opt('ADBg%d' % j, 'MouseActionCursorName') == 'Hand'
         assert not any(m.shown(d) for d in DRAG_METERS)
         # The drop layer is placed by the layout: one zone per column, from the header to the grid bottom
@@ -1052,7 +1072,7 @@ def test_drag_chip_actions():
     # The day view has nowhere to drag to
     sk = drag_skin(View='day')
     try:
-        assert sk.mock.opt('ADBg%d' % task_chip(sk), 'LeftMouseDownAction') == ''
+        assert sk.mock.opt('ADBg%d' % task_chip(sk), 'LeftMouseDownAction') == NO_DRAG
         assert sk.mock.opt('ADBg%d' % task_chip(sk), 'LeftMouseUpAction') == DAY_LINK
     finally:
         sk.close()
@@ -1162,7 +1182,9 @@ def test_drag_cancel():
             sk.g.DragStart(i)
             sk.g.DragOver(4)
             if cancel == 'right click':
-                sk.g.DragCancel()
+                sk.g.DragCancel(1)                   # the left button is still down
+                assert m.shown('DragArea') and not m.shown('DragZone2') and not m.shown('DragHi')
+                sk.g.DragCancel()                    # its release, over DragArea
             elif cancel == 'back home':
                 sk.g.DragOver(2)
                 assert not m.shown('DragHi') and m.opt('TbSync', 'Text') == sync

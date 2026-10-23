@@ -214,6 +214,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **All-Day Row** | Click `+N more` to show every all-day item (middle-click: open that day in Google Calendar); click ▲ at the left of the row to collapse it |
 | **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it) |
 | **Move a Task** | Drag it to another day (3-day and week views); right-click or leave the skin to cancel |
+| **Move the Skin** | Drag it by an empty area (toolbar background, day headers, empty grid): pressing an event, a task or a button does not move it |
 | **Sync Calendar Now** | Click the sync time in the top-right corner, or right-click > *Refresh now* |
 | **Context Menu** | Right-click the skin for quick access to weeks, hour scrolling, refresh, and settings |
 
@@ -264,7 +265,17 @@ against a fake Tasks API.
 Tooltips: no meter has a `ToolTipText` of its own. Rainmeter creates a window for each meter
 that has one (about 50 ms each), which made the first layout take seconds. Calendar.lua keeps
 each item's text and rectangle (`setTip`) and moves the single `[Tip]` meter onto the item under
-the cursor; the items get `MeterStyle=... | StyTip` for the mouse actions that report it.
+the cursor; the items get `MeterStyle=... | StyItem` for the mouse actions that report it.
+`StyItem` also gives every item a harmless `LeftMouseDownAction`: Rainmeter moves the whole skin
+when the button is pressed where no meter has one, so only the background moves the skin.
+
+To check the real skin with real mouse input (tooltips, dragging, the wheel), run
+`tools\LiveTest.ps1` with PowerShell 7; its header lists the steps. For example, press on an event
+and check that the skin did not move:
+
+```plaintext
+pwsh -File tools\LiveTest.ps1 -Front -Steps "pos; move 600 500; down; glide 660 540; up; pos"
+```
 
 ---
 
