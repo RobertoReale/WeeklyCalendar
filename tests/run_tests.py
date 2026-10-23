@@ -1023,7 +1023,7 @@ def test_task_check_button():
 
 
 # ---------------------------------------------------------------------------
-# Dragging a task to another day (plan 8)
+# Dragging a task to another day
 # ---------------------------------------------------------------------------
 DAY_W = (1400 - 64 - 14) / 7          # Width in Settings.inc, time gutter and right margin
 DAY_LINK = '["https://calendar.google.com/calendar/r/day/2027/3/3?authuser=me%40example.com"]'
@@ -1241,7 +1241,7 @@ process.stdout.write(JSON.stringify({
 
 
 # ---------------------------------------------------------------------------
-# Month view (plan 7b)
+# Month view
 # ---------------------------------------------------------------------------
 def epoch_day(y, mo, d):
     return (date(y, mo, d) - date(1970, 1, 1)).days
@@ -1361,6 +1361,78 @@ def test_month_view_lines_match_the_week_view():
         sk.g.SetView('week')
         assert not any(m.shown('MLn%d' % k) for k in range(1, 211)) and not m.shown('MHit1')
         assert m.shown('TzLabel') and event_meter(sk, 'Lezione')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_month_view_drag_a_task():
+    sk = Skin(View='month', feeds={3: 'tasks.ics'})
+    try:
+        sk.start(2027, 3, 3, 12)
+        m, g = sk.mock, sk.g
+        purple = '142,36,170'
+
+        def task_line():
+            return [l for l in month_lines(sk) if l[1].startswith('○ Simulazione')][0]
+
+        def shapes(meter):
+            return {k: v for (mt, k), v in m.options.items() if mt == meter and k.startswith('Shape')}
+
+        cell, _, ln = task_line()
+        k = int(ln[3:])
+        assert cell == 3
+        assert m.opt(ln, 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragStart(%d)"]' % k
+        assert m.opt(ln, 'LeftMouseUpAction') == '' and m.opt(ln, 'MouseActionCursorName') == 'SizeAll'
+        assert sk.tip(ln).endswith('#CRLF##CRLF#Drag to another day to move it'), sk.tip(ln)
+        # Not draggable: a task of an older script (no ids), an event, "+N more"
+        other = [l for l in month_lines(sk) if l[1].startswith('○ Ripasso')][0][2]
+        assert m.opt(other, 'LeftMouseDownAction') == NO_DRAG and m.opt(other, 'LeftMouseUpAction') != ''
+        assert m.opt(other, 'MouseActionCursorName') == 'Hand'
+        # One drop zone per cell
+        for c in (0, 4, 34):
+            assert [m.opt('DragZone%d' % c, o) for o in 'XYWH'] == [m.opt('MHit%d' % (c + 1), o) for o in 'XYWH']
+
+        # A click: the zones appear, the release on its own cell opens the day
+        g.DragStart(k)
+        assert all(m.shown('DragZone%d' % c) for c in range(35)) and not m.shown('DragZone35')
+        m.bangs.clear()
+        g.DragOver(2)
+        g.DragDrop(2)
+        assert [DAY_LINK] in m.bangs and not task_params(sk)
+        assert not any(m.shown('DragZone%d' % c) for c in range(42)) and not m.shown('DragArea')
+
+        # To Friday 5: the cell is highlighted, the task previewed after its all-day items
+        before = shapes('MShp3')
+        fri_allday = [l for l in month_lines(sk) if l[0] == 5 and not re.match(r'^\d\d:\d\d ', l[1])]
+        g.DragStart(k)
+        g.DragOver(2)
+        g.DragOver(4)
+        x5, y5 = int(m.opt('MHit5', 'X')), int(m.opt('MHit5', 'Y'))
+        assert m.shown('DragHi') and m.opt('DragHi', 'X') == str(x5 + 2) and m.opt('DragHi', 'Y') == str(y5 + 2)
+        assert 'Fill Color %s,28' % purple in m.opt('DragHi', 'Shape')
+        assert m.opt('DragPrev', 'Y') == str(y5 + 26 + len(fri_allday) * 18) and m.opt('DragPrev', 'H') == '16'
+        assert m.opt('DragPrevTx', 'Text').startswith('○ Simulazione')
+        assert m.opt('TbSync', 'Text') == 'Move to Fri 5'
+        changed = [o for o, v in shapes('MShp3').items() if v != before[o]]
+        assert len(changed) == 1 and purple not in shapes('MShp3')[changed[0]], changed   # faded
+        g.DragDrop(4)
+        assert task_params(sk) == ['-s -f -L -m 30 https://example.com/feed3.ics'
+                                   '?action=move&list=L1&task=t-open&due=2027-03-05'], task_params(sk)
+        assert task_line()[0] == 5 and not m.shown('DragHi')
+        assert 'Move to' not in m.opt('TbSync', 'Text')
+
+        # The wheel changes the month only after the drop; a right click cancels
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+        k = int(task_line()[2][3:])
+        g.DragStart(k)
+        g.DragOver(10)
+        g.ScrollHours(1)
+        assert m.opt('TbTitle', 'Text') == 'March 2027' and m.shown('DragHi')
+        g.DragCancel(1)
+        g.DragCancel()
+        assert m.opt('TbTitle', 'Text') == 'April 2027' and not m.shown('DragHi')
         sk.check_clean()
     finally:
         sk.close()

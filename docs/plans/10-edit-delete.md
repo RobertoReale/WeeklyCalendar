@@ -58,7 +58,7 @@ events up by iCal UID (below), never derive the id from the UID.
 - **Tooltip hint:** add the last line "Right-click: details, edit, delete" /
   "Clic destro: dettagli, modifica, elimina" to the event and task tooltips. Put it after
   the middle-click hint.
-- **"+N more" chip:** right click does nothing; plan 4 expands it.
+- **"+N more" chip:** right click does nothing; a click expands it.
 
 ### Detail card
 
@@ -218,8 +218,8 @@ event with a `CSVConvert…` UID to `layout.ics`.
 - Editing a whole recurring series ("this and following" / "all events").
 - Editing location, description, guests, reminders or colour: "Open in Google" covers them.
 - Declining or removing invitations.
-- Editing or deleting from the month view of plan 7: the day view has the card. If wanted,
-  add it to plan 7 later; the card code is shared.
+- Editing or deleting from the month view: the day view has the card. If wanted, add it
+  later; the card code is shared.
 
 ## Done when
 

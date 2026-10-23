@@ -12,9 +12,9 @@ Enter. The item appears at once and Google saves it.
 
 Read [the conventions](README.md#conventions-that-apply-to-every-plan) first. This plan reuses
 the task pipeline of feature 3 (`MeasureTaskAction` → `TaskResult`, optimistic display, the
-`OK` / `ERROR` / `auth` handling) and extends `tools/GoogleTasksFeed.gs`. If plan 8 (drag) is
-built first, both share the "pending changes" structure; build whichever comes second on top
-of the first.
+`OK` / `ERROR` / `auth` handling) and extends `tools/GoogleTasksFeed.gs`. The task drag
+(v1.8.0) already made `taskPending` hold one pending change per field (`{ state, due }`);
+build on that structure.
 
 ## Constraints that shape the design
 
@@ -77,7 +77,7 @@ above events.
  ┌──────────────────────────────────────┐   width 340, radius 12
  │  Add title____________________       │   InputText box, 13 pt, 2 px underline in TodayColor
  │                                      │
- │  ( Event ) ( Task )                  │   segmented chips (selected = SelBgColor, see plan 7)
+ │  ( Event ) ( Task )                  │   segmented chips (selected = SelBgColor, like the view switcher)
  │                                      │
  │  ◷  Wed 21 Oct · 10:00 – 11:00       │   date and times: mouse wheel changes them
  │     ☐ All day                        │   (event only)
@@ -124,8 +124,8 @@ above events.
   catches any click outside the card and cancels. Right click and `OnDismissAction` of the
   input do **not** close the card. Esc only closes the input.
 
-Meters for the card, placed just before `[NowLine]` (on top of everything; plan 8's drag
-meters can go right before them): `CrDismiss`, `CrCard`, `CrTitle` (placeholder String),
+Meters for the card, placed just before `[NowLine]` (on top of everything; the `Drag*`
+meters stay right before them): `CrDismiss`, `CrCard`, `CrTitle` (placeholder String),
 `CrTypeEv` / `CrTypeEvTx` / `CrTypeTk` / `CrTypeTkTx`, `CrDate`, `CrStart`, `CrDash`, `CrEnd`,
 `CrAllDay`, `CrTarget` (Shape dot + String), `CrMore`, `CrSave` / `CrSaveTx`. Everything is
 hidden outside creation.
@@ -279,7 +279,7 @@ Document it in the README as recommended.
 - Picking the calendar or the list in the card: the settings decide.
 - Recurrence, guests, reminders, location, description. "More options" covers events, and the
   Google Tasks app covers tasks.
-- Creating in the month view of plan 7: a click on a day there opens the day view, where
+- Creating in the month view: a click on a day there opens the day view, where
   creation works.
 
 ## Done when
