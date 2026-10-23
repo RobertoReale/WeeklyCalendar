@@ -100,7 +100,7 @@ your task titles and notes, mark your tasks completed or not completed, and chan
 use **Deploy** > **Manage deployments** > edit > *Version: New version* so the URL stays the same.
 If the address is wrong, the toolbar shows "feed error" (hover it for details).
 
-### Completing tasks
+### Completing and moving tasks
 Click the circle ○ at the start of a task to mark it completed, or the check mark ✓ to mark it
 not completed: the skin shows the change at once, and Google Tasks saves it through the same web
 app (it needs `curl.exe`, included in Windows 10 and 11). If Google does not confirm, the task goes
@@ -231,7 +231,8 @@ WeeklyCalendar/
 │   ├── Private.inc           # Private calendar URLs (git-ignored, created on first load)
 │   └── ZOrder/               # Helper that keeps dialogs above the skin (C# source + launcher)
 ├── tools/
-│   ├── GoogleTasksFeed.gs    # Google Apps Script that publishes Google Tasks as an iCal feed
+│   ├── GoogleTasksFeed.gs    # Google Apps Script: Google Tasks as an iCal feed; completes and moves tasks
+│   ├── LiveTest.ps1          # Drives the real skin with real mouse input (tooltips, dragging, wheel)
 │   └── textconv-utf16.py     # Readable git diffs for the UTF-16 Calendar.lua
 ├── tests/
 │   ├── run_tests.py          # Test suite (runs Calendar.lua against a mock Rainmeter)
