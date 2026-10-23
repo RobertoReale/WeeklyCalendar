@@ -1,8 +1,8 @@
 # Implementation plans
 
 Plans for features that are designed but not built yet. Recommended order (each one is
-independent and ships on its own). Plans 5, 4 and 7a are implemented (version 1.7.0); the
-others are still open.
+independent and ships on its own). Plans 5, 4 and 7a are implemented (version 1.7.0), plan 8
+in version 1.8.0; the others are still open.
 
 | # | Plan | Size | Touches |
 | :--- | :--- | :--- | :--- |
@@ -10,7 +10,7 @@ others are still open.
 | 4 | [Taller all-day row, expandable](04-all-day-rows.md) **(done)** | medium | all-day layout, ini pools, one new button |
 | 7a | [Day and 3-day views + view switcher](07-views.md#phase-a-day-3-day-and-week) **(done)** | medium-large | layout generalised from 7 to N days, toolbar |
 | 7b | [Month view](07-views.md#phase-b-month-view) | large | new layout mode and meter pools |
-| 8 | [Drag a task to another day](08-drag-tasks.md) | medium (+ 30 min spike) | all-day chips, drop zones, task pipeline, Apps Script |
+| 8 | [Drag a task to another day](08-drag-tasks.md) **(done)** | medium (+ 30 min spike) | all-day chips, drop zones, task pipeline, Apps Script |
 | 9 | [Create tasks and events](09-create-items.md) | large | click zones, quick-create card (InputText), task pipeline, Apps Script + Calendar permission |
 | 10 | [Edit and delete tasks and events](10-edit-delete.md) | large | right-click detail card, undo snackbar, local changes, Apps Script (Calendar API) |
 

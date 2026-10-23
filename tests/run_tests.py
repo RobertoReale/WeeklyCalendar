@@ -926,9 +926,10 @@ def test_task_check_button():
         m = sk.mock
         ad = sk.all_day()
         i = [v for k, v in ad.items() if k.startswith('○ Simulazione')][0]
-        # The chip opens the task's day in Google Calendar, the circle checks it
-        assert m.opt('ADBg%d' % i, 'LeftMouseUpAction') == \
-            '["https://calendar.google.com/calendar/r/day/2027/3/3?authuser=me%40example.com"]'
+        # The chip is pressed to drag it (a click opens the task's day through DragDrop),
+        # the circle checks it
+        assert m.opt('ADBg%d' % i, 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragStart(%d)"]' % i
+        assert m.opt('ADChk%d' % i, 'LeftMouseDownAction') == '[!UpdateMeter ADChk%d]' % i
         assert m.shown('ADChk%d' % i) and m.opt('ADChk%d' % i, 'ToolTipText') == 'Mark complete'
         assert m.opt('ADChk%d' % i, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "ToggleTask(%d)"]' % i
         assert 'Ellipse' in m.opt('ADChk%d' % i, 'MouseOverAction')
@@ -961,13 +962,17 @@ def test_task_check_button():
         sk.g.Reload(3)
         assert any(k.startswith('✓ Simulazione') for k in sk.all_day())
 
-        # A change Google does not confirm (e.g. the old script answers with the feed) is undone
+        # A change Google does not confirm is undone; an old script answers with the feed
         i = [v for k, v in sk.all_day().items() if k.startswith('✓ Simulazione')][0]
         sk.g.ToggleTask(i)
         assert any(k.startswith('○ Simulazione') for k in sk.all_day())
         m.measure_values['MeasureTaskAction'] = 'BEGIN:VCALENDAR'
         sk.g.TaskResult()
         assert any(k.startswith('✓ Simulazione') for k in sk.all_day()), sk.all_day()
+        assert 'update the Tasks script' in m.opt('TbSync', 'Text'), m.opt('TbSync', 'Text')
+        sk.g.ToggleTask(i)
+        m.measure_values['MeasureTaskAction'] = ''  # no answer (curl failed)
+        sk.g.TaskResult()
         assert 'task not saved' in m.opt('TbSync', 'Text'), m.opt('TbSync', 'Text')
 
         # Script authorized for reading only: say how to allow editing, with Google's reason
@@ -990,8 +995,224 @@ def test_task_check_button():
         sk.close()
 
 
+# ---------------------------------------------------------------------------
+# Dragging a task to another day (plan 8)
+# ---------------------------------------------------------------------------
+DAY_W = (1400 - 64 - 14) / 7          # Width in Settings.inc, time gutter and right margin
+DAY_LINK = '["https://calendar.google.com/calendar/r/day/2027/3/3?authuser=me%40example.com"]'
+DRAG_METERS = ['DragArea', 'DragHi', 'DragPrev', 'DragPrevTx'] + ['DragZone%d' % i for i in range(7)]
+
+
+def task_chip(sk, prefix='○ Simulazione'):
+    return [v for k, v in sk.all_day().items() if k.startswith(prefix)][0]
+
+
+def chip_col(sk, i):
+    return int((int(sk.mock.opt('ADBg%d' % i, 'X')) - 64) // DAY_W)
+
+
+def task_params(sk):
+    return [b[3] for b in sk.mock.bangs if b[:3] == ['!SetOption', 'MeasureTaskAction', 'Parameter']]
+
+
+def drag_skin(**kw):
+    sk = Skin(feeds={3: 'tasks.ics'}, **kw)
+    sk.start(2027, 3, 3, 12)  # Wednesday: the open task is in column 2
+    return sk
+
+
+def test_drag_chip_actions():
+    sk = drag_skin()
+    try:
+        m = sk.mock
+        i = task_chip(sk)
+        for meter in ('ADBg%d' % i, 'ADTx%d' % i):
+            assert m.opt(meter, 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragStart(%d)"]' % i
+            assert m.opt(meter, 'LeftMouseUpAction') == '' and m.opt(meter, 'MouseActionCursorName') == 'SizeAll'
+        assert m.opt('ADBg%d' % i, 'ToolTipText').endswith('#CRLF##CRLF#Drag to another day to move it')
+        # Not draggable: tasks of an older script (no ids) and events
+        for title in ('○ Ripasso', 'All day 1'):
+            j = sk.all_day()[title]
+            assert m.opt('ADBg%d' % j, 'LeftMouseDownAction') == '', title
+            assert m.opt('ADBg%d' % j, 'LeftMouseUpAction') != '' and m.opt('ADBg%d' % j, 'MouseActionCursorName') == 'Hand'
+        assert not any(m.shown(d) for d in DRAG_METERS)
+        # The drop layer is placed by the layout: one zone per column, from the header to the grid bottom
+        assert [m.opt('DragZone%d' % c, 'X') for c in range(7)] == [str(int(64 + c * DAY_W + 0.5)) for c in range(7)]
+        assert m.opt('DragZone0', 'Y') == '56' and m.opt('DragZone0', 'H') == str(int(m.vars['Height']) - 28 - 56)
+        sk.check_clean()
+    finally:
+        sk.close()
+    # The day view has nowhere to drag to
+    sk = drag_skin(View='day')
+    try:
+        assert sk.mock.opt('ADBg%d' % task_chip(sk), 'LeftMouseDownAction') == ''
+        assert sk.mock.opt('ADBg%d' % task_chip(sk), 'LeftMouseUpAction') == DAY_LINK
+    finally:
+        sk.close()
+
+
+def test_drag_click_opens_the_day():
+    sk = drag_skin()
+    try:
+        m = sk.mock
+        i = task_chip(sk)
+        sk.g.DragStart(i)
+        assert m.shown('DragArea') and all(m.shown('DragZone%d' % c) for c in range(7))
+        m.bangs.clear()
+        sk.g.DragOver(2)          # the zones appear under the cursor: its own column
+        sk.g.DragDrop(2)
+        assert [DAY_LINK] in m.bangs, m.bangs
+        assert not task_params(sk) and not any(m.shown(d) for d in DRAG_METERS)
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_drag_moves_the_task():
+    sk = drag_skin()
+    try:
+        m = sk.mock
+        i = task_chip(sk)
+        assert chip_col(sk, i) == 2
+        friday = [j for j in sk.all_day().values() if chip_col(sk, j) == 4]
+        purple = '142,36,170'
+        sk.g.DragStart(i)
+        sk.g.DragOver(2)
+        sk.g.DragOver(4)
+        # Friday's column is highlighted and the task previewed in its first free row
+        assert m.shown('DragHi') and m.opt('DragHi', 'X') == str(int(64 + 4 * DAY_W + 0.5) + 2)
+        assert 'Fill Color %s,28' % purple in m.opt('DragHi', 'Shape')
+        assert m.shown('DragPrev') and m.opt('DragPrev', 'Y') == str(56 + 68 + 3 + len(friday) * 22)
+        assert m.opt('DragPrevTx', 'Text').startswith('○ Simulazione')
+        assert m.opt('TbSync', 'Text') == 'Move to Fri 5'
+        assert purple not in m.opt('ADBg%d' % i, 'Shape')   # the source chip fades
+        m.bangs.clear()
+        sk.g.DragDrop(4)
+        assert task_params(sk) == ['-s -f -L -m 30 https://example.com/feed3.ics'
+                                   '?action=move&list=L1&task=t-open&due=2027-03-05'], task_params(sk)
+        assert ['!CommandMeasure', 'MeasureTaskAction', 'Run'] in m.bangs
+        # Shown on Friday at once, in its own color again
+        i = task_chip(sk)
+        assert chip_col(sk, i) == 4 and purple in m.opt('ADBg%d' % i, 'Shape')
+        assert not any(m.shown(d) for d in DRAG_METERS)
+        assert 'Move to' not in m.opt('TbSync', 'Text')
+        # Google confirms: the feed is downloaded again, and it has the new date
+        m.bangs.clear()
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        sk.g.TaskResult()
+        assert ['!CommandMeasure', 'MeasureICS3', 'Update'] in m.bangs
+        feed = os.path.join(sk.dir, 'DownloadFile', 'calendar3.ics')
+        text = open(feed, encoding='utf-8', newline='').read()
+        open(feed, 'w', encoding='utf-8', newline='').write(text.replace('20270303', '20270305', 1))
+        sk.g.Reload(3)
+        assert chip_col(sk, task_chip(sk)) == 4
+
+        # Script authorized for reading only: the task goes back
+        sk.g.DragStart(task_chip(sk))
+        sk.g.DragOver(1)
+        sk.g.DragDrop(1)
+        assert chip_col(sk, task_chip(sk)) == 1
+        m.measure_values['MeasureTaskAction'] = 'ERROR Missing scope https://www.googleapis.com/auth/tasks'
+        sk.g.TaskResult()
+        assert chip_col(sk, task_chip(sk)) == 4
+        assert m.opt('TbSync', 'Text').endswith('allow editing tasks'), m.opt('TbSync', 'Text')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_drag_then_complete_before_the_answer():
+    sk = drag_skin()
+    try:
+        m = sk.mock
+        sk.g.DragStart(task_chip(sk))
+        sk.g.DragOver(4)
+        sk.g.DragDrop(4)
+        sk.g.ToggleTask(task_chip(sk))               # sent after the move
+        i = task_chip(sk, '✓ Simulazione')
+        assert chip_col(sk, i) == 4
+        m.bangs.clear()
+        m.measure_values['MeasureTaskAction'] = 'ERROR Backend Error'
+        sk.g.TaskResult()                            # the move failed: the completion stays
+        i = task_chip(sk, '✓ Simulazione')
+        assert chip_col(sk, i) == 2, chip_col(sk, i)
+        assert task_params(sk)[-1].endswith('action=complete&list=L1&task=t-open'), task_params(sk)
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        sk.g.TaskResult()
+        assert chip_col(sk, task_chip(sk, '✓ Simulazione')) == 2
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_drag_cancel():
+    sk = drag_skin()
+    try:
+        m = sk.mock
+        i = task_chip(sk)
+        shape, sync = m.opt('ADBg%d' % i, 'Shape'), m.opt('TbSync', 'Text')
+        for cancel in ('right click', 'back home', 'timeout'):
+            sk.g.DragStart(i)
+            sk.g.DragOver(4)
+            if cancel == 'right click':
+                sk.g.DragCancel()
+            elif cancel == 'back home':
+                sk.g.DragOver(2)
+                assert not m.shown('DragHi') and m.opt('TbSync', 'Text') == sync
+                sk.g.DragDrop(2)
+            else:
+                sk.g.ScrollHours(1)                  # no layout while dragging
+                assert m.shown('DragHi') and m.opt('ADBg%d' % i, 'Shape') != shape
+                sk.at(2027, 3, 3, 12, 0, 25)
+                sk.g.Update()
+                sk.at(2027, 3, 3, 12)
+            assert not any(m.shown(d) for d in DRAG_METERS), cancel
+            assert m.opt('ADBg%d' % i, 'Shape') == shape and m.opt('TbSync', 'Text') == sync, cancel
+            assert not task_params(sk) and task_chip(sk) == i, cancel
+        sk.g.DragCancel()                            # the cursor leaves the skin: nothing to do
+        sk.g.DragOver(3)
+        sk.g.DragDrop(3)
+        assert not task_params(sk) and not m.shown('DragHi')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_google_tasks_script_move():
+    node = shutil.which('node')
+    if not node:
+        print('      (skipped: node not installed)')
+        return
+    import json
+    import subprocess
+    script = open(os.path.join(ROOT, 'tools', 'GoogleTasksFeed.gs'), encoding='utf-8').read()
+    harness = script + r"""
+var patches = [];
+var ContentService = { MimeType: { ICAL: 'ical' }, createTextOutput: function (s) {
+  return { text: s, setMimeType: function () { return this; } }; } };
+var Tasks = { Tasks: { patch: function (res, list, task) {
+  if (task === 'missing') throw new Error('Not Found');
+  patches.push([res, list, task]); } } };
+function move(p) { p.action = 'move'; return doGet({ parameter: p }).text; }
+process.stdout.write(JSON.stringify({
+  ok: move({ list: 'L1', task: 'a', due: '2027-03-05' }),
+  badDate: move({ list: 'L1', task: 'a', due: '5/3/2027' }),
+  noDate: move({ list: 'L1', task: 'a' }),
+  noTask: move({ list: 'L1', due: '2027-03-05' }),
+  missing: move({ list: 'L1', task: 'missing', due: '2027-03-05' }),
+  patches: patches }));
+"""
+    res = subprocess.run([node, '-e', harness], capture_output=True, encoding='utf-8')
+    assert res.returncode == 0, res.stderr
+    out = json.loads(res.stdout)
+    assert out['ok'] == 'OK', out
+    assert out['badDate'] == 'ERROR bad date' and out['noDate'] == 'ERROR bad date', out
+    assert out['noTask'].startswith('ERROR') and out['missing'] == 'ERROR Not Found', out
+    assert out['patches'] == [[{'due': '2027-03-05T00:00:00.000Z'}, 'L1', 'a']], out['patches']
+
+
 def main():
-    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith('test_') and callable(f)]
+    tests =[(n, f) for n, f in sorted(globals().items()) if n.startswith('test_') and callable(f)]
     failed = 0
     for name, fn in tests:
         try:

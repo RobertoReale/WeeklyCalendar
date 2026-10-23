@@ -9,8 +9,9 @@
  * not the time). Completed tasks are marked with X-WC-TASK:COMPLETED.
  *
  * The same address also marks a task completed or not completed when the skin's
- * circle / check mark is clicked: ?action=complete|reopen&list=<list id>&task=<task id>
- * (README, "Completing tasks").
+ * circle / check mark is clicked: ?action=complete|reopen&list=<list id>&task=<task id>,
+ * and moves it to another day when it is dragged there:
+ * ?action=move&list=<list id>&task=<task id>&due=YYYY-MM-DD (README, "Completing tasks").
  */
 
 var DAYS_BACK = 60;    // completed/overdue tasks older than this are left out
@@ -20,6 +21,9 @@ function doGet(e) {
   var p = (e && e.parameter) || {};
   if (p.action === 'complete' || p.action === 'reopen') {
     return ContentService.createTextOutput(setCompleted(p.list, p.task, p.action === 'complete'));
+  }
+  if (p.action === 'move') {
+    return ContentService.createTextOutput(moveTask(p.list, p.task, p.due));
   }
   return ContentService.createTextOutput(buildFeed()).setMimeType(ContentService.MimeType.ICAL);
 }
@@ -31,6 +35,19 @@ function setCompleted(listId, taskId, done) {
     // "completed" holds the completion time: it must be cleared to reopen a task
     Tasks.Tasks.patch(done ? { status: 'completed' } : { status: 'needsAction', completed: null },
                       listId, taskId);
+    return 'OK';
+  } catch (err) {
+    return 'ERROR ' + err.message;
+  }
+}
+
+// New due date (YYYY-MM-DD). The Tasks API stores only the date: it is midnight UTC
+// of that day, as in the feed above.
+function moveTask(listId, taskId, due) {
+  if (!listId || !taskId) return 'ERROR missing list or task';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(due || '')) return 'ERROR bad date';
+  try {
+    Tasks.Tasks.patch({ due: due + 'T00:00:00.000Z' }, listId, taskId);
     return 'OK';
   } catch (err) {
     return 'ERROR ' + err.message;

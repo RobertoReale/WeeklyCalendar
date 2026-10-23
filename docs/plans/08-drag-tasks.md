@@ -4,6 +4,16 @@ Goal: press a Google Task in the all-day row, drag it to another day column and 
 The task moves there immediately, and Google Tasks saves the new due date. This works like
 Google Calendar. Only tasks can move: iCal events are read-only.
 
+**Phase 0 result (2026-10-23, Rainmeter 4.5, real mouse):** all three assumptions hold.
+Pressing a meter that has a `LeftMouseDownAction` does not move the skin (only the background
+does). Meters shown by that action get `MouseOverAction` / `MouseLeaveAction` while the button is
+held, and the release runs the `LeftMouseUpAction` of the meter under the cursor. Leaving the skin
+with the button held fires `[Rainmeter] MouseLeaveAction`, and the release outside is never seen.
+Built as designed in v1.8.0, with two changes found on the way: a press on the ○ / ✓ button
+would fall through to the chip's `LeftMouseDownAction` (Rainmeter looks for the topmost meter
+that has *that* action), so `ADChk` gets a harmless `LeftMouseDownAction`; and leaving the skin
+is caught by `[Rainmeter] MouseLeaveAction`, not by `DragArea`.
+
 Read [the conventions](README.md#conventions-that-apply-to-every-plan) first. This plan reuses
 the task pipeline of feature 3 (`ToggleTask` → `MeasureTaskAction` → `TaskResult`, with
 optimistic display and rollback). Read that code before starting.

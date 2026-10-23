@@ -19,7 +19,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
 - **Declined Invitations**: Invitations you declined are drawn outlined, like Google Calendar, or can be hidden (`ShowDeclined=0`).
 - **All-Day Events & Timed Events**: Dedicated all-day events row at the top (3 rows by default, `AllDayRows`; click "+N more" to expand the row like Google Calendar, ▲ to collapse it) and column-packed overlapping timed events throughout the week.
-- **Google Tasks & Holidays**: Tasks with a due date appear in the all-day row like in Google Calendar (○ open, ✓ completed and struck through), via a small Google Apps Script; click the circle to mark a task completed (or the check mark to reopen it). Public holidays come from Google's holiday calendars.
+- **Google Tasks & Holidays**: Tasks with a due date appear in the all-day row like in Google Calendar (○ open, ✓ completed and struck through), via a small Google Apps Script; click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day. Public holidays come from Google's holiday calendars.
 - **Open in Google Calendar**: Click an event to open it in Google Calendar (a task opens its day); middle-click opens the event's video call or link (Meet, Zoom, Teams...). `ClickAction=link` swaps the two.
 - **Dialogs Always on Top**: Windows and dialogs you open (e.g. "Empty Recycle Bin") always appear above the calendar, even in Windows' "Show desktop" mode.
 - **Past Event Fading**: Events fade as soon as they end, just like in Google Calendar.
@@ -96,7 +96,7 @@ own Google account) publishes them as a private iCal address. One-time setup, ab
 Tasks with a due date appear in the all-day row of that day; the Tasks API keeps only the date, not
 the time. Hover a task to see its description (notes). Their color is the `EventColor` of the slot
 you used. Like the secret iCal address, keep the web app URL private: anyone who has it can read
-your task titles and notes, and mark your tasks completed or not completed. If you edit the script later,
+your task titles and notes, mark your tasks completed or not completed, and change their dates. If you edit the script later,
 use **Deploy** > **Manage deployments** > edit > *Version: New version* so the URL stays the same.
 If the address is wrong, the toolbar shows "feed error" (hover it for details).
 
@@ -106,8 +106,16 @@ not completed: the skin shows the change at once, and Google Tasks saves it thro
 app (it needs `curl.exe`, included in Windows 10 and 11). If Google does not confirm, the task goes
 back to how it was and the toolbar shows "task not saved".
 
-The circle is a button only with the current `tools\GoogleTasksFeed.gs`. If you set up the script
-before this feature, update it once:
+To move a task, drag it to another day of the week and release it there: the column under the
+cursor is highlighted, the task is previewed in its all-day row and the toolbar says where it will
+go. A plain click still opens the task's day in Google Calendar. Release it on its own day, right-click
+or leave the skin to cancel. Dragging works in the 3-day and week views. Two limits of the Tasks API:
+a task that has a time set in the Google apps keeps only its new date, and moving one occurrence of a
+repeating task may detach it from the series (the feed cannot tell which tasks repeat).
+
+The circle and dragging work only with the current `tools\GoogleTasksFeed.gs` (moving tasks needs the
+version of v1.8.0 or later). If the toolbar says **"update the Tasks script"**, or you set up the
+script before these features, update it once:
 
 1. Open your project on [script.google.com](https://script.google.com/), replace the code with the
    new `tools\GoogleTasksFeed.gs` and save.
@@ -204,6 +212,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Open an Event** | Click it: opens it in Google Calendar (a task or "+N more": that day). Middle-click: its Meet / Zoom / Teams link |
 | **All-Day Row** | Click `+N more` to show every all-day item (middle-click: open that day in Google Calendar); click ▲ at the left of the row to collapse it |
 | **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it) |
+| **Move a Task** | Drag it to another day (3-day and week views); right-click or leave the skin to cancel |
 | **Sync Calendar Now** | Click the sync time in the top-right corner, or right-click > *Refresh now* |
 | **Context Menu** | Right-click the skin for quick access to weeks, hour scrolling, refresh, and settings |
 
