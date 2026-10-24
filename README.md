@@ -18,10 +18,10 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Smart Recurrence & Overrides**: Client-side parsing of RFC 5545 recurrence rules (`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`, including `BYSETPOS` such as "last weekday of the month"), extra dates (`RDATE`), exceptions (`EXDATE`), and modified occurrences (`RECURRENCE-ID`).
 - **All-Day Events & Timed Events**: Dedicated all-day events row at the top (3 rows by default, `AllDayRows`; click "+N more" to expand the row like Google Calendar, ▲ to collapse it) and column-packed overlapping timed events throughout the week.
 - **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
-- **Google Tasks**: Tasks appear like in Google Calendar (○ open, ✓ completed): in the all-day row, or at their time when they have one. Click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day.
+- **Google Tasks**: Tasks appear like in Google Calendar (○ open, ✓ completed): in the all-day row, or at their time when they have one. Click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day. Each task shows its list and its details (notes); a new or edited task can go to any of your lists.
 - **Holidays & Birthdays**: Public holidays come from Google's holiday calendars; your contacts' birthdays, which Google's iCal address leaves out, come from the Tasks script.
-- **Create Events and Tasks**: Click an empty spot of the hours (an event at that time), of the all-day row or a day number (a task), or the **+** in the toolbar: a card like Google Calendar's opens, you type the title and press Enter. The item appears at once and Google saves it.
-- **Details, Edit, Delete**: Right-click an event or task for its details; edit its title, date and times, or delete it (one occurrence or the whole series of a recurring event) with a few seconds to undo.
+- **Create Events and Tasks**: Click an empty spot of the hours (an event at that time), of the all-day row or a day number (a task), or the **+** in the toolbar: a card like Google Calendar's opens, you type the title and press Enter. An event can also get a place, a description, a repeat (every day, weekday, week, month, year) and a calendar; a task its details and its list. The item appears at once and Google saves it.
+- **Details, Edit, Delete**: Right-click an event or task for its details; edit its title, date and times, place and description (all day or not), a task's details and list, one occurrence or every occurrence of a recurring event; or delete it (one occurrence or the whole series) with a few seconds to undo.
 - **Drag Events**: Drag an event to another time or day (snapped to 15 minutes, like Google Calendar), or an all-day event to another day; in the month view, events move to another day and keep their time. A click that slips a few pixels stays a click.
 - **Open in Google Calendar**: Click an event to open it in Google Calendar (a task opens its day); middle-click opens the event's video call or link (Meet, Zoom, Teams...). `ClickAction=link` swaps the two.
 - **Declined Invitations**: Invitations you declined are drawn outlined, like Google Calendar, or can be hidden (`ShowDeclined=0`).
@@ -120,7 +120,7 @@ and deletes items for the skin and publishes your birthdays. One-time setup, abo
 6. Paste it in `Private.inc` after `IcalUrl3=` (or any free slot), save and refresh the skin.
 
 Tasks with a due date appear in the all-day row of their day, in the `EventColor` of the slot you
-used; hover a task to see its description (notes). The Tasks API keeps only the date, but a task
+used; hover a task to see its list and its description (notes). The Tasks API keeps only the date, but a task
 that has a time in the Google apps shows at that time when your Google calendar is also in the
 skin: Google's iCal address lists such a task as a free event with the same title, and the skin
 shows the two as one task.
@@ -169,14 +169,25 @@ How it works:
   half hour). Type the title and press **Enter**. Before that you can switch *Event* / *Task*,
   tick *All day*, and change the times: click one and type it (`9`, `930`, `9:30`, `9:30 pm`),
   then Enter; a new start keeps the event's length. The **mouse wheel** over the date or a time
-  changes it too (a day, 15 minutes). *More options*
+  changes it too (a day, 15 minutes).
+  An event also has *Does not repeat* (click it to choose every day, every weekday, every week,
+  month or year), *Add location*, *Add description* and its calendar (any Google calendar shown in
+  the skin); a task has *Add details* and its list (all your Google Tasks lists). Click a text
+  to type it and press **Enter** to keep it (**Ctrl+Enter** starts a new line in details and
+  descriptions); a click elsewhere before Enter drops what was typed in that box. Click a choice
+  (▾) to list the others, or scroll over it to go to the next one. *More options*
   opens Google Calendar's own editor, filled in. Esc closes the title box; a click outside closes
   the card. Without the script the card offers *Open in Google Calendar* instead.
 - **Details**: right-click an event or task. Holiday calendars, birthdays, public addresses, other
   providers and invitations organised by someone else are read-only; the card says why.
 - **Edit**: *Edit* in the card; type the new title and press Enter, or change the date (and the
-  times of an event: click a time to type it, or use the wheel) and click *Save*. For a recurring event only that occurrence
-  changes.
+  times of an event: click a time to type it, or use the wheel), the place, the description,
+  *All day* (an event that does not repeat), a task's details or list, and click *Save*. Only what
+  you changed is sent. A recurring event then asks *This event* or *All events*: all events take
+  the new title, place, description and time of day (the date of a single occurrence changes
+  only that one). A task moves to another list with its id there; Google refuses to move a
+  repeating task to another list. A description with formatting (written in Google Calendar,
+  or with a video call) is changed in Google Calendar.
 - **Delete**: *Delete* in the card (a recurring event asks: *This event* / *All events*). The item
   disappears and a bar offers **Undo** for 8 seconds (`UndoSeconds`); the request goes to Google
   only after that (a skin refresh in those seconds keeps the item).
@@ -185,6 +196,14 @@ How it works:
   slips a few pixels while pressing. Right-click or leave the skin to cancel. Events spanning
   several days are moved from Google Calendar.
 
+What Google's Tasks API does not offer, so the skin cannot either: the time of a task (set it in
+Google Tasks; the skin shows it), starring a task and repeating tasks. Tasks without a date are not
+shown: a calendar has no day for them.
+
+Lists, details, places, descriptions, repeats and *All events* need the Tasks script of version
+1.14.0: with an older one the card says to update it
+([Updating the Tasks script](#6-updating-the-tasks-script)).
+
 Changes show at once. Google's iCal address can take minutes (sometimes hours) to show a change
 to an event, so the skin keeps showing it until the feed has it (24 hours at most); tasks update
 within seconds. If Google refuses a change, the item goes back and the toolbar says why (hover
@@ -192,10 +211,11 @@ it).
 
 Related settings in `Settings.inc`:
 ```ini
-; Calendar new events go to: empty = your primary calendar, or a calendar id
-; (as in its iCal address, e.g. abc123@group.calendar.google.com)
+; Calendar new events go to (the card can pick another): empty = your primary calendar, or a
+; calendar id (as in its iCal address, e.g. abc123@group.calendar.google.com)
 CreateCalendar=
-; Task list new tasks go to: @default = "My Tasks", or a list id (X-WC-TASKLIST in the tasks feed)
+; Task list new tasks go to (the card can pick another): @default = "My Tasks", or a list id
+; (X-WC-LIST in the tasks feed)
 TaskList=@default
 ; 1 = a click on an empty spot of the hours, the all-day row or a day number creates an item
 ; (0 = those spots do nothing; the + button still works)
@@ -230,7 +250,8 @@ Birthdays appear in the all-day row; a click opens one in Google Calendar. If th
 
 ### 6. Updating the Tasks script
 New versions of the skin may need the new `tools\GoogleTasksFeed.gs`: the toolbar then says
-**"update the Tasks script"**, or a new feature (creating events, birthdays) does not work. The web
+**"update the Tasks script"**, a new feature (creating events, birthdays) does not work, or the card
+says to update it (task lists and details, places, descriptions, repeats: version 1.14.0). The web
 app URL stays the same:
 
 1. Open your project on [script.google.com](https://script.google.com/), replace the code with the
@@ -335,6 +356,8 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it); a task shown at its time: right-click > *Mark complete* |
 | **Move a Task** | Drag it to another day (3-day, week and month views); right-click or leave the skin to cancel |
 | **Create** | Click an empty spot of the hours (event), of the all-day row or a day number (task), or **+** in the toolbar; type the title, Enter (`ClickToCreate=0` / `ShowCreateButton=0` turn them off) |
+| **Place, Description, Details** | Click *Add location*, *Add description* or *Add details* in the card, type, Enter (Ctrl+Enter: a new line) |
+| **Repeat, Calendar, Task List** | Click the choice (▾) in the card and pick another; or scroll over it |
 | **Change Date / Time in the Card** | Click the start or end and type it (`9`, `930`, `9:30`, `9:30 pm`), Enter; or mouse wheel over the date, start or end |
 | **Details, Edit, Delete** | Right-click an event or task; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`; `RightClickCard=0` shows the skin menu instead) |
 | **Move an Event** | Drag it to another time or day (15-minute steps); right-click or leave the skin to cancel (`DragToMove=0` turns dragging off) |
@@ -415,7 +438,12 @@ against fake Tasks and Calendar APIs.
 
 Lua 5.1 allows 200 local variables per function, and the main chunk of `Calendar.lua` is close:
 past it Rainmeter refuses the whole script. Put new helpers inside a `do ... end` block or into a
-table (`edit` holds those of the cards); `test_lua_main_chunk_has_room_for_locals` keeps some room.
+table (`edit` holds those of the cards, `edit.cf` the fields and pickers of their forms);
+`test_lua_main_chunk_has_room_for_locals` keeps some room.
+
+The Tasks script's feed says what the deployed script can do (`X-WC-VERSION`): an older script
+ignores parameters it does not know and still answers OK, so the cards offer lists, details,
+places, descriptions, repeats and *All events* only from version 2 of the feed.
 
 Tooltips: no meter has a `ToolTipText` of its own. Rainmeter creates a window for each meter
 that has one (about 50 ms each), which made the first layout take seconds. Calendar.lua keeps

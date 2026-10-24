@@ -71,6 +71,16 @@ These are the traps of this codebase. Each one has already caused a bug once.
   arrive intact); Esc or any focus loss runs `OnDismissAction`, before the click that caused it.
   The box cannot be closed from the skin: close the card only after the user's click.
   The start and end times have their own box (`MeasureTimeInput`, `CardTime()` / `TimeSubmit()`).
+  The same `MeasureCreateInput` types the notes, place and description too (`c.inputField`,
+  `CardField()`); `layoutCard` sets its size, font size and `InputLimit` for each. The 4.5 plugin
+  trims what was typed, inserts a new line with Ctrl+Enter and drops the text on a dismissal.
+- **Cards' pools:** `CrTx1..20` and 32 shapes of `CrCard` (`CR_TX`, `CARD_SHAPES`). A card that
+  needs more logs an error (the tests fail on it): add meters to the `.ini` and raise the constants.
+  The fields and pickers of the cards are functions of the `cf` table (`edit.cf` outside the block).
+- **Tasks script versions:** the feed of `tools/GoogleTasksFeed.gs` says what it can do
+  (`X-WC-VERSION`, `edit.scriptV`). An older deployed script ignores parameters it does not know
+  and still answers OK, so a feature that sends new parameters is shown only from the version
+  that knows them (raise the version in `buildFeed` when adding one).
 - **Live tests:** `type` / `key` in `tools\LiveTest.ps1` refuse to send keys unless a Rainmeter
   window is in the foreground. `-Front` raises the skin, which takes the focus from an open
   InputText box: one LiveTest run per typing sequence. While the skin is raised (`ZPos 2`),

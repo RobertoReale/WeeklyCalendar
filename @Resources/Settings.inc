@@ -129,11 +129,12 @@ ClickAction=calendar
 
 ;  Creating items from the skin (click an empty spot, or + in the toolbar; README: "Creating
 ;  and editing"). It needs tools\GoogleTasksFeed.gs in one of the calendar slots.
-;  CreateCalendar: the calendar new events go to. Empty (default) = your primary calendar; or a
-;  calendar id as it appears in its iCal address (e.g. abc123@group.calendar.google.com).
+;  CreateCalendar: the calendar new events go to (the card can pick another for one event).
+;  Empty (default) = your primary calendar; or a calendar id as it appears in its iCal address
+;  (e.g. abc123@group.calendar.google.com).
 CreateCalendar=
-;  TaskList: the Google Tasks list new tasks go to. @default (default) = "My Tasks"; or a list id
-;  (X-WC-TASKLIST in the tasks feed).
+;  TaskList: the Google Tasks list new tasks go to (the card can pick another for one task).
+;  @default (default) = "My Tasks"; or a list id (X-WC-LIST in the tasks feed).
 TaskList=@default
 
 ;  ClickToCreate=1: a click on an empty spot of the hours, of the all-day row or on a day number

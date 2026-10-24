@@ -16,15 +16,23 @@
  * It also creates, edits and deletes tasks and Google Calendar events for the skin's
  * cards (README, "Creating and editing"); events need the advanced "Google Calendar API"
  * service:
- *   ?action=createtask&list=..&title=..&due=YYYY-MM-DD           -> OK <task id>
- *   ?action=edittask&list=..&task=..[&title=..][&due=YYYY-MM-DD] -> OK
- *   ?action=deletetask&list=..&task=..                           -> OK
- *   ?action=createevent&cal=..&title=..&start=<UTC>&end=<UTC>    -> OK <iCal UID>
- *                      (or &date=YYYY-MM-DD&days=N for an all-day event)
- *   ?action=editevent|moveevent&cal=..&uid=<iCal UID>[&orig=..][&title=..][&start=..&end=..|&date=..&days=..]
+ *   ?action=createtask&list=..&title=..&due=YYYY-MM-DD[&notes=..]                -> OK <task id>
+ *   ?action=edittask&list=..&task=..[&title=..][&due=YYYY-MM-DD][&notes=..]      -> OK
+ *   ?action=movetask&list=..&task=..&tolist=<list id>        (to another list)    -> OK <task id>
+ *   ?action=deletetask&list=..&task=..                                           -> OK
+ *   ?action=createevent&cal=..&title=..&start=<UTC>&end=<UTC>[&location=..][&desc=..][&rrule=..]
+ *                      (or &date=YYYY-MM-DD&days=N for an all-day event)       -> OK <iCal UID>
+ *   ?action=editevent|moveevent&cal=..&uid=<iCal UID>[&orig=..][&scope=all][&title=..]
+ *                      [&location=..][&desc=..][&start=..&end=..|&date=..&days=..]
  *   ?action=deleteevent&cal=..&uid=..[&orig=..]&scope=one|all
  * "orig" is the original start of one occurrence of a recurring event (UTC, or the date
- * of an all-day event). Every answer is "OK ..." or "ERROR <reason>".
+ * of an all-day event). "rrule" is FREQ=DAILY|WEEKLY|MONTHLY|YEARLY, optionally with
+ * ;BYDAY=MO,TU,... An edit with scope=all changes the whole series: its title, place and
+ * description, and its time of day (start and end of the occurrence orig, the same day).
+ * An empty notes, location or desc clears it. Every answer is "OK ..." or "ERROR <reason>".
+ *
+ * The tasks feed also lists every task list (X-WC-LIST;ID=<id>:<title>, DEFAULT=1 for
+ * "My Tasks"), so the skin can offer them.
  *
  * The same address with ?feed=birthdays publishes the birthdays of your contacts, which
  * Google Calendar's iCal address leaves out (README, "Birthdays").
@@ -38,7 +46,7 @@ var DAYS_BACK = 60;    // completed/overdue tasks older than this are left out
 var DAYS_AHEAD = 400;  // and so are tasks due further ahead than this
 
 var WRITE_ACTIONS = {
-  complete: 1, reopen: 1, move: 1, createtask: 1, edittask: 1, deletetask: 1,
+  complete: 1, reopen: 1, move: 1, createtask: 1, edittask: 1, movetask: 1, deletetask: 1,
   createevent: 1, editevent: 1, moveevent: 1, deleteevent: 1
 };
 
@@ -60,6 +68,7 @@ function write(p) {
     case 'move': return moveTask(p.list, p.task, p.due);
     case 'createtask': return createTask(p);
     case 'edittask': return editTask(p);
+    case 'movetask': return moveTaskToList(p);
     case 'deletetask': return deleteTask(p);
     case 'createevent': return createEvent(p);
     case 'editevent': case 'moveevent': return editEvent(p);
@@ -101,6 +110,14 @@ function badTitle(title) {
   return !title || title.length > 500;
 }
 
+// Notes, places and descriptions: optional, "" clears them
+function badText(s) {
+  return s !== undefined && s.length > 4000;
+}
+
+// A repeat rule the skin offers: FREQ=..., optionally ;BYDAY=MO,TU,...
+var RRULE = /^FREQ=(DAILY|WEEKLY|MONTHLY|YEARLY)(;BYDAY=(MO|TU|WE|TH|FR|SA|SU)(,(MO|TU|WE|TH|FR|SA|SU))*)?$/;
+
 // Day after date (YYYY-MM-DD) plus n - 1 days: the exclusive end of an all-day event
 function addDays(date, n) {
   return new Date(Date.parse(date + 'T00:00:00Z') + n * 86400000).toISOString().substring(0, 10);
@@ -109,6 +126,7 @@ function addDays(date, n) {
 function createTask(p) {
   if (badTitle(p.title)) return 'ERROR bad title';
   if (!DATE.test(p.due || '')) return 'ERROR bad date';
+  if (badText(p.notes)) return 'ERROR notes too long';
   try {
     var t = Tasks.Tasks.insert({ title: p.title, notes: p.notes || undefined, due: p.due + 'T00:00:00.000Z' },
                                p.list || '@default');
@@ -118,7 +136,7 @@ function createTask(p) {
   }
 }
 
-// New title and / or due date; omitted fields stay as they are
+// New title, due date and / or notes; omitted fields stay as they are
 function editTask(p) {
   if (!p.list || !p.task) return 'ERROR missing list or task';
   var patch = {};
@@ -130,12 +148,37 @@ function editTask(p) {
     if (!DATE.test(p.due)) return 'ERROR bad date';
     patch.due = p.due + 'T00:00:00.000Z';
   }
+  if (p.notes !== undefined) {
+    if (badText(p.notes)) return 'ERROR notes too long';
+    patch.notes = p.notes;
+  }
   try {
     Tasks.Tasks.patch(patch, p.list, p.task);
     return 'OK';
   } catch (err) {
     return 'ERROR ' + err.message;
   }
+}
+
+// Moves a task to another list (tasks.move with destinationTasklist). Answers with its id
+// there. Google refuses it for repeating tasks.
+function moveTaskToList(p) {
+  if (!p.list || !p.task || !p.tolist) return 'ERROR missing list or task';
+  if (p.tolist === p.list) return 'OK ' + p.task;
+  var t;
+  try {
+    t = Tasks.Tasks.move(p.list, p.task, { destinationTasklist: p.tolist });
+  } catch (err) {
+    return 'ERROR ' + err.message;
+  }
+  var id = (t && t.id) || p.task;
+  // A service without destinationTasklist would only move it inside its own list
+  try {
+    Tasks.Tasks.get(p.tolist, id);
+  } catch (err) {
+    return 'ERROR the task stayed in its list: ' + err.message;
+  }
+  return 'OK ' + id;
 }
 
 function deleteTask(p) {
@@ -164,11 +207,26 @@ function eventTimes(p) {
 
 function createEvent(p) {
   if (badTitle(p.title)) return 'ERROR bad title';
+  if (badText(p.location) || badText(p.desc)) return 'ERROR text too long';
+  if (p.rrule !== undefined && !RRULE.test(p.rrule)) return 'ERROR bad repeat';
   var times = eventTimes(p);
   if (!times) return 'ERROR bad time';
   if (typeof times === 'string') return times;
+  var cal = p.cal || 'primary';
+  var res = { summary: p.title, start: times.start, end: times.end };
+  if (p.location) res.location = p.location;
+  if (p.desc) res.description = p.desc;
   try {
-    var ev = Calendar.Events.insert({ summary: p.title, start: times.start, end: times.end }, p.cal || 'primary');
+    if (p.rrule) {
+      res.recurrence = ['RRULE:' + p.rrule];
+      // Google repeats a timed event in a time zone, which it requires: the calendar's
+      if (times.start.dateTime) {
+        var tz = Calendar.Calendars.get(cal).timeZone;
+        res.start.timeZone = tz;
+        res.end.timeZone = tz;
+      }
+    }
+    var ev = Calendar.Events.insert(res, cal);
     return 'OK ' + ev.iCalUID;
   } catch (err) {
     if (/not ?found/i.test(err.message)) return 'ERROR calendar not found';
@@ -212,27 +270,61 @@ function findEvent(p) {
   return { series: series, target: found };
 }
 
-// New title and / or times of an event, or of one occurrence (orig)
+// New title, place, description and / or times of an event, of one occurrence (orig), or
+// of the whole series (scope=all)
 function editEvent(p) {
   var patch = {};
   if (p.title !== undefined) {
     if (badTitle(p.title)) return 'ERROR bad title';
     patch.summary = p.title;
   }
+  if (badText(p.location) || badText(p.desc)) return 'ERROR text too long';
+  if (p.location !== undefined) patch.location = p.location;
+  if (p.desc !== undefined) patch.description = p.desc;
   var times = eventTimes(p);
   if (typeof times === 'string') return times;
-  if (times) {
-    patch.start = times.start;
-    patch.end = times.end;
-  }
   try {
+    if (p.scope === 'all') return editSeries(p, patch, times);
     var ev = findEvent(p);
     if (typeof ev === 'string') return ev;
+    if (times) {
+      patch.start = times.start;
+      patch.end = times.end;
+      // From timed to all day or back: the patch keeps what it does not name, so the
+      // other kind of time is cleared
+      var wasAllDay = !!(ev.target.start && ev.target.start.date);
+      if (times.start.date && !wasAllDay) {
+        patch.start.dateTime = patch.end.dateTime = null;
+        patch.start.timeZone = patch.end.timeZone = null;
+      } else if (times.start.dateTime && wasAllDay) {
+        patch.start.date = patch.end.date = null;
+      }
+    }
     Calendar.Events.patch(patch, p.cal || 'primary', ev.target.id);
     return 'OK';
   } catch (err) {
     return 'ERROR ' + err.message;
   }
+}
+
+// Every occurrence of a recurring event: title, place, description, and the time of day.
+// The new start and end of occurrence orig (the same day) move the series as much.
+function editSeries(p, patch, times) {
+  var ev = findEvent({ cal: p.cal, uid: p.uid });
+  if (typeof ev === 'string') return ev;
+  var series = ev.series;
+  if (times) {
+    var st = series.start || {}, en = series.end || {};
+    if (times.start.date || !st.dateTime || !UTC_TIME.test(p.orig || '')) return 'ERROR change it in Google Calendar';
+    var shift = Date.parse(p.start) - Date.parse(p.orig);
+    if (Math.abs(shift) >= 86400000) return 'ERROR bad time';
+    var s = Date.parse(st.dateTime) + shift;
+    var len = Date.parse(p.end) - Date.parse(p.start);
+    patch.start = { dateTime: new Date(s).toISOString(), timeZone: st.timeZone };
+    patch.end = { dateTime: new Date(s + len).toISOString(), timeZone: en.timeZone || st.timeZone };
+  }
+  Calendar.Events.patch(patch, p.cal || 'primary', series.id);
+  return 'OK';
 }
 
 // scope=one: the event, or only occurrence orig of a recurring one; scope=all: the series
@@ -279,12 +371,24 @@ function buildFeed() {
   var stamp = Utilities.formatDate(now, 'UTC', "yyyyMMdd'T'HHmmss'Z'");
   var dueMin = new Date(now.getTime() - DAYS_BACK * 86400000).toISOString();
   var dueMax = new Date(now.getTime() + DAYS_AHEAD * 86400000).toISOString();
+  // X-WC-VERSION: what this script can do (2: lists, notes, places, descriptions, repeats)
   var out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//WeeklyCalendar//Google Tasks//EN',
-             'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Google Tasks'];
+             'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Google Tasks', 'X-WC-VERSION:2'];
 
   var lists = allPages(function (args) {
     args.maxResults = 100;
     return Tasks.Tasklists.list(args);
+  });
+  // Every list, for the skin's list picker (even lists without dated tasks); DEFAULT=1
+  // marks "My Tasks" (none is marked if Google does not say which it is)
+  var def = null;
+  try {
+    def = Tasks.Tasklists.get('@default').id;
+  } catch (err) {
+    // the skin then shows "@default" as "My Tasks" by name
+  }
+  lists.forEach(function (list) {
+    out.push('X-WC-LIST;ID=' + list.id + (list.id === def ? ';DEFAULT=1' : '') + ':' + esc(list.title || ''));
   });
   lists.forEach(function (list) {
     var tasks = allPages(function (args) {

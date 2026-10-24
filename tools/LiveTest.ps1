@@ -10,11 +10,12 @@
     down / up         left button        rdown / rup   right button
     wheel N           mouse wheel (120 = one notch up, -120 down)
     type TEXT         type text into the focused window (Unicode, e.g. a title in InputText)
-    key NAME          press a key: enter, esc, tab, back, end, home
+    key NAME          press a key: enter, esc, tab, back, end, home; ctrl+enter etc. with Ctrl
     wait MS           pause
     lua CODE          !CommandMeasure MeasureScript "CODE" (e.g. SetView('month'))
     shot FILE X Y W H screenshot of a skin area, tooltips included
     pos               print the skin position from Rainmeter.ini (did a press move it?)
+    fg                print the foreground window (does an InputText box have the keyboard?)
 
   -Front brings the skin above other windows for the test (!ZPos 2) and back to the
   desktop at the end (!ZPos -2); "shot" then raises the tooltip above the skin again.
@@ -50,6 +51,11 @@ public class LiveTest {
   [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
   // Keys go to the foreground window: only type into Rainmeter's own windows
   public static uint ForegroundPid() { uint p; GetWindowThreadProcessId(GetForegroundWindow(), out p); return p; }
+  public static string ForegroundName() {
+    var c = new StringBuilder(64); var t = new StringBuilder(128); IntPtr h = GetForegroundWindow();
+    GetClassName(h, c, 64); GetWindowText(h, t, 128);
+    return "pid " + ForegroundPid() + ", class " + c + ", title '" + t + "'";
+  }
   [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint f);
   [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr h);
   [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr h, IntPtr dc);
@@ -136,13 +142,17 @@ try {
       'type'  { foreach ($ch in $arg.ToCharArray()) {
                   [LiveTest]::Key(0, $ch, $false) | Out-Null; [LiveTest]::Key(0, $ch, $true) | Out-Null
                   Start-Sleep -Milliseconds 15 } }
-      'key'   { $vk = @{ enter = 0x0D; esc = 0x1B; tab = 0x09; back = 0x08; end = 0x23; home = 0x24 }[$arg]
+      'key'   { $ctrl = $arg -like 'ctrl+*'
+                $vk = @{ enter = 0x0D; esc = 0x1B; tab = 0x09; back = 0x08; end = 0x23; home = 0x24 }[($arg -replace '^ctrl\+', '')]
                 if (-not $vk) { throw "unknown key: $arg" }
+                if ($ctrl) { [LiveTest]::Key(0x11, [char]0, $false) | Out-Null }
                 [LiveTest]::Key($vk, [char]0, $false) | Out-Null; [LiveTest]::Key($vk, [char]0, $true) | Out-Null
+                if ($ctrl) { [LiveTest]::Key(0x11, [char]0, $true) | Out-Null }
                 Start-Sleep -Milliseconds 100 }
       'wait'  { Start-Sleep -Milliseconds ([int]$arg) }
       'lua'   { & $rm '!CommandMeasure' 'MeasureScript' $arg $Config; Start-Sleep -Milliseconds 300 }
       'pos'   { $px, $py = SkinPos; "skin at $px,$py" }
+      'fg'    { "foreground: " + [LiveTest]::ForegroundName() + " (Rainmeter: pid " + (Get-Process Rainmeter).Id + ")" }
       'shot'  { [LiveTest]::RaiseTooltips((Get-Process Rainmeter).Id); Start-Sleep -Milliseconds 100
                 $hbm = [LiveTest]::Capture((PX $v[1]), (PY $v[2]), [int]([double]$v[3] * $scale), [int]([double]$v[4] * $scale))
                 $bmp = [System.Drawing.Image]::FromHbitmap($hbm); [LiveTest]::DeleteObject($hbm) | Out-Null

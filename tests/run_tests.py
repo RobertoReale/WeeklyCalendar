@@ -1578,7 +1578,7 @@ def test_one_tooltip_carrier():
 SCRIPT_URL = 'https://script.google.com/macros/s/TEST/exec'
 HOLIDAY_URL = ('https://calendar.google.com/calendar/ical/it.italian%23holiday%40group.v.calendar.google.com'
                '/public/basic.ics')
-CARD_METERS = ['CrCard', 'CrDismiss', 'CrDraft', 'CrDraftTx'] + ['CrTx%d' % k for k in range(1, 15)]
+CARD_METERS = ['CrCard', 'CrDismiss', 'CrDraft', 'CrDraftTx'] + ['CrTx%d' % k for k in range(1, 21)]
 
 
 def ini_order():
@@ -1587,12 +1587,12 @@ def ini_order():
 
 
 def card_texts(sk):
-    return [sk.mock.opt('CrTx%d' % k, 'Text') for k in range(1, 15) if sk.mock.shown('CrTx%d' % k)]
+    return [sk.mock.opt('CrTx%d' % k, 'Text') for k in range(1, 21) if sk.mock.shown('CrTx%d' % k)]
 
 
 def card_el(sk, text):
     """The card meter showing text."""
-    return [m for m in ('CrTx%d' % k for k in range(1, 15))
+    return [m for m in ('CrTx%d' % k for k in range(1, 21))
             if sk.mock.shown(m) and sk.mock.opt(m, 'Text') == text][0]
 
 
@@ -1709,7 +1709,7 @@ def test_create_event_card_and_draft():
         # Closing hides every meter of the card and clears their actions
         g.CardClose()
         assert not any(m.shown(x) for x in CARD_METERS)
-        assert all(m.opt('CrTx%d' % k, 'LeftMouseUpAction') in (None, '') for k in range(1, 15))
+        assert all(m.opt('CrTx%d' % k, 'LeftMouseUpAction') in (None, '') for k in range(1, 21))
 
         # Sunday: the card goes left of the column; at the bottom it stays inside the skin
         g.CreateAt(6, int(m.opt('CrZone6', 'H')) - 3)
@@ -1842,10 +1842,14 @@ def test_create_event_submit():
         m.bangs.clear()
         g.TaskResult()
         assert not any(t.startswith('Seconda') for t in sk.event_titles())
-        assert m.shown('CrCard') and ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] in m.bangs
-        assert m.opt('MeasureCreateInput', 'DefaultValue') == "Seconda 'prova'"
+        # (the box opens on a click only: one Rainmeter opens by itself gets no keyboard and
+        # keeps the plugin from opening another)
+        assert m.shown('CrCard') and ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] not in m.bangs
         assert 'Not saved: Calendar usage limits exceeded.' in card_texts(sk), card_texts(sk)
         assert m.opt('TbSync', 'Text').endswith('change not saved'), m.opt('TbSync', 'Text')
+        run_action(sk, m.opt(card_el(sk, "Seconda 'prova'"), 'LeftMouseUpAction'))
+        assert ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] in m.bangs
+        assert m.opt('MeasureCreateInput', 'DefaultValue') == "Seconda 'prova'"
         # Enter on the title as it was saves the real one (with its quotes)
         m.vars['CreateTitle'] = "Seconda 'prova'"
         g.CreateSubmit()
@@ -1942,7 +1946,9 @@ def test_create_zones_are_under_the_items():
         assert order.index('Grid') < order.index(z) < order.index('ADBg1') < order.index('EvBg1'), z
     assert order.index('EvD80') < order.index('CrDraft') < order.index('HidUpBg0')
     assert order.index('DragZone41') < order.index('DragSlot1') < order.index('CrDismiss') < order.index('CrCard')
-    assert order.index('CrCard') < order.index('CrTx1') < order.index('ToastBg') < order.index('NowLine')
+    assert order.index('CrCard') < order.index('CrTx1') < order.index('ToastBg')
+    # the line of the current time goes under an open card
+    assert order.index('EvBg80') < order.index('NowLine') < order.index('CrDismiss')
     # Clicks on the hours and on the events: the events keep their own click
     sk = create_skin()
     try:
@@ -2046,11 +2052,11 @@ EDIT_ICS = GOOGLE_ICS.replace('END:VCALENDAR\r\n', (
     "END:VCALENDAR\r\n"))
 
 
-def edit_skin(**kw):
+def edit_skin(tasks='tasks.ics', **kw):
     kw.setdefault('IcalUrl3', SCRIPT_URL)
     sk = Skin(**kw)
     open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(EDIT_ICS)
-    shutil.copy(os.path.join(FIXTURES, 'tasks.ics'), os.path.join(sk.dir, 'DownloadFile', 'calendar3.ics'))
+    shutil.copy(os.path.join(FIXTURES, tasks), os.path.join(sk.dir, 'DownloadFile', 'calendar3.ics'))
     sk.start(2027, 3, 3, 8)
     return sk
 
@@ -2116,7 +2122,7 @@ def test_task_with_a_time_shows_once():
         assert not event_meters(sk, 'Simulazione')                  # the free event is left out
         h0 = int(clock_of(utc(2027, 3, 3, 14))[:2])
         assert '%02d:00 - %02d:00' % (h0, h0 + 1) in m.opt('EvT%d' % i, 'Text') + m.opt('EvD%d' % i, 'Text')
-        assert sk.tip('EvBg%d' % i).split('#CRLF#')[2] == 'Task'
+        assert sk.tip('EvBg%d' % i).split('#CRLF#')[2] == 'Task · Le mie attività'
         assert m.opt('EvBg%d' % i, 'LeftMouseDownAction') == NO_DRAG  # a task is not dragged by its time
         # The card: a task at that time; editing keeps only the date
         texts = open_card(sk, 'EvBg%d' % i)
@@ -2204,7 +2210,7 @@ def test_item_card_details_and_read_only():
         g.CardClose()
         # A task: complete it from the card
         texts = open_card(sk, 'ADBg%d' % task_chip(sk))
-        assert texts[:2] == ['Simulazione Tema di Esame', 'Wed 3 Mar#CRLF#Task'] and 'Mark complete' in texts, texts
+        assert texts[:2] == ['Simulazione Tema di Esame', 'Wed 3 Mar#CRLF#Task · Le mie attività'] and 'Mark complete' in texts, texts
         g.ItemToggle()
         assert not m.shown('CrCard') and task_params(sk)[-1].endswith('?action=complete&list=L1&task=t-open')
         # Tasks of an older script: read-only, with what to do
@@ -2394,7 +2400,7 @@ def test_edit_task_and_events():
         g.CreateAdjust('start', 2)
         run_action(sk, m.opt(card_el(sk, 'Save'), 'LeftMouseUpAction'))
         assert task_params(sk)[-1] == ('-s -f -L -m 30 ' + SCRIPT_URL + '?action=editevent&cal=me%40example.com'
-                                       '&uid=rec%40google.com&orig=2027-03-03T09%3A00%3A00Z&title=Daily'
+                                       '&uid=rec%40google.com&orig=2027-03-03T09%3A00%3A00Z'
                                        '&start=2027-03-03T09%3A30%3A00Z&end=2027-03-03T10%3A00%3A00Z'), task_params(sk)[-1]
         after = {c: int(m.opt('EvBg%d' % i, 'Y')) for c, i in event_meters(sk, 'Daily').items()}
         assert after[2] > before[2] and all(after[c] == before[c] for c in (0, 1, 3, 4)), (before, after)
@@ -2412,7 +2418,7 @@ def test_edit_task_and_events():
         g.CreateAdjust('date', -1)
         g.ItemSave()
         assert task_params(sk)[-1].endswith('?action=editevent&cal=me%40example.com&uid=trip%40google.com'
-                                            '&title=Gita&date=2027-03-03&days=2')
+                                            '&date=2027-03-03&days=2')
         sk.check_clean()
     finally:
         sk.close()
@@ -2436,16 +2442,19 @@ var Tasks = { Tasks: {
   patch: function (res, list, task) { calls.push(['tpatch', res, list, task]); },
   remove: function (list, task) { if (task === 'missing') throw new Error('Not Found'); calls.push(['tremove', list, task]); } } };
 var EVENTS = {
-  'abc@google.com': [{ id: 'abc', iCalUID: 'abc@google.com' }],
+  'abc@google.com': [{ id: 'abc', iCalUID: 'abc@google.com', start: { dateTime: '2027-03-03T10:00:00Z' } }],
   'CSVConvert123': [{ id: 'imp1', iCalUID: 'CSVConvert123' }],
   'rec@google.com': [{ id: 'rec_x', recurringEventId: 'rec', iCalUID: 'rec@google.com' },
-                     { id: 'rec', iCalUID: 'rec@google.com', recurrence: ['RRULE:FREQ=DAILY'] }],
+                     { id: 'rec', iCalUID: 'rec@google.com', recurrence: ['RRULE:FREQ=DAILY'],
+                       start: { dateTime: '2027-03-01T10:00:00+01:00', timeZone: 'Europe/Rome' },
+                       end: { dateTime: '2027-03-01T10:30:00+01:00', timeZone: 'Europe/Rome' } }],
   'day@google.com': [{ id: 'dayrec', iCalUID: 'day@google.com', recurrence: ['RRULE:FREQ=WEEKLY'] }]
 };
 var INSTANCES = {
-  rec: [{ id: 'rec_20270303T090000Z', originalStartTime: { dateTime: '2027-03-03T10:00:00+01:00' } },
+  rec: [{ id: 'rec_20270303T090000Z', originalStartTime: { dateTime: '2027-03-03T10:00:00+01:00' },
+         start: { dateTime: '2027-03-03T10:00:00+01:00' } },
         { id: 'rec_20270304T090000Z', originalStartTime: { dateTime: '2027-03-04T10:00:00+01:00' } }],
-  dayrec: [{ id: 'dayrec_20270305', originalStartTime: { date: '2027-03-05' } }]
+  dayrec: [{ id: 'dayrec_20270305', originalStartTime: { date: '2027-03-05' }, start: { date: '2027-03-05' } }]
 };
 var Calendar = { Events: {
   insert: function (res, cal) {
@@ -2790,6 +2799,431 @@ process.stdout.write(JSON.stringify([
     assert res.returncode == 0, res.stderr
     assert json.loads(res.stdout) == ['OK', 'ERROR Forbidden', 'ERROR event not found', 'ERROR bad time',
                                       'ERROR bad date', 'ERROR missing uid'], res.stdout
+
+
+# ---------------------------------------------------------------------------
+# Task lists, details; places, descriptions, repeats, calendars (Tasks script 2)
+# ---------------------------------------------------------------------------
+ARROW = ' \u25be'  # after the choice of a picker
+
+
+def set_feed(sk, feed, text):
+    # A new download of feed (its .ics text), as WebParser would finish it
+    open(os.path.join(sk.dir, 'DownloadFile', 'calendar%d.ics' % feed), 'w', encoding='utf-8', newline='').write(text)
+    sk.g.Reload(feed)
+
+
+def answer(sk, out):
+    # The Tasks script answers the request being sent ("OK ...", "ERROR ...")
+    sk.mock.measure_values['MeasureTaskAction'] = out
+    sk.g.TaskResult()
+
+
+def test_old_script_hides_the_new_fields():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        g.CreateAllDay(4)
+        texts = card_texts(sk)
+        assert 'My Tasks' in texts and 'Add details' not in texts, texts
+        assert any(t.startswith('For lists, details, places and repeats, update the') for t in texts), texts
+        g.CreateType('event')
+        assert 'Add location' not in card_texts(sk) and 'Does not repeat' + ARROW not in card_texts(sk)
+        g.CardClose()
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Mia riunione'))
+        g.ItemEdit()
+        assert 'Add location' not in card_texts(sk) and 'All day' not in card_texts(sk)
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_task_lists_details_and_moves():
+    sk = edit_skin(tasks='tasks_v2.ics')
+    try:
+        m, g = sk.mock, sk.g
+        v2 = open(os.path.join(FIXTURES, 'tasks_v2.ics'), encoding='utf-8').read()
+        # Details: its list and its notes
+        texts = open_card(sk, 'ADBg%d' % task_chip(sk))
+        assert texts[1] == 'Wed 3 Mar#CRLF#Task · Le mie attività' and 'capitolo 4#CRLF#esercizi' in texts, texts
+        g.CardClose()
+
+        # A new task: its list (the default one first) and details
+        g.CreateAllDay(4)
+        texts = card_texts(sk)
+        assert 'Add details' in texts and 'Le mie attività' + ARROW in texts, texts
+        assert not any('update the' in t for t in texts)
+        el = card_el(sk, 'Le mie attività' + ARROW)
+        assert sk.tip(el) == 'Click to choose, scroll to change'
+        run_action(sk, m.opt(el, 'LeftMouseUpAction'))
+        texts = card_texts(sk)
+        assert texts[:4] == ['Task list', 'Le mie attività', 'Analisi Matematica 1 - 1° Parziale', 'Sport, palestra'], texts
+        assert 'Cancel' in texts and m.opt(card_el(sk, 'Le mie attività'), 'FontColor') == '4,30,73,255'
+        run_action(sk, m.opt(card_el(sk, 'Sport, palestra'), 'LeftMouseUpAction'))
+        assert 'Sport, palestra' + ARROW in card_texts(sk)
+        assert m.bangs.count(['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1']) >= 2  # title again
+        run_action(sk, m.opt(card_el(sk, 'Sport, palestra' + ARROW), 'MouseScrollUpAction'))  # the wheel
+        assert 'Analisi Matematica 1 - 1° Parziale' + ARROW in card_texts(sk)
+        # Details: a smaller box, two lines tall; Ctrl+Enter lines arrive as CR LF
+        run_action(sk, m.opt(card_el(sk, 'Add details'), 'LeftMouseUpAction'))
+        assert m.opt('MeasureCreateInput', 'FontSize') == '9' and m.opt('MeasureCreateInput', 'DefaultValue') == ''
+        assert m.opt('MeasureCreateInput', 'H') == '44' and m.opt('MeasureCreateInput', 'InputLimit') == '1500'
+        assert 'Enter: done - Ctrl+Enter: new line' in card_texts(sk)
+        m.vars['CreateTitle'] = ' riga 1\r\nriga \\"2\\" '      # Rainmeter gives a typed " as \"
+        g.CreateSubmit()
+        assert "riga 1 riga '2'" in card_texts(sk) and 'Add details' not in card_texts(sk)
+        g.CardTitle()
+        assert m.opt('MeasureCreateInput', 'FontSize') == '13' and m.opt('MeasureCreateInput', 'InputLimit') == '500'
+        m.vars['CreateTitle'] = 'Consegna'
+        g.CreateSubmit()
+        assert task_params(sk)[-1] == ('-s -f -L -m 30 ' + SCRIPT_URL + '?action=createtask&list=L2&title=Consegna'
+                                       '&due=2027-03-05&notes=riga%201%0Ariga%20%222%22'), task_params(sk)[-1]
+        assert chip_col(sk, sk.all_day()['○ Consegna']) == 4
+        answer(sk, 'OK newtask1')
+
+        # Edit a task: new details and another list; details show the list at once
+        open_card(sk, 'ADBg%d' % task_chip(sk))
+        g.ItemEdit()
+        texts = card_texts(sk)
+        assert 'capitolo 4 esercizi' in texts and 'Le mie attività' + ARROW in texts, texts
+        g.CardCycle('list', 2)
+        assert 'Sport, palestra' + ARROW in card_texts(sk)
+        g.CardField('notes')
+        assert m.opt('MeasureCreateInput', 'DefaultValue') == 'capitolo 4\r\nesercizi'
+        m.vars['CreateTitle'] = 'capitolo 4\r\nesercizi'            # Enter without changes
+        g.CreateSubmit()
+        g.CardField('notes')
+        m.vars['CreateTitle'] = 'capitolo 5'
+        g.CreateSubmit()
+        n = len(task_params(sk))
+        g.ItemSave()
+        assert task_params(sk)[n:] == ['-s -f -L -m 30 ' + SCRIPT_URL + '?action=edittask&list=L1&task=t-open'
+                                       '&notes=capitolo%205'], task_params(sk)[n:]
+        texts = open_card(sk, 'ADBg%d' % task_chip(sk))
+        assert texts[1] == 'Wed 3 Mar#CRLF#Task · Sport, palestra' and 'capitolo 5' in texts, texts
+        g.CardClose()
+        answer(sk, 'OK')
+        # then the move to the other list; Google gives it a new id there
+        assert task_params(sk)[-1] == '-s -f -L -m 30 ' + SCRIPT_URL + '?action=movetask&list=L1&task=t-open&tolist=L3'
+        answer(sk, 'OK t-new')
+        # a change after the move goes to the task where it is now
+        g.ToggleTask(task_chip(sk))
+        assert task_params(sk)[-1] == '-s -f -L -m 30 ' + SCRIPT_URL + '?action=complete&list=L3&task=t-new'
+        answer(sk, 'OK')
+        assert sk.all_day().get('✓ Simulazione Tema di Esame')
+        # A download that started before Google saved it (the old task) does not undo it
+        set_feed(sk, 3, v2.replace('DTSTAMP:20270301T080000Z', 'DTSTAMP:20270301T090000Z'))
+        assert '✓ Simulazione Tema di Esame' in sk.all_day()
+        texts = open_card(sk, 'ADBg%d' % task_chip(sk, '✓ Simulazione'))
+        assert texts[1] == 'Wed 3 Mar#CRLF#Task completed · Sport, palestra', texts
+        g.CardClose()
+        # The feed has it in the new list, with its new id: shown once
+        moved = v2.replace('UID:t-open@', 'UID:t-new@').replace('X-WC-TASKID:t-open', 'X-WC-TASKID:t-new') \
+                  .replace('X-WC-TASKLIST:L1', 'X-WC-TASKLIST:L3').replace('X-WC-TASK:NEEDS-ACTION\nX-WC-TASKLIST:L3\nX-WC-TASKID:t-new',
+                                                                          'X-WC-TASK:COMPLETED\nX-WC-TASKLIST:L3\nX-WC-TASKID:t-new') \
+                  .replace('DESCRIPTION:capitolo 4\\nesercizi', 'DESCRIPTION:capitolo 5')
+        assert 'X-WC-TASK:COMPLETED' in moved
+        set_feed(sk, 3, moved)
+        assert [k for k in sk.all_day() if 'Simulazione' in k] == ['✓ Simulazione Tema di Esame'], sk.all_day()
+        assert not g._WC.edit.card
+        sk.check_clean()
+
+        # Google refuses a move (a repeating task): the list goes back, the toolbar says why
+        open_card(sk, 'ADBg%d' % task_chip(sk, '○ Ritirare'))
+        g.ItemEdit()
+        g.CardCycle('list', -1)
+        g.ItemSave()
+        assert task_params(sk)[-1].endswith('?action=movetask&list=L3&task=t-sport&tolist=L2')
+        answer(sk, 'ERROR Recurrent tasks cannot currently be moved between lists')
+        assert m.opt('TbSync', 'Text').endswith('task not saved') and 'Recurrent tasks' in sk.tip('TbSync')
+        texts = open_card(sk, 'ADBg%d' % task_chip(sk, '○ Ritirare'))
+        assert texts[1] == 'Thu 4 Mar#CRLF#Task · Sport, palestra', texts
+        g.CardClose()
+        # A change Google saved but the feed never shows ends after 10 minutes
+        open_card(sk, 'ADBg%d' % task_chip(sk, '○ Ritirare'))
+        g.ItemEdit()
+        m.vars['CreateTitle'] = 'Ritirare il pacco'
+        g.CreateSubmit()
+        answer(sk, 'OK')
+        set_feed(sk, 3, moved.replace('DTSTAMP:20270301T080000Z', 'DTSTAMP:20270301T100000Z'))
+        assert '○ Ritirare il pacco' in sk.all_day()
+        sk.at(2027, 3, 3, 8, 11)
+        set_feed(sk, 3, moved)
+        assert '○ Ritirare oggetti' in sk.all_day()
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+FAMILY_URL = 'https://calendar.google.com/calendar/ical/family123%40group.calendar.google.com/private-y/basic.ics'
+FAMILY_ICS = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-WR-CALNAME:Famiglia\r\nEND:VCALENDAR\r\n'
+
+
+def test_event_place_description_repeat_and_calendar():
+    sk = edit_skin(tasks='tasks_v2.ics', IcalUrl2=FAMILY_URL)
+    try:
+        m, g = sk.mock, sk.g
+        set_feed(sk, 2, FAMILY_ICS)
+        g.CreateAt(2, zone_y(sk, 2, '16:00'))
+        texts = card_texts(sk)
+        for t in ('Does not repeat' + ARROW, 'Add location', 'Add description', 'me@example.com' + ARROW, 'More options'):
+            assert t in texts, (t, texts)
+        g.CardMenu('repeat')
+        texts = card_texts(sk)
+        assert texts[:7] == ['Repeat', 'Does not repeat', 'Every day', 'Every weekday (Monday to Friday)',
+                             'Weekly on Wednesday', 'Monthly on day 3', 'Annually on March 3'], texts
+        g.CardPick(4)
+        assert 'Weekly on Wednesday' + ARROW in card_texts(sk)
+        g.CardField('loc')
+        assert m.opt('MeasureCreateInput', 'H') == '24'           # one line for a place
+        m.vars['CreateTitle'] = 'Aula 3'
+        g.CreateSubmit()
+        g.CardField('desc')
+        m.vars['CreateTitle'] = 'Portare il libro'
+        g.CreateSubmit()
+        g.CardMenu('cal')
+        assert card_texts(sk)[:3] == ['Calendar', 'me@example.com', 'Famiglia'], card_texts(sk)
+        g.CardPick(2)
+        assert 'Famiglia' + ARROW in card_texts(sk) and 'Aula 3' in card_texts(sk) and 'Portare il libro' in card_texts(sk)
+        assert 'Fill Color 11,128,67,255' in m.opt('CrDraft', 'Shape')        # the color of slot 2
+        g.CardTitle()
+        m.vars['CreateTitle'] = 'Lezione nuova'
+        g.CreateSubmit()
+        assert task_params(sk)[-1] == ('-s -f -L -m 30 ' + SCRIPT_URL + '?action=createevent'
+                                       '&cal=family123%40group.calendar.google.com&title=Lezione%20nuova'
+                                       '&start=' + enc(utc_of_local(2027, 3, 3, 16)) + '&end=' + enc(utc_of_local(2027, 3, 3, 17))
+                                       + '&location=Aula%203&desc=Portare%20il%20libro&rrule=FREQ%3DWEEKLY'), task_params(sk)[-1]
+        # shown at once, every week, with its place
+        assert sorted(event_meters(sk, 'Lezione nuova')) == [2]
+        assert 'Aula 3' in sk.tip('EvBg%d' % event_meters(sk, 'Lezione nuova')[2])
+        g.ShiftWeek(1)
+        assert sorted(event_meters(sk, 'Lezione nuova')) == [2]
+        g.ShiftWeek(-1)
+        answer(sk, 'OK new1@google.com')
+        # "More options" takes them to Google Calendar's editor
+        g.CreateAt(3, zone_y(sk, 3, '15:00'))
+        g.CardField('loc')
+        m.vars['CreateTitle'] = 'Via Roma 1'
+        g.CreateSubmit()
+        g.CardCycle('repeat', 1)
+        m.bangs.clear()
+        g.CreateMore()
+        url = [b[0] for b in m.bangs if b[0].startswith('["https://')][0]
+        assert url.endswith('&location=Via%20Roma%201&recur=RRULE%3AFREQ%3DDAILY"]'), url
+        # All day, without a repeat
+        g.CreateAllDay(1)
+        g.CreateType('event')
+        m.vars['CreateTitle'] = 'Gita'
+        g.CreateSubmit()
+        assert task_params(sk)[-1].endswith('?action=createevent&cal=&title=Gita&date=2027-03-02&days=1'), task_params(sk)[-1]
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_edit_event_fields_all_day_and_series():
+    sk = edit_skin(tasks='tasks_v2.ics')
+    try:
+        m, g = sk.mock, sk.g
+        # Only the place changes
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Mia riunione'))
+        g.ItemEdit()
+        texts = card_texts(sk)
+        assert 'Add location' in texts and 'Add description' in texts and 'All day' in texts, texts
+        g.CardField('loc')
+        m.vars['CreateTitle'] = 'Sala B'
+        g.CreateSubmit()
+        g.ItemSave()
+        assert task_params(sk)[-1] == ('-s -f -L -m 30 ' + SCRIPT_URL + '?action=editevent&cal=me%40example.com'
+                                       '&uid=mine%40google.com&location=Sala%20B'), task_params(sk)[-1]
+        assert 'Sala B' in sk.tip('EvBg%d' % event_meter(sk, 'Mia riunione'))
+        answer(sk, 'OK')
+        # ...then all day: the place stays shown while the feed catches up
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Mia riunione'))
+        g.ItemEdit()
+        assert 'Sala B' in card_texts(sk)
+        g.CreateToggleAllDay()
+        assert not any(re.match(r'\d\d:\d\d$', t) for t in card_texts(sk)), card_texts(sk)
+        g.ItemSave()
+        assert task_params(sk)[-1].endswith('&uid=mine%40google.com&date=2027-03-05&days=1'), task_params(sk)[-1]
+        assert 'Mia riunione' in sk.all_day() and not [t for t in sk.event_titles() if t.startswith('Mia riunione')]
+        assert 'Sala B' in sk.tip('ADBg%d' % sk.all_day()['Mia riunione'])
+        answer(sk, 'OK')
+        # ...and back to a time (9:00 by default)
+        open_card(sk, 'ADBg%d' % sk.all_day()['Mia riunione'])
+        g.ItemEdit()
+        g.CreateToggleAllDay()
+        assert '09:00' in card_texts(sk) and '10:00' in card_texts(sk)
+        g.ItemSave()
+        assert task_params(sk)[-1].endswith('&uid=mine%40google.com&start=' + enc(utc_of_local(2027, 3, 5, 9))
+                                            + '&end=' + enc(utc_of_local(2027, 3, 5, 10))), task_params(sk)[-1]
+        assert 'Mia riunione' not in sk.all_day()
+        answer(sk, 'OK')
+
+        # An event without a title: saved unchanged, nothing is sent (not "(no title)")
+        add_event(sk, 1, 'BEGIN:VEVENT\nUID:nt@google.com\nDTSTART:20270305T160000Z\nDTEND:20270305T170000Z\nEND:VEVENT\n')
+        g.Reload(1)
+        n = len(task_params(sk))
+        open_card(sk, 'EvBg%d' % event_meter(sk, '(no title)'))
+        g.ItemEdit()
+        g.ItemSave()
+        assert len(task_params(sk)) == n and not m.shown('CrCard')
+        # A rich description (Google Meet block) cannot be edited here
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Lezione'))
+        g.ItemEdit()
+        el = card_el(sk, [t for t in card_texts(sk) if t.startswith('Aula 3.0.3') or t.startswith("'b'")
+                          or t.startswith('(b)') or '<b>' in t or 'Aula' in t][0])
+        assert m.opt(el, 'LeftMouseUpAction') in (NO_DRAG, None, '') and sk.tip(el).startswith('Formatted description')
+        g.CardClose()
+
+        # A recurring event: this event, or all of them (the same day, a new time)
+        before = {c: int(m.opt('EvBg%d' % i, 'Y')) for c, i in event_meters(sk, 'Daily').items()}
+        open_card(sk, 'EvBg%d' % event_meters(sk, 'Daily')[2])
+        g.ItemEdit()
+        assert 'Only this event will change' not in card_texts(sk) and 'All day' not in card_texts(sk)
+        g.CreateAdjust('start', 2)
+        g.ItemSave()
+        texts = card_texts(sk)
+        assert 'Save recurring event:' in texts and 'All events' in texts and 'This event' in texts, texts
+        g.ItemSaveAsk(0)
+        assert 'Save recurring event:' not in card_texts(sk)
+        g.ItemSave()
+        g.ItemSave('all')
+        assert task_params(sk)[-1] == ('-s -f -L -m 30 ' + SCRIPT_URL + '?action=editevent&cal=me%40example.com'
+                                       '&uid=rec%40google.com&orig=2027-03-03T09%3A00%3A00Z&scope=all'
+                                       '&start=2027-03-03T09%3A30%3A00Z&end=2027-03-03T10%3A00%3A00Z'), task_params(sk)[-1]
+        after = {c: int(m.opt('EvBg%d' % i, 'Y')) for c, i in event_meters(sk, 'Daily').items()}
+        assert sorted(after) == [0, 1, 2, 3, 4] and all(after[c] > before[c] for c in after), (before, after)
+        answer(sk, 'OK')
+        # the feed has the series at its new time: shown there once, not moved twice
+        path = os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics')
+        text = open(path, encoding='utf-8', newline='').read()
+        set_feed(sk, 1, text.replace('DTSTART:20270301T090000Z\r\nDTEND:20270301T093000Z',
+                                     'DTSTART:20270301T093000Z\r\nDTEND:20270301T100000Z'))
+        assert {c: int(m.opt('EvBg%d' % i, 'Y')) for c, i in event_meters(sk, 'Daily').items()} == after
+        assert not any(k for k in g._WC.edit.changes.keys() if 'rec@google.com' in k)
+        # Another day: only that occurrence can change, and the form says so
+        open_card(sk, 'EvBg%d' % event_meters(sk, 'Daily')[1])
+        g.ItemEdit()
+        g.CreateAdjust('date', 1)
+        assert 'Only this event will change' in card_texts(sk)
+        g.ItemSave()
+        assert task_params(sk)[-1].endswith('&uid=rec%40google.com&orig=2027-03-02T09%3A30%3A00Z'
+                                            '&start=2027-03-03T09%3A30%3A00Z&end=2027-03-03T10%3A00%3A00Z'), task_params(sk)[-1]
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_google_script_lists_notes_and_events():
+    node = shutil.which('node')
+    if not node:
+        print('      (skipped: node not installed)')
+        return
+    import json
+    import subprocess
+    script = open(os.path.join(ROOT, 'tools', 'GoogleTasksFeed.gs'), encoding='utf-8').read()
+    harness = script + r"""
+var calls = [];
+var Utilities = { formatDate: function () { return '20270301T080000Z'; } };
+var PropertiesService = { getScriptProperties: function () { return { getProperty: function () { return null; } }; } };
+var ContentService = { MimeType: { ICAL: 'ical' }, createTextOutput: function (s) {
+  return { text: s, setMimeType: function () { return this; } }; } };
+var Tasks = {
+  Tasklists: { list: function () { return { items: [{ id: 'L1', title: 'Le mie attività' }, { id: 'L2', title: 'Sport, palestra' }] }; },
+               get: function (id) { return { id: 'L1' }; } },
+  Tasks: {
+    list: function (id, a) { return { items: id === 'L2' ? [{ id: 's', title: 'Corsa', status: 'needsAction', due: '2027-03-04T00:00:00.000Z' }] : [] }; },
+    insert: function (res, list) { calls.push(['tinsert', res, list]); return { id: 'T1' }; },
+    patch: function (res, list, task) { calls.push(['tpatch', res, list, task]); },
+    move: function (list, task, a) {
+      calls.push(['tmove', list, task, a]);
+      if (task === 'rep') throw new Error('Recurrent tasks cannot currently be moved between lists');
+      return { id: task === 'old' ? 'old' : 'N' + task }; },
+    get: function (list, task) {
+      calls.push(['tget', list, task]);
+      if (task === 'old') throw new Error('Not Found');
+      return { id: task }; } } };
+var SERIES = { id: 'rec', iCalUID: 'rec@google.com', recurrence: ['RRULE:FREQ=DAILY'],
+               start: { dateTime: '2027-03-01T10:00:00+01:00', timeZone: 'Europe/Rome' },
+               end: { dateTime: '2027-03-01T10:30:00+01:00', timeZone: 'Europe/Rome' } };
+var Calendar = {
+  Calendars: { get: function (cal) { calls.push(['calget', cal]); return { timeZone: 'Europe/Rome' }; } },
+  Events: {
+    insert: function (res, cal) { calls.push(['insert', res, cal]); return { id: 'new1', iCalUID: 'new1@google.com' }; },
+    list: function (cal, a) {
+      if (a.iCalUID === 'rec@google.com') return { items: [SERIES] };
+      if (a.iCalUID === 'one@google.com') return { items: [{ id: 'one', start: { dateTime: '2027-03-03T10:00:00Z' } }] };
+      if (a.iCalUID === 'day@google.com') return { items: [{ id: 'day', start: { date: '2027-03-03' } }] };
+      return { items: [] }; },
+    patch: function (res, cal, id) { calls.push(['patch', res, cal, id]); } } };
+function w(p) { var n = calls.length; var r = doGet({ parameter: p }).text; return [r, calls.slice(n)]; }
+var C = 'me@example.com';
+var long = new Array(4002).join('x');
+process.stdout.write(JSON.stringify({
+  feed: buildFeed(),
+  task: w({ action: 'createtask', list: 'L2', title: 'Esame', due: '2027-03-05', notes: 'riga 1\nriga 2' }),
+  taskLong: w({ action: 'createtask', title: 'Esame', due: '2027-03-05', notes: long }),
+  notes: w({ action: 'edittask', list: 'L1', task: 't1', notes: '' }),
+  move: w({ action: 'movetask', list: 'L1', task: 't1', tolist: 'L2' }),
+  moveSame: w({ action: 'movetask', list: 'L1', task: 't1', tolist: 'L1' }),
+  moveRep: w({ action: 'movetask', list: 'L1', task: 'rep', tolist: 'L2' }),
+  moveIgnored: w({ action: 'movetask', list: 'L1', task: 'old', tolist: 'L2' }),
+  moveNoList: w({ action: 'movetask', list: 'L1', task: 't1' }),
+  ev: w({ action: 'createevent', cal: '', title: 'Corso', start: '2027-03-03T09:00:00Z', end: '2027-03-03T10:00:00Z',
+          location: 'Aula 3', desc: 'Libro', rrule: 'FREQ=WEEKLY;BYDAY=MO,WE' }),
+  evDay: w({ action: 'createevent', cal: C, title: 'Ferie', date: '2027-03-03', days: '1', rrule: 'FREQ=YEARLY' }),
+  evBadRule: w({ action: 'createevent', title: 'X', start: '2027-03-03T09:00:00Z', end: '2027-03-03T10:00:00Z', rrule: 'FREQ=HOURLY' }),
+  place: w({ action: 'editevent', cal: C, uid: 'one@google.com', location: '', desc: 'Nuova' }),
+  toAllDay: w({ action: 'editevent', cal: C, uid: 'one@google.com', date: '2027-03-04', days: '1' }),
+  toTimed: w({ action: 'editevent', cal: C, uid: 'day@google.com', start: '2027-03-03T09:00:00Z', end: '2027-03-03T10:00:00Z' }),
+  all: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', scope: 'all', title: 'Daily 2',
+           start: '2027-03-03T09:30:00Z', end: '2027-03-03T10:15:00Z' }),
+  allTexts: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', scope: 'all', location: 'Sala' }),
+  allOtherDay: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', scope: 'all',
+                  start: '2027-03-04T09:30:00Z', end: '2027-03-04T10:00:00Z' }),
+  allAllDay: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', scope: 'all', date: '2027-03-03', days: '1' })
+}));
+"""
+    res = subprocess.run([node, '-e', harness], capture_output=True, encoding='utf-8')
+    assert res.returncode == 0, res.stderr
+    out = json.loads(res.stdout)
+    C = 'me@example.com'
+    feed = out['feed']
+    assert ('X-WR-CALNAME:Google Tasks\r\nX-WC-VERSION:2\r\nX-WC-LIST;ID=L1;DEFAULT=1:Le mie attività\r\n'
+            'X-WC-LIST;ID=L2:Sport\\, palestra\r\nBEGIN:VEVENT') in feed, feed
+    lua = new_runtime(MockSkin({}, ini_sections()))
+    wc = lua.globals()._WC
+    wc.cfg.lang, wc.cfg.showDeclined, wc.cfg.scriptFeed = wc.LANGS.en, True, 3
+    wc.parseICS(feed, 3)
+    lists = wc.edit.taskLists
+    assert wc.edit.scriptV == 2 and [(lists[i].id, lists[i].title, lists[i].default) for i in (1, 2)] == \
+        [('L1', 'Le mie attività', True), ('L2', 'Sport, palestra', False)]
+    assert out['task'] == ['OK T1', [['tinsert', {'title': 'Esame', 'notes': 'riga 1\nriga 2', 'due': '2027-03-05T00:00:00.000Z'}, 'L2']]]
+    assert out['taskLong'] == ['ERROR notes too long', []]
+    assert out['notes'] == ['OK', [['tpatch', {'notes': ''}, 'L1', 't1']]]
+    assert out['move'] == ['OK Nt1', [['tmove', 'L1', 't1', {'destinationTasklist': 'L2'}], ['tget', 'L2', 'Nt1']]], out['move']
+    assert out['moveSame'] == ['OK t1', []]
+    assert out['moveRep'][0] == 'ERROR Recurrent tasks cannot currently be moved between lists'
+    assert out['moveIgnored'][0] == 'ERROR the task stayed in its list: Not Found' and out['moveNoList'] == ['ERROR missing list or task', []]
+    assert out['ev'] == ['OK new1@google.com', [['calget', 'primary'], ['insert', {
+        'summary': 'Corso', 'start': {'dateTime': '2027-03-03T09:00:00Z', 'timeZone': 'Europe/Rome'},
+        'end': {'dateTime': '2027-03-03T10:00:00Z', 'timeZone': 'Europe/Rome'}, 'location': 'Aula 3', 'description': 'Libro',
+        'recurrence': ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE']}, 'primary']]], out['ev']
+    assert out['evDay'][1] == [['insert', {'summary': 'Ferie', 'start': {'date': '2027-03-03'}, 'end': {'date': '2027-03-04'},
+                                           'recurrence': ['RRULE:FREQ=YEARLY']}, C]], out['evDay']
+    assert out['evBadRule'] == ['ERROR bad repeat', []]
+    assert out['place'] == ['OK', [['patch', {'location': '', 'description': 'Nuova'}, C, 'one']]], out['place']
+    assert out['toAllDay'][1] == [['patch', {'start': {'date': '2027-03-04', 'dateTime': None, 'timeZone': None},
+                                             'end': {'date': '2027-03-05', 'dateTime': None, 'timeZone': None}}, C, 'one']], out['toAllDay']
+    assert out['toTimed'][1] == [['patch', {'start': {'dateTime': '2027-03-03T09:00:00Z', 'date': None},
+                                            'end': {'dateTime': '2027-03-03T10:00:00Z', 'date': None}}, C, 'day']], out['toTimed']
+    # the series moves by 30 minutes and lasts 45, in its own time zone
+    assert out['all'] == ['OK', [['patch', {'summary': 'Daily 2',
+                                            'start': {'dateTime': '2027-03-01T09:30:00.000Z', 'timeZone': 'Europe/Rome'},
+                                            'end': {'dateTime': '2027-03-01T10:15:00.000Z', 'timeZone': 'Europe/Rome'}}, C, 'rec']]], out['all']
+    assert out['allTexts'] == ['OK', [['patch', {'location': 'Sala'}, C, 'rec']]]
+    assert out['allOtherDay'] == ['ERROR bad time', []] and out['allAllDay'][0] == 'ERROR change it in Google Calendar'
 
 
 def test_lua_main_chunk_has_room_for_locals():
