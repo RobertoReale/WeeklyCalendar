@@ -12,20 +12,56 @@
  * circle / check mark is clicked: ?action=complete|reopen&list=<list id>&task=<task id>,
  * and moves it to another day when it is dragged there:
  * ?action=move&list=<list id>&task=<task id>&due=YYYY-MM-DD (README, "Completing tasks").
+ *
+ * It also creates, edits and deletes tasks and Google Calendar events for the skin's
+ * cards (README, "Creating and editing"); events need the advanced "Google Calendar API"
+ * service:
+ *   ?action=createtask&list=..&title=..&due=YYYY-MM-DD           -> OK <task id>
+ *   ?action=edittask&list=..&task=..[&title=..][&due=YYYY-MM-DD] -> OK
+ *   ?action=deletetask&list=..&task=..                           -> OK
+ *   ?action=createevent&cal=..&title=..&start=<UTC>&end=<UTC>    -> OK <iCal UID>
+ *                      (or &date=YYYY-MM-DD&days=N for an all-day event)
+ *   ?action=editevent|moveevent&cal=..&uid=<iCal UID>[&orig=..][&title=..][&start=..&end=..|&date=..&days=..]
+ *   ?action=deleteevent&cal=..&uid=..[&orig=..]&scope=one|all
+ * "orig" is the original start of one occurrence of a recurring event (UTC, or the date
+ * of an all-day event). Every answer is "OK ..." or "ERROR <reason>".
+ *
+ * Optional protection: with the script property WRITE_TOKEN set (Project Settings >
+ * Script properties), every change needs &token=<that value> (TasksToken in the skin's
+ * Private.inc). Reading the feed does not.
  */
 
 var DAYS_BACK = 60;    // completed/overdue tasks older than this are left out
 var DAYS_AHEAD = 400;  // and so are tasks due further ahead than this
 
+var WRITE_ACTIONS = {
+  complete: 1, reopen: 1, move: 1, createtask: 1, edittask: 1, deletetask: 1,
+  createevent: 1, editevent: 1, moveevent: 1, deleteevent: 1
+};
+
 function doGet(e) {
   var p = (e && e.parameter) || {};
-  if (p.action === 'complete' || p.action === 'reopen') {
-    return ContentService.createTextOutput(setCompleted(p.list, p.task, p.action === 'complete'));
-  }
-  if (p.action === 'move') {
-    return ContentService.createTextOutput(moveTask(p.list, p.task, p.due));
+  if (WRITE_ACTIONS[p.action]) {
+    return ContentService.createTextOutput(write(p));
   }
   return ContentService.createTextOutput(buildFeed()).setMimeType(ContentService.MimeType.ICAL);
+}
+
+// A change asked by the skin: "OK [id]" or "ERROR <reason>"
+function write(p) {
+  var token = PropertiesService.getScriptProperties().getProperty('WRITE_TOKEN');
+  if (token && p.token !== token) return 'ERROR bad token';
+  switch (p.action) {
+    case 'complete': case 'reopen': return setCompleted(p.list, p.task, p.action === 'complete');
+    case 'move': return moveTask(p.list, p.task, p.due);
+    case 'createtask': return createTask(p);
+    case 'edittask': return editTask(p);
+    case 'deletetask': return deleteTask(p);
+    case 'createevent': return createEvent(p);
+    case 'editevent': case 'moveevent': return editEvent(p);
+    case 'deleteevent': return deleteEvent(p);
+  }
+  return 'ERROR unknown action';
 }
 
 // Answers "OK", or "ERROR <reason>" (the skin then shows the task as it was)
@@ -54,6 +90,159 @@ function moveTask(listId, taskId, due) {
   }
 }
 
+var DATE = /^\d{4}-\d{2}-\d{2}$/;
+var UTC_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?Z$/;
+
+function badTitle(title) {
+  return !title || title.length > 500;
+}
+
+// Day after date (YYYY-MM-DD) plus n - 1 days: the exclusive end of an all-day event
+function addDays(date, n) {
+  return new Date(Date.parse(date + 'T00:00:00Z') + n * 86400000).toISOString().substring(0, 10);
+}
+
+function createTask(p) {
+  if (badTitle(p.title)) return 'ERROR bad title';
+  if (!DATE.test(p.due || '')) return 'ERROR bad date';
+  try {
+    var t = Tasks.Tasks.insert({ title: p.title, notes: p.notes || undefined, due: p.due + 'T00:00:00.000Z' },
+                               p.list || '@default');
+    return 'OK ' + t.id;
+  } catch (err) {
+    return 'ERROR ' + err.message;
+  }
+}
+
+// New title and / or due date; omitted fields stay as they are
+function editTask(p) {
+  if (!p.list || !p.task) return 'ERROR missing list or task';
+  var patch = {};
+  if (p.title !== undefined) {
+    if (badTitle(p.title)) return 'ERROR bad title';
+    patch.title = p.title;
+  }
+  if (p.due !== undefined) {
+    if (!DATE.test(p.due)) return 'ERROR bad date';
+    patch.due = p.due + 'T00:00:00.000Z';
+  }
+  try {
+    Tasks.Tasks.patch(patch, p.list, p.task);
+    return 'OK';
+  } catch (err) {
+    return 'ERROR ' + err.message;
+  }
+}
+
+function deleteTask(p) {
+  if (!p.list || !p.task) return 'ERROR missing list or task';
+  try {
+    Tasks.Tasks.remove(p.list, p.task);
+    return 'OK';
+  } catch (err) {
+    return 'ERROR ' + err.message;
+  }
+}
+
+// Start and end of an event from the request: { start, end } in the Calendar API format,
+// null when the request has no times, or a string with the error
+function eventTimes(p) {
+  if (p.date !== undefined) {
+    var days = parseInt(p.days || '1', 10);
+    if (!DATE.test(p.date) || !(days >= 1 && days <= 366)) return 'ERROR bad date';
+    return { start: { date: p.date }, end: { date: addDays(p.date, days) } };
+  }
+  if (p.start === undefined && p.end === undefined) return null;
+  if (!UTC_TIME.test(p.start || '') || !UTC_TIME.test(p.end || '')) return 'ERROR bad time';
+  if (Date.parse(p.end) <= Date.parse(p.start)) return 'ERROR end before start';
+  return { start: { dateTime: p.start }, end: { dateTime: p.end } };
+}
+
+function createEvent(p) {
+  if (badTitle(p.title)) return 'ERROR bad title';
+  var times = eventTimes(p);
+  if (!times) return 'ERROR bad time';
+  if (typeof times === 'string') return times;
+  try {
+    var ev = Calendar.Events.insert({ summary: p.title, start: times.start, end: times.end }, p.cal || 'primary');
+    return 'OK ' + ev.iCalUID;
+  } catch (err) {
+    if (/not ?found/i.test(err.message)) return 'ERROR calendar not found';
+    return 'ERROR ' + err.message;
+  }
+}
+
+// The event the skin means: found by its iCal UID (Google may give imported events
+// another id), then, for one occurrence of a recurring event, the instance whose original
+// start is p.orig. Returns { series, target } or a string with the error.
+function findEvent(p) {
+  if (!p.uid) return 'ERROR missing uid';
+  var cal = p.cal || 'primary';
+  var items = Calendar.Events.list(cal, { iCalUID: p.uid, showDeleted: false, maxResults: 5 }).items || [];
+  var series = items.filter(function (x) { return !x.recurringEventId; })[0];
+  if (!series) return 'ERROR event not found';
+  if (!p.orig || !series.recurrence) return { series: series, target: series };
+  var allDay = DATE.test(p.orig);
+  var origMs = allDay ? null : Date.parse(p.orig);
+  function matches(x) {
+    var o = x.originalStartTime || {};
+    return allDay ? o.date === p.orig : (o.dateTime !== undefined && Date.parse(o.dateTime) === origMs);
+  }
+  // The instance may have been moved anywhere: ask for it by its original start, then
+  // look around that day
+  var found = null;
+  try {
+    found = (Calendar.Events.instances(cal, series.id, { originalStart: p.orig, showDeleted: false }).items || [])
+      .filter(matches)[0];
+  } catch (err) {
+    found = null; // e.g. a format of originalStart the API does not take: search instead
+  }
+  if (!found) {
+    var at = allDay ? Date.parse(p.orig + 'T00:00:00Z') : origMs;
+    found = (Calendar.Events.instances(cal, series.id, {
+      timeMin: new Date(at - 8 * 86400000).toISOString(),
+      timeMax: new Date(at + 9 * 86400000).toISOString(),
+      showDeleted: false, maxResults: 250 }).items || []).filter(matches)[0];
+  }
+  if (!found) return 'ERROR occurrence not found';
+  return { series: series, target: found };
+}
+
+// New title and / or times of an event, or of one occurrence (orig)
+function editEvent(p) {
+  var patch = {};
+  if (p.title !== undefined) {
+    if (badTitle(p.title)) return 'ERROR bad title';
+    patch.summary = p.title;
+  }
+  var times = eventTimes(p);
+  if (typeof times === 'string') return times;
+  if (times) {
+    patch.start = times.start;
+    patch.end = times.end;
+  }
+  try {
+    var ev = findEvent(p);
+    if (typeof ev === 'string') return ev;
+    Calendar.Events.patch(patch, p.cal || 'primary', ev.target.id);
+    return 'OK';
+  } catch (err) {
+    return 'ERROR ' + err.message;
+  }
+}
+
+// scope=one: the event, or only occurrence orig of a recurring one; scope=all: the series
+function deleteEvent(p) {
+  try {
+    var ev = findEvent(p.scope === 'all' ? { cal: p.cal, uid: p.uid } : p);
+    if (typeof ev === 'string') return ev;
+    Calendar.Events.remove(p.cal || 'primary', ev.target.id);
+    return 'OK';
+  } catch (err) {
+    return 'ERROR ' + err.message;
+  }
+}
+
 // Run this once from the editor (Run > test) to grant access and preview the feed.
 function test() {
   Logger.log(buildFeed().slice(0, 2000));
@@ -67,10 +256,18 @@ function authorize() {
   var tasks = lists.length ? (Tasks.Tasks.list(lists[0].id, { maxResults: 1 }).items || []) : [];
   if (!tasks.length) {
     Logger.log('No task to check with: create one, then run authorize again.');
+  } else {
+    Tasks.Tasks.patch({ status: tasks[0].status }, lists[0].id, tasks[0].id);
+    Logger.log('OK: the skin can now mark tasks completed. Deploy a new version if you have not yet.');
+  }
+  // Creating and changing events from the skin needs the Google Calendar API service
+  if (typeof Calendar === 'undefined') {
+    Logger.log('To create and change events from the skin, add the Google Calendar API service ' +
+               '(+ next to Services), then run authorize again.');
     return;
   }
-  Tasks.Tasks.patch({ status: tasks[0].status }, lists[0].id, tasks[0].id);
-  Logger.log('OK: the skin can now mark tasks completed. Deploy a new version if you have not yet.');
+  Calendar.Calendars.get('primary');
+  Logger.log('OK: the skin can now change your calendar too.');
 }
 
 function buildFeed() {

@@ -125,6 +125,39 @@ ShowDeclined=1
 ;              click opens Google Calendar.
 ClickAction=calendar
 
+;  Creating items from the skin (click an empty spot, or + in the toolbar; README: "Creating
+;  and editing"). It needs tools\GoogleTasksFeed.gs in one of the calendar slots.
+;  CreateCalendar: the calendar new events go to. Empty (default) = your primary calendar; or a
+;  calendar id as it appears in its iCal address (e.g. abc123@group.calendar.google.com).
+CreateCalendar=
+;  TaskList: the Google Tasks list new tasks go to. @default (default) = "My Tasks"; or a list id
+;  (X-WC-TASKLIST in the tasks feed).
+TaskList=@default
+
+;  ClickToCreate=1: a click on an empty spot of the hours, of the all-day row or on a day number
+;  opens the card to create an event or a task. 0 = those spots do nothing (the + button and the
+;  right-click details still work).
+ClickToCreate=1
+
+;  ShowCreateButton=1: shows the + button in the toolbar (create an event today). 0 = hidden.
+ShowCreateButton=1
+
+;  DragToMove=1: press and drag an event or a task to move it to another time or day.
+;  0 = nothing can be dragged (a click still opens the item).
+DragToMove=1
+
+;  RightClickCard=1: a right click on an event or a task shows its details (edit, delete,
+;  complete). 0 = the right click shows the skin's menu, as on the rest of the skin.
+RightClickCard=1
+
+;  UndoSeconds: how long the "Undo" bar stays after deleting an item; the deletion goes to
+;  Google only after this time (2-60 seconds, default 8).
+UndoSeconds=8
+
+;  NewEventMinutes: length of a new event created with a click or with + (15-minute steps,
+;  default 60).
+NewEventMinutes=60
+
 ;  Theme: light or dark (Google Calendar Material 3 colors).
 Theme=light
 

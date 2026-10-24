@@ -9,6 +9,8 @@
     glide X Y [MS]    move there in 20 steps (Rainmeter sees every step)
     down / up         left button        rdown / rup   right button
     wheel N           mouse wheel (120 = one notch up, -120 down)
+    type TEXT         type text into the focused window (Unicode, e.g. a title in InputText)
+    key NAME          press a key: enter, esc, tab, back, end, home
     wait MS           pause
     lua CODE          !CommandMeasure MeasureScript "CODE" (e.g. SetView('month'))
     shot FILE X Y W H screenshot of a skin area, tooltips included
@@ -45,6 +47,9 @@ public class LiveTest {
   [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr l);
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+  // Keys go to the foreground window: only type into Rainmeter's own windows
+  public static uint ForegroundPid() { uint p; GetWindowThreadProcessId(GetForegroundWindow(), out p); return p; }
   [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint f);
   [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr h);
   [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr h, IntPtr dc);
@@ -63,12 +68,24 @@ public class LiveTest {
     a[0].flags = flags | 0x8000 | 0x0001; // ABSOLUTE | MOVE
     return SendInput(1, a, Marshal.SizeOf(typeof(INPUT)));
   }
-  // Tooltip windows of a process back on top (the skin was raised above them)
+  // Keyboard: a virtual key (vk) or, with vk = 0, a Unicode character (KEYEVENTF_UNICODE).
+  // KEYBDINPUT shares the union at offset 8: wVk (2 bytes), wScan (2), dwFlags (4).
+  public static uint Key(ushort vk, char ch, bool up) {
+    INPUT[] a = new INPUT[1];
+    a[0].type = 1;
+    a[0].dx = vk | (ch << 16);
+    a[0].dy = (vk == 0 ? 0x0004 : 0) | (up ? 0x0002 : 0);
+    return SendInput(1, a, Marshal.SizeOf(typeof(INPUT)));
+  }
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  // Tooltip windows and InputText boxes of a process back on top (the skin was raised above them)
   public static void RaiseTooltips(uint pid) {
     EnumWindows((h, l) => {
       uint p; GetWindowThreadProcessId(h, out p);
       var c = new StringBuilder(64); GetClassName(h, c, 64);
-      if (p == pid && c.ToString() == "tooltips_class32") SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0013);
+      var t = new StringBuilder(64); GetWindowText(h, t, 64);
+      if (p == pid && (c.ToString() == "tooltips_class32" || t.ToString() == "InputBox"))
+        SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0013);
       return true; }, IntPtr.Zero);
   }
   // Screen capture including layered windows such as tooltips (SRCCOPY | CAPTUREBLT)
@@ -114,6 +131,15 @@ try {
       'rdown' { [LiveTest]::Mouse(0x0008, $cur[0], $cur[1], 0) | Out-Null; Start-Sleep -Milliseconds 80 }
       'rup'   { [LiveTest]::Mouse(0x0010, $cur[0], $cur[1], 0) | Out-Null; Start-Sleep -Milliseconds 80 }
       'wheel' { [LiveTest]::Mouse(0x0800, $cur[0], $cur[1], [int]$arg) | Out-Null; Start-Sleep -Milliseconds 400 }
+      { $_ -in 'type', 'key' } {
+                if ([LiveTest]::ForegroundPid() -ne (Get-Process Rainmeter).Id) { throw "$($a[0]): the foreground window is not Rainmeter's" } }
+      'type'  { foreach ($ch in $arg.ToCharArray()) {
+                  [LiveTest]::Key(0, $ch, $false) | Out-Null; [LiveTest]::Key(0, $ch, $true) | Out-Null
+                  Start-Sleep -Milliseconds 15 } }
+      'key'   { $vk = @{ enter = 0x0D; esc = 0x1B; tab = 0x09; back = 0x08; end = 0x23; home = 0x24 }[$arg]
+                if (-not $vk) { throw "unknown key: $arg" }
+                [LiveTest]::Key($vk, [char]0, $false) | Out-Null; [LiveTest]::Key($vk, [char]0, $true) | Out-Null
+                Start-Sleep -Milliseconds 100 }
       'wait'  { Start-Sleep -Milliseconds ([int]$arg) }
       'lua'   { & $rm '!CommandMeasure' 'MeasureScript' $arg $Config; Start-Sleep -Milliseconds 300 }
       'pos'   { $px, $py = SkinPos; "skin at $px,$py" }

@@ -20,6 +20,9 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Declined Invitations**: Invitations you declined are drawn outlined, like Google Calendar, or can be hidden (`ShowDeclined=0`).
 - **All-Day Events & Timed Events**: Dedicated all-day events row at the top (3 rows by default, `AllDayRows`; click "+N more" to expand the row like Google Calendar, ▲ to collapse it) and column-packed overlapping timed events throughout the week.
 - **Google Tasks & Holidays**: Tasks with a due date appear in the all-day row like in Google Calendar (○ open, ✓ completed and struck through), via a small Google Apps Script; click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day (3-day, week and month views). Public holidays come from Google's holiday calendars.
+- **Create Events and Tasks**: Click an empty spot of the hours (an event at that time), of the all-day row or a day number (a task), or the **+** in the toolbar: a card like Google Calendar's opens, you type the title and press Enter. The item appears at once and Google saves it.
+- **Details, Edit, Delete**: Right-click an event or task for its details; edit its title, date and times, or delete it (one occurrence or the whole series of a recurring event) with a few seconds to undo.
+- **Drag Events**: Drag an event to another time or day (snapped to 15 minutes, like Google Calendar), or an all-day event to another day; in the month view, events move to another day and keep their time.
 - **Open in Google Calendar**: Click an event to open it in Google Calendar (a task opens its day); middle-click opens the event's video call or link (Meet, Zoom, Teams...). `ClickAction=link` swaps the two.
 - **Dialogs Always on Top**: Windows and dialogs you open (e.g. "Empty Recycle Bin") always appear above the calendar, even in Windows' "Show desktop" mode.
 - **Past Event Fading**: Events fade as soon as they end, just like in Google Calendar.
@@ -110,7 +113,7 @@ To move a task, drag it to another day and release it there: the day under the c
 or a cell in the month view) is highlighted, the task is previewed where it will land and the
 toolbar says where it will go. A plain click still opens the task's day in Google Calendar. Release
 it on its own day, right-click or leave the skin to cancel. Dragging works in the 3-day, week and
-month views (the day view has no other day to drop it on); events cannot be dragged yet. Two limits of the Tasks API:
+month views (the day view has no other day to drop it on); events are dragged too (see Creating and editing). Two limits of the Tasks API:
 a task that has a time set in the Google apps keeps only its new date, and moving one occurrence of a
 repeating task may detach it from the series (the feed cannot tell which tasks repeat).
 
@@ -130,8 +133,72 @@ If the toolbar says **"allow editing tasks"**, the script was authorized for rea
 steps 2 and 3. If Google does not ask for permission and `authorize` fails, declare the scope by
 hand: **Project Settings** (gear icon) > tick *Show "appsscript.json" manifest file in editor*,
 open `appsscript.json`, add inside the outer braces
-`"oauthScopes": ["https://www.googleapis.com/auth/tasks"],`, save, then run `authorize` again
-and deploy a new version.
+`"oauthScopes": ["https://www.googleapis.com/auth/tasks", "https://www.googleapis.com/auth/calendar"],`,
+save, then run `authorize` again and deploy a new version.
+
+### Creating and editing
+The skin creates, edits, moves and deletes tasks and Google Calendar events through the same
+Tasks script (`tools\GoogleTasksFeed.gs`, version 1.11.0 or later), which also needs access to
+your calendar. Set it up once (or after updating the script):
+
+1. Open your project on [script.google.com](https://script.google.com/), replace the code with the
+   new `tools\GoogleTasksFeed.gs` and save.
+2. Click the **+** next to **Services**, pick **Google Calendar API**, click **Add**. (Manifest
+   alternative: add `{ "userSymbol": "Calendar", "version": "v3", "serviceId": "calendar" }` to
+   `enabledAdvancedServices` in `appsscript.json`.)
+3. Select `authorize` and click **Run**: allow access to your tasks and your calendar. The log must
+   end with `OK: the skin can now change your calendar too.`
+4. **Deploy** > **Manage deployments** > pencil icon > *Version*: **New version** > **Deploy**.
+
+Recommended: with this, anyone who has the web app URL can also change your tasks and events.
+Protect the changes with a secret: in the script, **Project Settings** > **Script properties** >
+add `WRITE_TOKEN` with a long random value, and put the same value in `Private.inc`:
+```ini
+TasksToken=the same long random value
+```
+Reading the tasks feed does not need it.
+
+How it works:
+- **Create**: click an empty spot of the hours (an event at that half hour, one hour long), of
+  the all-day row or a day number (a task for that day), or **+** in the toolbar (today, the next
+  half hour). Type the title and press **Enter**. Before typing you can switch *Event* / *Task*,
+  tick *All day*, and change the date and times with the **mouse wheel** over them. *More options*
+  opens Google Calendar's own editor, filled in. Esc closes the title box; a click outside closes
+  the card. Without the script the card offers *Open in Google Calendar* instead.
+- **Details**: right-click an event or task. Holiday calendars, public addresses, other providers
+  and invitations organised by someone else are read-only; the card says why.
+- **Edit**: *Edit* in the card; type the new title and press Enter, or change date and times with
+  the wheel and click *Save*. For a recurring event only that occurrence changes.
+- **Delete**: *Delete* in the card (a recurring event asks: *This event* / *All events*). The item
+  disappears and a bar offers **Undo** for 8 seconds (`UndoSeconds`); the request goes to Google only after that
+  (a skin refresh in those seconds keeps the item).
+- **Drag**: press an event and move it: a preview shows the new time (15-minute steps) and the
+  toolbar says where it goes; release to move it. A plain click still opens it. Right-click or
+  leave the skin to cancel. Events spanning several days are moved from Google Calendar.
+
+Changes show at once. Google's iCal address can take minutes (sometimes hours) to show a change
+to an event, so the skin keeps showing it until the feed has it (24 hours at most); tasks update
+within seconds. If Google refuses a change, the item goes back and the toolbar says why (hover
+it). New events go to your primary calendar; `CreateCalendar` and `TaskList` in `Settings.inc`
+choose another calendar or task list.
+
+What the mouse may do is set in `Settings.inc`:
+```ini
+; 1 = a click on an empty spot of the hours, the all-day row or a day number creates an item
+; (0 = those spots do nothing; the + button still works)
+ClickToCreate=1
+; 1 = the + button in the toolbar
+ShowCreateButton=1
+; 1 = drag events and tasks to move them (0 = a press just opens them, nothing moves)
+DragToMove=1
+; 1 = right-click an event or task for its details, editing and deleting (0 = the skin menu)
+RightClickCard=1
+; Seconds a deletion can be undone before it goes to Google (2-60)
+UndoSeconds=8
+; Length of a new event in minutes (15-minute steps, default 60)
+NewEventMinutes=60
+```
+With `RightClickCard=0` nothing can be edited or deleted from the skin; creating still works.
 
 ### 2. Visible Hours & Auto-Scroll
 ```ini
@@ -215,7 +282,11 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **All-Day Row** | Click `+N more` to show every all-day item (middle-click: open that day in Google Calendar); click ▲ at the left of the row to collapse it |
 | **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it) |
 | **Move a Task** | Drag it to another day (3-day, week and month views); right-click or leave the skin to cancel |
-| **Move the Skin** | Drag it by an empty area (toolbar background, day headers, empty grid): pressing an event, a task or a button does not move it |
+| **Create** | Click an empty spot of the hours (event), of the all-day row or a day number (task), or **+** in the toolbar; type the title, Enter (`ClickToCreate=0` / `ShowCreateButton=0` turn them off) |
+| **Change Date / Time in the Card** | Mouse wheel over the date, start or end |
+| **Details, Edit, Delete** | Right-click an event or task; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`; `RightClickCard=0` shows the skin menu instead) |
+| **Move an Event** | Drag it to another time or day (15-minute steps); right-click or leave the skin to cancel (`DragToMove=0` turns dragging off) |
+| **Move the Skin** | Drag it by an empty area of the toolbar or the day headers: pressing an event, a task, a button or the grid does not move it |
 | **Sync Calendar Now** | Click the sync time in the top-right corner, or right-click > *Refresh now* |
 | **Context Menu** | Right-click the skin for quick access to weeks, hour scrolling, refresh, and settings |
 
@@ -232,8 +303,8 @@ WeeklyCalendar/
 │   ├── Private.inc           # Private calendar URLs (git-ignored, created on first load)
 │   └── ZOrder/               # Helper that keeps dialogs above the skin (C# source + launcher)
 ├── tools/
-│   ├── GoogleTasksFeed.gs    # Google Apps Script: Google Tasks as an iCal feed; completes and moves tasks
-│   ├── LiveTest.ps1          # Drives the real skin with real mouse input (tooltips, dragging, wheel)
+│   ├── GoogleTasksFeed.gs    # Google Apps Script: Google Tasks as an iCal feed; creates, edits, moves and deletes tasks and events
+│   ├── LiveTest.ps1          # Drives the real skin with real mouse and keyboard input (tooltips, dragging, wheel, typing)
 │   └── textconv-utf16.py     # Readable git diffs for the UTF-16 Calendar.lua
 ├── tests/
 │   ├── run_tests.py          # Test suite (runs Calendar.lua against a mock Rainmeter)
@@ -262,7 +333,11 @@ python tests/run_tests.py
 ```
 
 If [Node.js](https://nodejs.org/) is installed, the tests also run `tools/GoogleTasksFeed.gs`
-against a fake Tasks API.
+against fake Tasks and Calendar APIs.
+
+Lua 5.1 allows 200 local variables per function, and the main chunk of `Calendar.lua` is close:
+past it Rainmeter refuses the whole script. Put new helpers inside a `do ... end` block or into a
+table (`edit` holds those of the cards); `test_lua_main_chunk_has_room_for_locals` keeps some room.
 
 Tooltips: no meter has a `ToolTipText` of its own. Rainmeter creates a window for each meter
 that has one (about 50 ms each), which made the first layout take seconds. Calendar.lua keeps

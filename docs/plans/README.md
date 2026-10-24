@@ -1,17 +1,8 @@
 # Implementation plans
 
-Plans for features that are designed but not built yet, in the recommended order. The
-plans of the features already built (4, 5, 7, 8) were removed when they shipped; git history
-keeps them.
-
-| # | Plan | Size | Touches |
-| :--- | :--- | :--- | :--- |
-| 9 | [Create tasks and events](09-create-items.md) | large | click zones, quick-create card (InputText), task pipeline, Apps Script + Calendar permission |
-| 10 | [Edit and delete tasks and events](10-edit-delete.md) | large | right-click detail card, undo snackbar, local changes, Apps Script (Calendar API) |
-| 11 | [Drag an event to another time or day](11-drag-events.md) | large (+ 30 min spike) | slot meters, event drag, local changes and Calendar API of plan 10 |
-
-9 and 10 share the card and the Calendar parts of the script; 11 needs the Calendar parts
-of 10.
+Plans for features that are designed but not built yet. There are none open now: the plans of
+the features already built (4, 5, 7, 8, and 9-11 in v1.11.0: create, edit / delete, drag
+events) were removed when they shipped; git history keeps them.
 
 ## Conventions that apply to every plan
 
@@ -61,6 +52,25 @@ These are the traps of this codebase. Each one has already caused a bug once.
 - **Strings come from `LANGS.en` and `LANGS.it`.** Add both. Context menu titles are
   `lang.ctx` plus `ContextTitleN` in `[Rainmeter]`.
 - **Shapes need some alpha to catch the mouse.** Click areas use `Fill Color 0,0,0,1`, not alpha 0.
+- **200 locals.** Lua 5.1 allows 200 local variables per function, and the main chunk of
+  `Calendar.lua` is close. Past it Rainmeter refuses the whole script, and a press on the empty
+  skin then moves it. Put new helpers inside a `do ... end` block or into a table (`edit`);
+  `test_lua_main_chunk_has_room_for_locals` keeps room for 15. `layout()` is also close to the
+  limit of 60 upvalues: reach new state through `edit`.
+- **Script environment.** Rainmeter runs the script in its own environment, not `_G`: code
+  given to `!CommandMeasure MeasureScript` sees the globals through `getfenv(1)`.
+- **Mouse actions are per action.** A click goes to the topmost meter that has *that* action:
+  a meter on top without a `LeftMouseUpAction` lets the click through to the one below
+  (`CrCard` has a harmless one so a click on the card does not close it).
+- **InputText** (`MeasureCreateInput`) reads its options when the bang runs, so `!SetOption` is
+  enough. X/Y are skin coordinates. Enter runs `Command1` (titles with `"`, `#`, `[ ]`, accents
+  arrive intact); Esc or any focus loss runs `OnDismissAction`, before the click that caused it.
+  The box cannot be closed from the skin: close the card only after the user's click.
+- **Live tests:** `type` / `key` in `tools\LiveTest.ps1` refuse to send keys unless a Rainmeter
+  window is in the foreground. `-Front` raises the skin, which takes the focus from an open
+  InputText box: one LiveTest run per typing sequence. Click only on spots known to be empty
+  (a click on an event opens it in the browser); close cards with `lua CardClose()`.
+  Measure with a temporary wrapper of the entry points (`os.clock`, `!Log`), never shipped.
 - **Ship checklist:** Settings.inc comment for any new setting (with its default),
   README (Features, Configuration, Controls table), `Version=` in `[Metadata]`, tests.
   Then refresh the real skin
