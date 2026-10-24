@@ -1270,6 +1270,7 @@ def test_birthdays_feed_in_the_skin():
         assert m.opt('ADBg%d' % i, 'LeftMouseUpAction') == '["https://www.google.com/calendar/event?eid=YjE"]'
         texts = open_card(sk, 'ADBg%d' % i)
         assert 'Delete' not in texts and 'Edit' not in texts
+        assert any('Birthdays come from Google Contacts' in t for t in texts), texts
         g.CardClose()
         # The script says what is missing
         open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(
@@ -1993,6 +1994,39 @@ GHOST_ICS = EDIT_ICS.replace('END:VCALENDAR\r\n', (
     "END:VCALENDAR\r\n"))
 
 
+def test_short_events_show_their_place():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        extra = (
+            "BEGIN:VEVENT\r\nUID:barber@google.com\r\nDTSTART:20270304T163000Z\r\nDTEND:20270304T173000Z\r\n"
+            "SUMMARY:Barbiere\r\nLOCATION:Viale Monza\\, 325\r\nEND:VEVENT\r\n"
+            "BEGIN:VEVENT\r\nUID:short@google.com\r\nDTSTART:20270305T163000Z\r\nDTEND:20270305T170000Z\r\n"
+            "SUMMARY:Breve\r\nLOCATION:Sala 2\r\nEND:VEVENT\r\n"
+            "BEGIN:VEVENT\r\nUID:long@google.com\r\nDTSTART:20270306T090000Z\r\nDTEND:20270306T120000Z\r\n"
+            "SUMMARY:Lungo\r\nLOCATION:Aula 5\r\nEND:VEVENT\r\n")
+        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(
+            EDIT_ICS.replace('END:VCALENDAR\r\n', extra + 'END:VCALENDAR\r\n'))
+        g.Reload(1)
+
+        def lines(title):
+            i = list(event_meters(sk, title).values())[0]
+            text = m.opt('EvT%d' % i, 'Text')
+            if m.shown('EvD%d' % i):
+                text += '#CRLF#' + m.opt('EvD%d' % i, 'Text')
+            return text.split('#CRLF#')
+        start = clock_of(utc(2027, 3, 4, 16, 30))
+        # one hour: the title, then the start and the place on one line
+        assert lines('Barbiere') == ['Barbiere', start + ', Viale Monza, 325'], lines('Barbiere')
+        # half an hour: everything on the title's line
+        assert lines('Breve') == ['Breve, ' + start + ', Sala 2'], lines('Breve')
+        # tall boxes keep the time range and the place on lines of their own
+        assert lines('Lungo')[1:3] == ['%s - %s' % (clock_of(utc(2027, 3, 6, 9)), clock_of(utc(2027, 3, 6, 12))), 'Aula 5']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_task_with_a_time_shows_once():
     sk = edit_skin()
     try:
@@ -2250,6 +2284,20 @@ def test_edit_task_and_events():
         m.measure_values['MeasureTaskAction'] = 'ERROR Backend Error'
         g.TaskResult()
         assert chip_col(sk, task_chip(sk)) == 2           # back
+        # Only the title: the date is not sent again (it could drop a time set in Google)
+        open_card(sk, 'ADBg%d' % task_chip(sk))
+        g.ItemEdit()
+        m.vars['CreateTitle'] = 'Solo titolo'
+        g.CreateSubmit()
+        assert task_params(sk)[-1].endswith('?action=edittask&list=L1&task=t-open&title=Solo%20titolo'), task_params(sk)[-1]
+        m.measure_values['MeasureTaskAction'] = 'ERROR Backend Error'
+        g.TaskResult()
+        # Saved without changes: nothing is sent
+        n = len(task_params(sk))
+        open_card(sk, 'ADBg%d' % task_chip(sk))
+        g.ItemEdit()
+        g.ItemSave()
+        assert len(task_params(sk)) == n and not m.shown('CrCard')
         # Delete a task
         open_card(sk, 'ADBg%d' % task_chip(sk))
         g.ItemDelete('one')
