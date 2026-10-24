@@ -8,11 +8,22 @@
 // that becomes active (so dialogs and windows are always above the calendar) and puts
 // them back when the desktop is active again. Outside that mode it does nothing.
 // Window classes and z-order rules follow Rainmeter's System.cpp / Skin.cpp.
+// KeepDialogsOnTop=0 turns this off: the skin then leaves NoZOrder.txt next to the helper.
+//
+// It also keeps what is typed in the skin's text boxes. The InputText plugin gives the
+// skin the text only on Enter: a click elsewhere (e.g. on the card's Save) closes the box
+// and drops it. While Typed.txt exists next to this helper (the skin creates it when it
+// opens a box and deletes it when the box closes), the text of the Rainmeter text box that
+// has the keyboard is copied into it, after a "WC" line (see edit.typedTake in Calendar.lua).
+// When the skin wrote END in it, the cursor goes after the text first: the plugin selects
+// the text it shows, and typing on after a click (e.g. on Task) would replace it.
 //
 // Built on first load by launch.cmd with the C# compiler included in Windows (.NET 4,
 // C# 5 syntax only). It exits by itself when Rainmeter closes.
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -21,6 +32,7 @@ using System.Windows.Forms;
 static class ZOrderHelper
 {
     delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+    delegate bool EnumProc(IntPtr hwnd, IntPtr param);
 
     [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr mod, WinEventProc proc, uint pid, uint tid, uint flags);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string cls, string name);
@@ -31,11 +43,19 @@ static class ZOrderHelper
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder buf, int max);
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr param);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp, uint flags, uint ms, out IntPtr result);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wp, StringBuilder lp, uint flags, uint ms, out IntPtr result);
 
     const uint EVENT_SYSTEM_FOREGROUND = 3;
     const uint GW_HWNDPREV = 3;
     const int GWL_EXSTYLE = -20;
     const int WS_EX_TOPMOST = 0x8;
+    const int GWL_STYLE = -16;
+    const int ES_PASSWORD = 0x20;
+    const uint WM_GETTEXT = 0x000D, WM_GETTEXTLENGTH = 0x000E, EM_SETSEL = 0x00B1, EM_SCROLLCARET = 0x00B7;
+    const uint SMTO_ABORTIFHUNG = 0x2;
     static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
     static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
     // Same flags Rainmeter uses: SWP_NOSENDCHANGING bypasses the skin's own z-order lock.
@@ -51,10 +71,30 @@ static class ZOrderHelper
     static readonly List<IntPtr> lowered = new List<IntPtr>();
     static WinEventProc hookProc; // referenced so the delegate is not garbage collected
     static int missing;
+    static uint rainmeterPid;
+
+    static readonly string typedPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Typed.txt");
+    static readonly string noZOrderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NoZOrder.txt");
+    static IntPtr typedBox;  // the box and the text last copied
+    static string typedText;
 
     [STAThread]
     static void Main()
     {
+        // An older build (WeeklyCalendarZOrder<N>.exe, see launch.cmd) still running gives way
+        string me = Process.GetCurrentProcess().ProcessName;
+        foreach (var p in Process.GetProcesses())
+        {
+            try
+            {
+                if (p.ProcessName.StartsWith("WeeklyCalendarZOrder") && p.ProcessName != me)
+                {
+                    p.Kill();
+                    p.WaitForExit(2000);
+                }
+            }
+            catch (Exception) { }
+        }
         bool first;
         using (var mutex = new Mutex(true, @"Local\WeeklyCalendarZOrderHelper", out first))
         {
@@ -65,8 +105,79 @@ static class ZOrderHelper
             timer.Interval = 250;
             timer.Tick += delegate { Check(); };
             timer.Start();
+            var typing = new System.Windows.Forms.Timer();
+            typing.Interval = 40;
+            typing.Tick += delegate { CopyTyped(); };
+            typing.Start();
             Application.Run();
         }
+    }
+
+    // The text box (not a password) of a Rainmeter window, or zero
+    static IntPtr TextBoxOf(IntPtr window)
+    {
+        IntPtr found = IntPtr.Zero;
+        EnumChildWindows(window, (w, p) =>
+        {
+            string cls = ClassOf(w);
+            if ((cls == "Edit" || cls.Contains(".EDIT.")) && (GetWindowLong(w, GWL_STYLE) & ES_PASSWORD) == 0)
+            {
+                found = w;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    static string TextOf(IntPtr box)
+    {
+        IntPtr len;
+        if (SendMessageTimeout(box, WM_GETTEXTLENGTH, IntPtr.Zero, IntPtr.Zero, SMTO_ABORTIFHUNG, 200, out len) == IntPtr.Zero) return null;
+        var sb = new StringBuilder(len.ToInt32() + 1);
+        IntPtr got;
+        if (SendMessageTimeout(box, WM_GETTEXT, new IntPtr(sb.Capacity), sb, SMTO_ABORTIFHUNG, 200, out got) == IntPtr.Zero) return null;
+        return sb.ToString();
+    }
+
+    static void CopyTyped()
+    {
+        if (rainmeterPid == 0 || !File.Exists(typedPath))
+        {
+            typedBox = IntPtr.Zero;
+            return;
+        }
+        IntPtr fg = GetForegroundWindow();
+        uint pid;
+        GetWindowThreadProcessId(fg, out pid);
+        if (fg == IntPtr.Zero || pid != rainmeterPid || ClassOf(fg) == "RainmeterMeterWindow") return;
+        IntPtr box = TextBoxOf(fg);
+        if (box == IntPtr.Zero) return;
+        string text = TextOf(box);
+        if (text == null) return;
+        try
+        {
+            // (no copy in it: the skin opened another box since the last one)
+            string had = File.ReadAllText(typedPath);
+            bool copied = had.StartsWith("WC\n");
+            if (box == typedBox && text == typedText && copied) return;
+            if (had == "END")
+            {
+                IntPtr r;
+                SendMessageTimeout(box, EM_SETSEL, new IntPtr(text.Length), new IntPtr(text.Length), SMTO_ABORTIFHUNG, 200, out r);
+                SendMessageTimeout(box, EM_SCROLLCARET, IntPtr.Zero, IntPtr.Zero, SMTO_ABORTIFHUNG, 200, out r);
+            }
+            byte[] data = new UTF8Encoding(false).GetBytes("WC\n" + text);
+            // Truncate: never creates the file the skin has deleted
+            using (var f = new FileStream(typedPath, FileMode.Truncate, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
+            {
+                f.Write(data, 0, data.Length);
+            }
+            typedBox = box;
+            typedText = text;
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     static string ClassOf(IntPtr hwnd)
@@ -101,6 +212,14 @@ static class ZOrderHelper
             return;
         }
         missing = 0;
+        GetWindowThreadProcessId(helper, out rainmeterPid);
+
+        // KeepDialogsOnTop=0: the skin leaves this file, and only the typing is kept
+        if (File.Exists(noZOrderPath))
+        {
+            lowered.Clear();
+            return;
+        }
 
         // Rainmeter makes its positioning helper topmost only in "Show desktop" mode
         if (!IsTopmost(helper))

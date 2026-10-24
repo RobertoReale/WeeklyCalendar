@@ -73,7 +73,11 @@ These are the traps of this codebase. Each one has already caused a bug once.
   The start and end times have their own box (`MeasureTimeInput`, `CardTime()` / `TimeSubmit()`).
   The same `MeasureCreateInput` types the notes, place and description too (`c.inputField`,
   `CardField()`); `layoutCard` sets its size, font size and `InputLimit` for each. The 4.5 plugin
-  trims what was typed, inserts a new line with Ctrl+Enter and drops the text on a dismissal.
+  trims what was typed, inserts a new line with Ctrl+Enter, selects the text it shows and drops
+  the text on a dismissal. The helper of `@Resources\ZOrder` copies the text of the open box into
+  `ZOrder\Typed.txt` (`edit.typedStart` / `edit.typedTake`), so a dismissal keeps it; a click on
+  Save can be handled before the dismissal (`edit.takeOpenBox`). The helper builds once per exe
+  name: bump the number in `launch.cmd` when `ZOrderHelper.cs` changes.
 - **Cards' pools:** `CrTx1..20` and 32 shapes of `CrCard` (`CR_TX`, `CARD_SHAPES`). A card that
   needs more logs an error (the tests fail on it): add meters to the `.ini` and raise the constants.
   The fields and pickers of the cards are functions of the `cf` table (`edit.cf` outside the block).

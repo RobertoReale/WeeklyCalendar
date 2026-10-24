@@ -17,5 +17,6 @@ Desktop.ini
 !tests/fixtures/*.ics
 tests/__pycache__/
 
-# z-order helper, built on first load from @Resources/ZOrder/ZOrderHelper.cs
+# z-order helper, built on first load from @Resources/ZOrder/ZOrderHelper.cs, and its files
 @Resources/ZOrder/*.exe
+@Resources/ZOrder/*.txt

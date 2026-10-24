@@ -166,7 +166,7 @@ the feeds does not need the token.
 How it works:
 - **Create**: click an empty spot of the hours (an event at that half hour, one hour long), of
   the all-day row or a day number (a task for that day), or **+** in the toolbar (today, the next
-  half hour). Type the title and press **Enter**. Before that you can switch *Event* / *Task*,
+  half hour). Type the title and press **Enter** or click *Save*. Before that you can switch *Event* / *Task*,
   tick *All day*, and change the times: click one and type it (`9`, `930`, `9:30`, `9:30 pm`),
   then Enter; a new start keeps the event's length. The **mouse wheel** over the date or a time
   changes it too (a day, 15 minutes).
@@ -174,7 +174,8 @@ How it works:
   month or year), *Add location*, *Add description* and its calendar (any Google calendar shown in
   the skin); a task has *Add details* and its list (all your Google Tasks lists). Click a text
   to type it and press **Enter** to keep it (**Ctrl+Enter** starts a new line in details and
-  descriptions); a click elsewhere before Enter drops what was typed in that box. Click a choice
+  descriptions), or just click elsewhere in the card: what you typed stays (this needs the helper
+  of `@Resources\ZOrder`, see [Dimensions & Appearance](#8-dimensions--appearance)). Click a choice
   (▾) to list the others, or scroll over it to go to the next one. *More options*
   opens Google Calendar's own editor, filled in. Esc closes the title box; a click outside closes
   the card. Without the script the card offers *Open in Google Calendar* instead.
@@ -335,6 +336,10 @@ could open behind the calendar. With `KeepDialogsOnTop=1` the skin starts a tiny
 the calendar just below whatever window you activate and puts it back when you return to the
 desktop. It uses no CPU while idle and closes by itself when Rainmeter exits.
 
+The same helper keeps what you type in a card when you click *Save* (or another part of the
+card) instead of pressing Enter: Rainmeter's text box gives the skin its text only on Enter.
+It always runs; `KeepDialogsOnTop=0` only turns off its handling of dialogs.
+
 Declined invitations are recognized from the address in your Google iCal URL. For other
 providers, add your address to `MyEmail=` in `Private.inc`.
 
@@ -355,7 +360,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **All-Day Row** | Click `+N more` to show every all-day item (middle-click: open that day in Google Calendar); click ▲ at the left of the row to collapse it |
 | **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it); a task shown at its time: right-click > *Mark complete* |
 | **Move a Task** | Drag it to another day (3-day, week and month views); right-click or leave the skin to cancel |
-| **Create** | Click an empty spot of the hours (event), of the all-day row or a day number (task), or **+** in the toolbar; type the title, Enter (`ClickToCreate=0` / `ShowCreateButton=0` turn them off) |
+| **Create** | Click an empty spot of the hours (event), of the all-day row or a day number (task), or **+** in the toolbar; type the title, Enter or *Save* (`ClickToCreate=0` / `ShowCreateButton=0` turn them off) |
 | **Place, Description, Details** | Click *Add location*, *Add description* or *Add details* in the card, type, Enter (Ctrl+Enter: a new line) |
 | **Repeat, Calendar, Task List** | Click the choice (▾) in the card and pick another; or scroll over it |
 | **Change Date / Time in the Card** | Click the start or end and type it (`9`, `930`, `9:30`, `9:30 pm`), Enter; or mouse wheel over the date, start or end |
@@ -398,7 +403,7 @@ WeeklyCalendar/
 │   ├── Calendar.lua          # Core calendar engine (iCal parser, recurrence, layout, cards)
 │   ├── Settings.inc          # User preferences
 │   ├── Private.inc           # Private calendar URLs and secrets (git-ignored, created on first load)
-│   └── ZOrder/               # Helper that keeps dialogs above the skin (C# source + launcher)
+│   └── ZOrder/               # Helper: keeps dialogs above the skin and what is typed in the cards (C# source + launcher)
 ├── tools/
 │   ├── GoogleTasksFeed.gs    # Google Apps Script: tasks and birthdays as iCal feeds; creates, edits, moves and deletes tasks and events
 │   ├── LiveTest.ps1          # Drives the real skin with real mouse and keyboard input (tooltips, dragging, wheel, typing)

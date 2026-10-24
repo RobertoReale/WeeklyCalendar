@@ -676,15 +676,21 @@ def test_unreadable_fifth_feed_is_reported():
         sk.close()
 
 
-def test_helper_started_only_when_enabled():
-    for value, expected in (('1', True), ('0', False)):
+def test_helper_keeps_dialogs_on_top_only_when_enabled():
+    # Always started (it keeps what is typed in the cards); NoZOrder.txt turns its z-order off
+    for value, flag in (('1', False), ('0', True)):
         sk = Skin(KeepDialogsOnTop=value)
         try:
+            folder = os.path.join(sk.dir, '@Resources', 'ZOrder')
+            os.makedirs(folder)
+            if not flag:
+                open(os.path.join(folder, 'NoZOrder.txt'), 'w').close()   # left by KeepDialogsOnTop=0
             sk.start(2027, 3, 3, 12)
             calls = []
             sk.mock.Bang = lambda *a: calls.append(sk.mock._args(a))
             sk.g.StartHelper()
-            assert (['!CommandMeasure', 'MeasureZOrderHelper', 'Run'] in calls) == expected, (value, calls)
+            assert ['!CommandMeasure', 'MeasureZOrderHelper', 'Run'] in calls, (value, calls)
+            assert os.path.exists(os.path.join(folder, 'NoZOrder.txt')) == flag, value
         finally:
             sk.close()
 
@@ -1667,8 +1673,9 @@ def test_create_event_card_and_draft():
         for t in ('Event', 'Task', 'Wed 3 Mar', '10:00', '11:00', 'All day', 'me@example.com', 'Save', 'More options'):
             assert t in texts, (t, texts)
         assert m.opt(card_el(sk, 'Event'), 'FontColor') == '4,30,73,255'      # selected
-        assert m.opt(card_el(sk, 'Save'), 'FontColor') == '116,119,117,255'   # nothing to save yet
-        assert sk.tip(card_el(sk, 'Save')) == 'Press Enter to save'
+        # Save is always a button (a click on it closes the box: see test_text_typed_before_a_click)
+        assert m.opt(card_el(sk, 'Save'), 'FontColor') == '255,255,255,255'
+        assert m.opt(card_el(sk, 'Save'), 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "CreateSave()"]'
         # The title box opens over the title field, inside the card, right of the column
         assert ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] in m.bangs
         cx, cy, cw, ch = (int(m.opt('CrCard', o)) for o in 'XYWH')
@@ -1725,6 +1732,110 @@ def test_create_event_card_and_draft():
         assert not m.shown('Tip')                      # the button's tooltip goes under the card
         assert '12:00' in card_texts(sk) and '13:00' in card_texts(sk) and 'Wed 3 Mar' in card_texts(sk)
         g.CardClose()
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_text_typed_before_a_click():
+    # The helper of @Resources/ZOrder copies the text of the open box into Typed.txt (the skin
+    # creates the file when it opens a box): a click on Save or on another part of the card
+    # closes the box without Enter, and the text stays.
+    sk = create_skin()
+    try:
+        m, g = sk.mock, sk.g
+        typed = os.path.join(sk.dir, '@Resources', 'ZOrder', 'Typed.txt')
+
+        def helper(text):
+            assert os.path.exists(typed)               # a box is open
+            open(typed, 'w', encoding='utf-8', newline='').write('WC\n' + text)
+
+        # Without the helper (no folder): Save with no title opens the box again
+        g.CreateAt(2, zone_y(sk, 2, '10:20'))
+        g.CreateInputClosed()
+        assert 'Add title' in card_texts(sk)
+        m.bangs.clear()
+        run_action(sk, m.opt(card_el(sk, 'Save'), 'LeftMouseUpAction'))
+        assert ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] in m.bangs and not task_params(sk)
+        g.CreateInputClosed()
+        g.CardClose()
+
+        # With it: typed, then a click on Save
+        os.makedirs(os.path.dirname(typed))
+        g.CreateAt(2, zone_y(sk, 2, '10:20'))
+        assert open(typed, encoding='utf-8').read() == 'END'     # the cursor after the text
+        helper('prova "uno" #2')
+        g.CreateInputClosed()                          # the click closes the box first
+        assert not os.path.exists(typed)
+        run_action(sk, m.opt(card_el(sk, 'Save'), 'LeftMouseUpAction'))
+        assert task_params(sk)[-1].startswith('-s -f -L -m 30 ' + SCRIPT_URL + '?action=createevent&cal=&title='
+                                              + enc('prova "uno" #2') + '&start='), task_params(sk)[-1]
+        assert not m.shown('CrCard')
+        m.measure_values['MeasureTaskAction'] = 'OK abc1@google.com'
+        g.TaskResult()
+
+        # A click on Task keeps the title; the box opens again with it
+        g.CreateAt(3, zone_y(sk, 3, '10:20'))
+        helper('Comprare il latte')
+        g.CreateInputClosed()
+        g.CreateType('task')
+        assert m.opt('MeasureCreateInput', 'DefaultValue') == 'Comprare il latte'
+        assert m.opt('CrDraftTx', 'Text') == '○ Comprare il latte'
+        # the time box too: typed, then a click on Save
+        g.CreateType('event')
+        g.CreateInputClosed()
+        run_action(sk, m.opt(card_el(sk, '10:00'), 'LeftMouseUpAction'))
+        assert open(typed, encoding='utf-8').read() == ''         # a time: the plugin selects it
+        helper('11:30')
+        g.TimeInputClosed()
+        assert '11:30' in card_texts(sk) and '12:30' in card_texts(sk), card_texts(sk)
+        # Enter still saves; a later box starts empty again (no text of the one before)
+        g.CardTitle()
+        helper('Comprare il latte e il pane')
+        m.vars['CreateTitle'] = 'Comprare il latte e il pane'
+        g.CreateSubmit()
+        assert task_params(sk)[-1].startswith('-s -f -L -m 30 ' + SCRIPT_URL + '?action=createevent&cal=&title='
+                                              + enc('Comprare il latte e il pane') + '&start='
+                                              + enc(utc_of_local(2027, 3, 4, 11, 30))), task_params(sk)[-1]
+        assert not os.path.exists(typed)
+        # Esc without changes (the helper copied the text as shown) or with nothing copied
+        g.CreateAt(2, zone_y(sk, 2, '16:20'))
+        g.CreateInputClosed()
+        assert 'Add title' in card_texts(sk)
+        g.CardTitle()
+        helper('')
+        g.CreateInputClosed()
+        assert 'Add title' in card_texts(sk)
+        g.CardClose()
+        # A quick tap on Save, handled before the box closes: the text typed so far
+        m.measure_values['MeasureTaskAction'] = 'OK abc2@google.com'
+        g.TaskResult()
+        g.CreateAt(4, zone_y(sk, 4, '09:20'))
+        helper('Tap veloce')
+        run_action(sk, m.opt(card_el(sk, 'Save'), 'LeftMouseUpAction'))
+        assert task_params(sk)[-1].startswith('-s -f -L -m 30 ' + SCRIPT_URL + '?action=createevent&cal=&title=Tap%20veloce&start=')
+        g.CreateInputClosed()                          # the close, later: nothing more
+        assert not m.shown('CrCard') and not os.path.exists(typed)
+        sk.check_clean()
+    finally:
+        sk.close()
+
+    # The edit form: a new title typed, then Save; an emptied title keeps the old one
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        typed = os.path.join(sk.dir, '@Resources', 'ZOrder', 'Typed.txt')
+        os.makedirs(os.path.dirname(typed))
+        open_card(sk, 'ADBg%d' % task_chip(sk))
+        g.ItemEdit()
+        open(typed, 'w', encoding='utf-8', newline='').write('WC\n')
+        g.CreateInputClosed()
+        assert 'Simulazione Tema di Esame' in card_texts(sk)
+        g.CardTitle()
+        open(typed, 'w', encoding='utf-8', newline='').write('WC\nSimulazione 2')
+        g.CreateInputClosed()
+        run_action(sk, m.opt(card_el(sk, 'Save'), 'LeftMouseUpAction'))
+        assert task_params(sk)[-1].endswith('?action=edittask&list=L1&task=t-open&title=Simulazione%202'), task_params(sk)[-1]
         sk.check_clean()
     finally:
         sk.close()

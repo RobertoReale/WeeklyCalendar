@@ -88,9 +88,10 @@ ShowToolbar=1
 ZPos=-2
 
 ;  KeepDialogsOnTop=1: with ZPos=-2, windows and dialogs you open (e.g. "Empty Recycle Bin")
-;  always appear above the calendar, even in "Show desktop" mode. It starts a tiny helper
-;  (@Resources\ZOrder, built on first load with the C# compiler included in Windows) that
-;  closes by itself with Rainmeter. Set to 0 to turn it off.
+;  always appear above the calendar, even in "Show desktop" mode. This is done by a tiny
+;  helper (@Resources\ZOrder, built on first load with the C# compiler included in Windows)
+;  that closes by itself with Rainmeter. Set to 0 to turn it off: the helper still runs, to
+;  keep what you type in the cards when you click Save or another field instead of Enter.
 KeepDialogsOnTop=1
 
 ; ---------------------------------------------------------------------
