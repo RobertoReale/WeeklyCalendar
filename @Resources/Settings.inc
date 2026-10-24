@@ -20,6 +20,8 @@
 ;     https://calendar.google.com/calendar/ical/it.italian%23holiday%40group.v.calendar.google.com/public/basic.ics)
 ;   - Google Tasks: they are not part of any iCal address; publish them with
 ;     tools\GoogleTasksFeed.gs (see README, "Showing Google Tasks").
+;   - birthdays of your contacts: the same script's address with ?feed=birthdays at the end
+;     (README, "Birthdays").
 ;  The empty values below are only fallbacks: do not paste your addresses here.
 IcalUrl1=
 IcalUrl2=

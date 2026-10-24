@@ -19,7 +19,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
 - **Declined Invitations**: Invitations you declined are drawn outlined, like Google Calendar, or can be hidden (`ShowDeclined=0`).
 - **All-Day Events & Timed Events**: Dedicated all-day events row at the top (3 rows by default, `AllDayRows`; click "+N more" to expand the row like Google Calendar, ▲ to collapse it) and column-packed overlapping timed events throughout the week.
-- **Google Tasks & Holidays**: Tasks with a due date appear in the all-day row like in Google Calendar (○ open, ✓ completed and struck through), via a small Google Apps Script; click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day (3-day, week and month views). Public holidays come from Google's holiday calendars.
+- **Google Tasks & Holidays**: Tasks with a due date appear in the all-day row like in Google Calendar (○ open, ✓ completed and struck through), via a small Google Apps Script; click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day (3-day, week and month views). Public holidays come from Google's holiday calendars. Your contacts' birthdays, which Google's iCal address leaves out, come from the same script.
 - **Create Events and Tasks**: Click an empty spot of the hours (an event at that time), of the all-day row or a day number (a task), or the **+** in the toolbar: a card like Google Calendar's opens, you type the title and press Enter. The item appears at once and Google saves it.
 - **Details, Edit, Delete**: Right-click an event or task for its details; edit its title, date and times, or delete it (one occurrence or the whole series of a recurring event) with a few seconds to undo.
 - **Drag Events**: Drag an event to another time or day (snapped to 15 minutes, like Google Calendar), or an all-day event to another day; in the month view, events move to another day and keep their time.
@@ -96,12 +96,23 @@ own Google account) publishes them as a private iCal address. One-time setup, ab
    (`https://script.google.com/macros/s/.../exec`).
 6. Paste it in `Private.inc` after `IcalUrl3=` (or any free slot), save and refresh the skin.
 
-Tasks with a due date appear in the all-day row of that day; the Tasks API keeps only the date, not
-the time. Hover a task to see its description (notes). Their color is the `EventColor` of the slot
+Tasks with a due date appear in the all-day row of that day. The Tasks API keeps only the date: a
+task that has a time in the Google apps shows at that time when one of your Google calendars is
+also in the skin (Google's iCal address lists it as a free event with the task's title, which the
+skin shows as the task, once). Hover a task to see its description (notes). Their color is the `EventColor` of the slot
 you used. Like the secret iCal address, keep the web app URL private: anyone who has it can read
 your task titles and notes, mark your tasks completed or not completed, and change their dates. If you edit the script later,
 use **Deploy** > **Manage deployments** > edit > *Version: New version* so the URL stays the same.
 If the address is wrong, the toolbar shows "feed error" (hover it for details).
+
+### Birthdays
+Google Calendar shows your contacts' birthdays, but its iCal address leaves them out. The Tasks
+script publishes them too, once it has the **Google Calendar API** service (step 2 of "Creating and
+editing" below): take its web app URL, add `?feed=birthdays` at the end
+(`https://script.google.com/macros/s/.../exec?feed=birthdays`) and paste it in a free slot of
+`Private.inc`, for example `IcalUrl4=`. Pick its color with `EventColor4` in `Settings.inc` (Google
+uses `51,182,121,255`). A click on a birthday opens it in Google Calendar. If the toolbar says
+"feed error", hover it: the script says what is missing.
 
 ### Completing and moving tasks
 Click the circle ○ at the start of a task to mark it completed, or the check mark ✓ to mark it
@@ -173,7 +184,8 @@ How it works:
   disappears and a bar offers **Undo** for 8 seconds (`UndoSeconds`); the request goes to Google only after that
   (a skin refresh in those seconds keeps the item).
 - **Drag**: press an event and move it: a preview shows the new time (15-minute steps) and the
-  toolbar says where it goes; release to move it. A plain click still opens it. Right-click or
+  toolbar says where it goes; release to move it. A plain click still opens it, even if the mouse
+  slips a few pixels while pressing. Right-click or
   leave the skin to cancel. Events spanning several days are moved from Google Calendar.
 
 Changes show at once. Google's iCal address can take minutes (sometimes hours) to show a change

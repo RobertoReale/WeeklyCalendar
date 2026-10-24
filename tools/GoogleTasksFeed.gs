@@ -26,6 +26,9 @@
  * "orig" is the original start of one occurrence of a recurring event (UTC, or the date
  * of an all-day event). Every answer is "OK ..." or "ERROR <reason>".
  *
+ * The same address with ?feed=birthdays publishes the birthdays of your contacts, which
+ * Google Calendar's iCal address leaves out (README, "Birthdays").
+ *
  * Optional protection: with the script property WRITE_TOKEN set (Project Settings >
  * Script properties), every change needs &token=<that value> (TasksToken in the skin's
  * Private.inc). Reading the feed does not.
@@ -44,7 +47,8 @@ function doGet(e) {
   if (WRITE_ACTIONS[p.action]) {
     return ContentService.createTextOutput(write(p));
   }
-  return ContentService.createTextOutput(buildFeed()).setMimeType(ContentService.MimeType.ICAL);
+  var feed = p.feed === 'birthdays' ? buildBirthdays() : buildFeed();
+  return ContentService.createTextOutput(feed).setMimeType(ContentService.MimeType.ICAL);
 }
 
 // A change asked by the skin: "OK [id]" or "ERROR <reason>"
@@ -310,6 +314,45 @@ function buildFeed() {
     });
   });
 
+  out.push('END:VCALENDAR');
+  return out.join('\r\n') + '\r\n';
+}
+
+// The birthdays of your contacts (?feed=birthdays): Google Calendar keeps them as
+// "birthday" events of your primary calendar but leaves them out of its iCal address.
+// Needs the Google Calendar API service (README, "Birthdays").
+function buildBirthdays() {
+  if (typeof Calendar === 'undefined') {
+    return 'ERROR add the Google Calendar API service to the Tasks script (README, "Birthdays")';
+  }
+  var now = new Date();
+  var stamp = Utilities.formatDate(now, 'UTC', "yyyyMMdd'T'HHmmss'Z'");
+  var items;
+  try {
+    items = allPages(function (args) {
+      args.eventTypes = ['birthday'];
+      args.singleEvents = true;  // one entry per year, as the skin shows them
+      args.timeMin = new Date(now.getTime() - DAYS_BACK * 86400000).toISOString();
+      args.timeMax = new Date(now.getTime() + DAYS_AHEAD * 86400000).toISOString();
+      args.maxResults = 2500;
+      return Calendar.Events.list('primary', args);
+    });
+  } catch (err) {
+    return 'ERROR ' + err.message;
+  }
+  var out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//WeeklyCalendar//Birthdays//EN',
+             'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Birthdays'];
+  items.forEach(function (ev) {
+    if (ev.status === 'cancelled' || !ev.start || !ev.start.date) return;
+    out.push('BEGIN:VEVENT',
+             'UID:' + ev.id + '@birthdays.google.com',
+             'DTSTAMP:' + stamp,
+             'DTSTART;VALUE=DATE:' + ev.start.date.replace(/-/g, ''));
+    if (ev.end && ev.end.date) out.push('DTEND;VALUE=DATE:' + ev.end.date.replace(/-/g, ''));
+    out.push('SUMMARY:' + esc(ev.summary || ''));
+    if (ev.htmlLink) out.push('URL:' + ev.htmlLink);  // a click opens it in Google Calendar
+    out.push('END:VEVENT');
+  });
   out.push('END:VCALENDAR');
   return out.join('\r\n') + '\r\n';
 }

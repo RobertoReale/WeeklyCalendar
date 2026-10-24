@@ -1209,6 +1209,78 @@ def test_drag_cancel():
         sk.close()
 
 
+def test_google_tasks_script_birthdays():
+    node = shutil.which('node')
+    if not node:
+        print('      (skipped: node not installed)')
+        return
+    import json
+    import subprocess
+    script = open(os.path.join(ROOT, 'tools', 'GoogleTasksFeed.gs'), encoding='utf-8').read()
+    harness = script + r"""
+var calls = [];
+var Utilities = { formatDate: function () { return '20270301T080000Z'; } };
+var ContentService = { MimeType: { ICAL: 'ical' }, createTextOutput: function (s) {
+  return { text: s, setMimeType: function () { return this; } }; } };
+var Tasks = { Tasklists: { list: function () { return { items: [] }; } } };
+var Calendar = { Events: { list: function (cal, a) {
+  calls.push([cal, a]);
+  if (!a.pageToken) return { nextPageToken: 'p2', items: [
+    { id: 'b1_20270304', summary: "Marco's birthday, 30", start: { date: '2027-03-04' }, end: { date: '2027-03-05' },
+      htmlLink: 'https://www.google.com/calendar/event?eid=YjE' },
+    { id: 'b2', summary: 'Gone', status: 'cancelled', start: { date: '2027-03-05' } } ] };
+  return { items: [ { id: 'b3', summary: 'Anna', start: { date: '2027-06-01' } } ] };
+} } };
+var withCal = doGet({ parameter: { feed: 'birthdays' } }).text;
+var tasks = doGet({ parameter: {} }).text;
+var failing = (Calendar.Events.list = function () { throw new Error('Not allowed'); }, buildBirthdays());
+Calendar = undefined;
+var noService = buildBirthdays();
+process.stdout.write(JSON.stringify({ ics: withCal, tasks: tasks, calls: calls, failing: failing, noService: noService }));
+"""
+    res = subprocess.run([node, '-e', harness], capture_output=True, encoding='utf-8')
+    assert res.returncode == 0, res.stderr
+    out = json.loads(res.stdout)
+    ics = out['ics']
+    assert 'X-WR-CALNAME:Birthdays\r\n' in ics and 'X-WR-CALNAME:Google Tasks' in out['tasks']
+    assert ('BEGIN:VEVENT\r\nUID:b1_20270304@birthdays.google.com\r\nDTSTAMP:20270301T080000Z\r\n'
+            'DTSTART;VALUE=DATE:20270304\r\nDTEND;VALUE=DATE:20270305\r\n'
+            "SUMMARY:Marco's birthday\\, 30\r\nURL:https://www.google.com/calendar/event?eid=YjE\r\nEND:VEVENT\r\n") in ics, ics
+    assert 'Gone' not in ics and 'UID:b3@birthdays.google.com\r\nDTSTAMP:20270301T080000Z\r\nDTSTART;VALUE=DATE:20270601\r\nSUMMARY:Anna\r\n' in ics
+    first = out['calls'][0]
+    assert first[0] == 'primary' and first[1]['eventTypes'] == ['birthday'] and first[1]['singleEvents'] is True
+    assert out['calls'][1][1]['pageToken'] == 'p2'
+    assert out['failing'] == 'ERROR Not allowed' and out['noService'].startswith('ERROR add the Google Calendar API')
+
+
+def test_birthdays_feed_in_the_skin():
+    bday_url = SCRIPT_URL + '?feed=birthdays'
+    sk = Skin(IcalUrl1=bday_url, IcalUrl3=SCRIPT_URL, feeds={3: 'tasks.ics'})
+    try:
+        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(
+            'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-WR-CALNAME:Birthdays\r\n'
+            'BEGIN:VEVENT\r\nUID:b1@birthdays.google.com\r\nDTSTART;VALUE=DATE:20270304\r\nDTEND;VALUE=DATE:20270305\r\n'
+            "SUMMARY:Marco's birthday\r\nURL:https://www.google.com/calendar/event?eid=YjE\r\nEND:VEVENT\r\n"
+            'END:VCALENDAR\r\n')
+        sk.start(2027, 3, 3, 12)
+        m, g = sk.mock, sk.g
+        assert g._WC.cfg.scriptFeed == 3                     # not the birthdays address
+        i = sk.all_day()["Marco's birthday"]
+        assert chip_col(sk, i) == 3
+        assert m.opt('ADBg%d' % i, 'LeftMouseUpAction') == '["https://www.google.com/calendar/event?eid=YjE"]'
+        texts = open_card(sk, 'ADBg%d' % i)
+        assert 'Delete' not in texts and 'Edit' not in texts
+        g.CardClose()
+        # The script says what is missing
+        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(
+            'ERROR add the Google Calendar API service to the Tasks script (README, "Birthdays")')
+        g.Reload(1)
+        assert 'Calendar 1: ERROR add the Google Calendar API service' in sk.tip('TbSync'), sk.tip('TbSync')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_google_tasks_script_move():
     node = shutil.which('node')
     if not node:
@@ -1802,7 +1874,7 @@ def test_create_zones_are_under_the_items():
     try:
         i = event_meter(sk, 'Attività')
         # (an event the skin may change is pressed to drag it; its click comes through the drop)
-        assert sk.mock.opt('EvBg%d' % i, 'LeftMouseDownAction') ==             '[!CommandMeasure MeasureScript "DragEvent(%d, $MouseY$+0)"]' % i
+        assert sk.mock.opt('EvBg%d' % i, 'LeftMouseDownAction') ==             '[!CommandMeasure MeasureScript "DragEvent(%d, $MouseY$+0, $MouseX$+0)"]' % i
         assert sk.mock.opt('EvBg%d' % i, 'RightMouseUpAction') == '[!CommandMeasure MeasureScript "ItemCard(\'ev\', %d)"]' % i
         # The month view has no zones
         sk.g.SetView('month')
@@ -1907,6 +1979,69 @@ def edit_skin(**kw):
     shutil.copy(os.path.join(FIXTURES, 'tasks.ics'), os.path.join(sk.dir, 'DownloadFile', 'calendar3.ics'))
     sk.start(2027, 3, 3, 8)
     return sk
+
+
+GHOST_ICS = EDIT_ICS.replace('END:VCALENDAR\r\n', (
+    # Google's iCal address lists the tasks that have a time as free events
+    "BEGIN:VEVENT\r\nUID:ghost1@google.com\r\nDTSTART:20270303T140000Z\r\nDTEND:20270303T150000Z\r\n"
+    "SUMMARY:Simulazione Tema di Esame\r\nCLASS:PRIVATE\r\nTRANSP:TRANSPARENT\r\nEND:VEVENT\r\n"
+    "BEGIN:VEVENT\r\nUID:ghost2@google.com\r\nDTSTART:20270302T090000Z\r\nDTEND:20270302T093000Z\r\n"
+    "SUMMARY:Esercizi\\, parte 2\r\nTRANSP:TRANSPARENT\r\nEND:VEVENT\r\n"
+    # a real event with a task's title stays
+    "BEGIN:VEVENT\r\nUID:real@google.com\r\nDTSTART:20270301T090000Z\r\nDTEND:20270301T100000Z\r\n"
+    "SUMMARY:Ripasso\r\nTRANSP:OPAQUE\r\nEND:VEVENT\r\n"
+    "END:VCALENDAR\r\n"))
+
+
+def test_task_with_a_time_shows_once():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(GHOST_ICS)
+        g.Reload(1)
+        chips = sk.all_day()
+        assert not any(t.startswith('○ Simulazione') or t.startswith('✓ Esercizi') for t in chips), chips
+        assert '○ Ripasso' in chips and list(event_meters(sk, 'Ripasso')) == [0]
+        assert list(event_meters(sk, '✓ Eserci')) == [1]
+        cols = event_meters(sk, '○ Simulazione')
+        assert list(cols) == [2], cols
+        i = cols[2]
+        assert not event_meters(sk, 'Simulazione')                  # the free event is left out
+        h0 = int(clock_of(utc(2027, 3, 3, 14))[:2])
+        assert '%02d:00 - %02d:00' % (h0, h0 + 1) in m.opt('EvT%d' % i, 'Text') + m.opt('EvD%d' % i, 'Text')
+        assert sk.tip('EvBg%d' % i).split('#CRLF#')[2] == 'Task'
+        assert m.opt('EvBg%d' % i, 'LeftMouseDownAction') == NO_DRAG  # a task is not dragged by its time
+        # The card: a task at that time; editing keeps only the date
+        texts = open_card(sk, 'EvBg%d' % i)
+        assert 'Mark complete' in texts and any('%02d:00' % h0 in t for t in texts), texts
+        g.ItemEdit()
+        assert not any('%02d:00' % h0 in t for t in card_texts(sk)), card_texts(sk)
+        g.CardClose()
+        # Completed from the card: it stays at its time, with the check mark
+        open_card(sk, 'EvBg%d' % i)
+        g.ItemToggle()
+        assert list(event_meters(sk, '✓ Simulazione')) == [2]
+        assert 'action=complete' in task_params(sk)[-1]
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+        # Deleted: the free event does not come back while Google's address still has it
+        open_card(sk, 'EvBg%d' % event_meters(sk, '✓ Simulazione')[2])
+        g.ItemDelete('one')
+        assert not event_meters(sk, '✓ Simulazione') and not event_meters(sk, 'Simulazione')
+        g.ItemUndo()
+        # Moved to another day: an all-day task there, the free event still hidden
+        open_card(sk, 'EvBg%d' % event_meters(sk, '✓ Simulazione')[2])
+        g.ItemEdit()
+        g.CreateAdjust('date', 1)
+        g.ItemSave()
+        assert not event_meters(sk, 'Simulazione') and not event_meters(sk, '✓ Simulazione')
+        assert chip_col(sk, sk.all_day()['✓ Simulazione Tema di Esame']) == 3
+        g.SetView('month')
+        assert not any((m.opt('MLn%d' % k, 'Text') or '').endswith(' Simulazione Tema di Esame') and m.shown('MLn%d' % k)
+                       and (m.opt('MLn%d' % k, 'Text') or '')[:1].isdigit() for k in range(1, 211))
+        sk.check_clean()
+    finally:
+        sk.close()
 
 
 def event_meters(sk, title):
@@ -2281,8 +2416,8 @@ def test_drag_event_actions_and_click():
     try:
         m, g = sk.mock, sk.g
         i = event_meter(sk, 'Lezione')
-        assert m.opt('EvBg%d' % i, 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragEvent(%d, $MouseY$+0)"]' % i
-        assert m.opt('EvT%d' % i, 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragEvent(%d, $MouseY$+5)"]' % i
+        assert m.opt('EvBg%d' % i, 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragEvent(%d, $MouseY$+0, $MouseX$+0)"]' % i
+        assert m.opt('EvT%d' % i, 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragEvent(%d, $MouseY$+5, $MouseX$+8)"]' % i
         for meter in ('EvBg%d' % i, 'EvT%d' % i):
             assert m.opt(meter, 'LeftMouseUpAction') == '' and m.opt(meter, 'MouseActionCursorName') == 'SizeAll'
         # Read-only events keep their click and the harmless press
@@ -2351,6 +2486,53 @@ def test_drag_event_to_another_time_and_day():
         m.measure_values['MeasureTaskAction'] = 'ERROR Forbidden'
         g.TaskResult()
         assert list(event_meters(sk, 'Lezione')) == [4], event_meters(sk, 'Lezione')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_drag_event_small_slip_is_a_click():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        i = event_meter(sk, 'Lezione')                # Wednesday, column 2
+        top, left = int(m.opt('EvBg%d' % i, 'Y')), int(m.opt('EvBg%d' % i, 'X'))
+
+        def slot_y(k):
+            return int(m.opt('DragSlot%d' % k, 'Y'))
+        start = slot_of(sk, clock_of(utc(2027, 3, 3, 10)))
+        h0 = int(clock_of(utc(2027, 3, 3, 10))[:2])
+        # Pressed one pixel above the next strip: slipping over its edge is not a move
+        edge = slot_y(start + 1)
+        g.DragEvent(i, edge - 1 - top, 20)
+        g.DragSlot(start + 1)
+        assert not m.shown('DragPrev') and 'Move to' not in m.opt('TbSync', 'Text')
+        m.bangs.clear()
+        g.DragSlotDrop(start + 1, 20, 2)              # released 3 px lower: a click
+        assert ['["%s"]' % eid_link('abc123')] in m.bangs and not task_params(sk)
+        # 6 px lower is a move (15 minutes)
+        g.DragEvent(i, edge - 1 - top, 20)
+        g.DragSlotDrop(start + 1, 20, 5)
+        assert 'moveevent' in task_params(sk)[-1] and 'start=' + enc(utc_of_local(2027, 3, 3, h0, 15)) in task_params(sk)[-1]
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+        # Pressed 3 px from the column's right edge: just across it is still home...
+        i = event_meter(sk, 'Lezione')
+        top, left = int(m.opt('EvBg%d' % i, 'Y')), int(m.opt('EvBg%d' % i, 'X'))
+        k = slot_of(sk, '%02d:15' % h0)
+        col_edge = int(m.opt('DragZone3', 'X'))
+        g.DragEvent(i, slot_y(k) + 4 - top, col_edge - 3 - left)
+        g.DragOver(3)
+        g.DragSlot(k)
+        assert not m.shown('DragPrev')
+        m.bangs.clear()
+        g.DragSlotDrop(k, 1, 4)                       # 4 px right: a click
+        assert not task_params(sk) and any(b[0].startswith('["https://calendar.google.com') for b in m.bangs)
+        # ...7 px across moves it to Thursday at the same time
+        g.DragEvent(i, slot_y(k) + 4 - top, col_edge - 3 - left)
+        g.DragOver(3)
+        g.DragSlotDrop(k, 4, 4)
+        assert 'start=' + enc(utc_of_local(2027, 3, 4, h0, 15)) in task_params(sk)[-1], task_params(sk)[-1]
         sk.check_clean()
     finally:
         sk.close()

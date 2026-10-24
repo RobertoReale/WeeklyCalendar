@@ -62,6 +62,10 @@ These are the traps of this codebase. Each one has already caused a bug once.
 - **Mouse actions are per action.** A click goes to the topmost meter that has *that* action:
   a meter on top without a `LeftMouseUpAction` lets the click through to the one below
   (`CrCard` has a harmless one so a click on the card does not close it).
+- **Mouse coordinates.** `$MouseX$` / `$MouseY$` (relative to the meter) work in click actions
+  (`LeftMouseDownAction`, `LeftMouseUpAction`...), not in `MouseOverAction`, where they stay as
+  text (checked on Rainmeter 4.5.28). A drag knows the exact spot only on the press and on the
+  release; in between it only knows which meter the cursor entered.
 - **InputText** (`MeasureCreateInput`) reads its options when the bang runs, so `!SetOption` is
   enough. X/Y are skin coordinates. Enter runs `Command1` (titles with `"`, `#`, `[ ]`, accents
   arrive intact); Esc or any focus loss runs `OnDismissAction`, before the click that caused it.
