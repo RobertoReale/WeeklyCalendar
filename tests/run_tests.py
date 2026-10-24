@@ -36,7 +36,7 @@ end
 """
 EXPORTS = """
 _WC = { parseICS = parseICS, buildOverrides = buildOverrides, buildInstances = buildInstances,
-        daysFromCivil = daysFromCivil, cfg = cfg, LANGS = LANGS, toLatin1 = toLatin1 }
+        daysFromCivil = daysFromCivil, cfg = cfg, LANGS = LANGS, toLatin1 = toLatin1, edit = edit }
 """
 
 
@@ -1686,7 +1686,8 @@ def test_create_event_card_and_draft():
         # The wheel: the start moves the event, the end stays 15 min after the start
         start = card_el(sk, '10:00')
         assert m.opt(start, 'MouseScrollUpAction') == '[!CommandMeasure MeasureScript "CreateAdjust(\'start\', 1)"]'
-        assert sk.tip(start) == 'Scroll to change'
+        assert sk.tip(start) == 'Click to type, scroll to change'
+        assert sk.tip(card_el(sk, 'Wed 3 Mar')) == 'Scroll to change'
         g.CreateAdjust('start', 1)
         assert '10:15' in card_texts(sk) and '11:15' in card_texts(sk)
         for _ in range(8):
@@ -1724,6 +1725,78 @@ def test_create_event_card_and_draft():
         assert not m.shown('Tip')                      # the button's tooltip goes under the card
         assert '12:00' in card_texts(sk) and '13:00' in card_texts(sk) and 'Wed 3 Mar' in card_texts(sk)
         g.CardClose()
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_type_the_times_in_the_card():
+    sk = create_skin()
+    try:
+        m, g = sk.mock, sk.g
+        parse = sk.lua.eval('function(t, e) return _WC.edit.parseClock(t, e) end')
+        for text, want in [('9', 540), ('09', 540), ('930', 570), ('0930', 570), ('9:30', 570), ('9.30', 570),
+                           ('9,30', 570), ('9h30', 570), ('21h', 1260), (' 9 : 30 ', 570), ('9:30 pm', 1290),
+                           ('12 am', 0), ('12pm', 720), ('0:00', 0), ('23:59', 1439),
+                           ('24:00', None), ('9:60', None), ('25', None), ('13 pm', None), ('abc', None), ('', None)]:
+            assert parse(text, False) == want, (text, parse(text, False), want)
+        assert parse('24:00', True) == 1440 and parse('0:00', True) == 1440
+        g.CreateAt(2, zone_y(sk, 2, '10:20'))                      # 10:00 - 11:00
+        start = card_el(sk, '10:00')
+        assert m.opt(start, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "CardTime(\'start\')"]'
+        m.bangs.clear()
+        run_action(sk, m.opt(start, 'LeftMouseUpAction'))
+        assert ['!CommandMeasure', 'MeasureTimeInput', 'ExecuteBatch 1'] in m.bangs
+        assert m.opt('MeasureTimeInput', 'DefaultValue') == '10:00'
+        cx, cy = int(m.opt('CrCard', 'X')), int(m.opt('CrCard', 'Y'))
+        bx, by = int(m.opt('MeasureTimeInput', 'X')), int(m.opt('MeasureTimeInput', 'Y'))
+        sx = int(m.opt(start, 'X'))                                 # the chip's center
+        assert bx < sx < bx + int(m.opt('MeasureTimeInput', 'W')) and cy < by < cy + int(m.opt('CrCard', 'H'))
+        # Enter: the start moves the event, which keeps its hour; then the title box again
+        m.vars['CreateTime'] = '1430'
+        m.bangs.clear()
+        g.TimeSubmit()
+        assert '14:30' in card_texts(sk) and '15:30' in card_texts(sk), card_texts(sk)
+        assert ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] in m.bangs
+        assert m.opt('CrDraftTx', 'Text').endswith('14:30 - 15:30')
+        # The end: after the start, or nothing changes
+        run_action(sk, m.opt(card_el(sk, '15:30'), 'LeftMouseUpAction'))
+        assert m.opt('MeasureTimeInput', 'DefaultValue') == '15:30'
+        m.vars['CreateTime'] = '13'
+        g.TimeSubmit()
+        assert '15:30' in card_texts(sk)
+        run_action(sk, m.opt(card_el(sk, '15:30'), 'LeftMouseUpAction'))
+        m.vars['CreateTime'] = '17:45'
+        g.TimeSubmit()
+        assert '14:30' in card_texts(sk) and '17:45' in card_texts(sk)
+        # Esc: nothing changes; a late start keeps the event inside the day
+        run_action(sk, m.opt(card_el(sk, '14:30'), 'LeftMouseUpAction'))
+        g.TimeInputClosed()
+        assert '14:30' in card_texts(sk)
+        run_action(sk, m.opt(card_el(sk, '14:30'), 'LeftMouseUpAction'))
+        m.vars['CreateTime'] = '23:30'
+        g.TimeSubmit()
+        assert '23:30' in card_texts(sk) and '24:00' in card_texts(sk), card_texts(sk)
+        # the wheel still works
+        g.CreateAdjust('start', -2)
+        assert '23:00' in card_texts(sk)
+        g.CardClose()
+        sk.check_clean()
+    finally:
+        sk.close()
+    # The edit form of an event: typed, then saved
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Lezione'))
+        g.ItemEdit()
+        h0 = int(clock_of(utc(2027, 3, 3, 10))[:2])
+        run_action(sk, m.opt(card_el(sk, '%02d:00' % h0), 'LeftMouseUpAction'))
+        m.vars['CreateTime'] = '%d:15' % (h0 + 2)
+        g.TimeSubmit()
+        g.ItemSave()
+        assert 'start=' + enc(utc_of_local(2027, 3, 3, h0 + 2, 15)) in task_params(sk)[-1], task_params(sk)[-1]
+        assert 'end=' + enc(utc_of_local(2027, 3, 3, h0 + 3, 15)) in task_params(sk)[-1]
         sk.check_clean()
     finally:
         sk.close()

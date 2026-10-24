@@ -166,14 +166,16 @@ the feeds does not need the token.
 How it works:
 - **Create**: click an empty spot of the hours (an event at that half hour, one hour long), of
   the all-day row or a day number (a task for that day), or **+** in the toolbar (today, the next
-  half hour). Type the title and press **Enter**. Before typing you can switch *Event* / *Task*,
-  tick *All day*, and change the date and times with the **mouse wheel** over them. *More options*
+  half hour). Type the title and press **Enter**. Before that you can switch *Event* / *Task*,
+  tick *All day*, and change the times: click one and type it (`9`, `930`, `9:30`, `9:30 pm`),
+  then Enter; a new start keeps the event's length. The **mouse wheel** over the date or a time
+  changes it too (a day, 15 minutes). *More options*
   opens Google Calendar's own editor, filled in. Esc closes the title box; a click outside closes
   the card. Without the script the card offers *Open in Google Calendar* instead.
 - **Details**: right-click an event or task. Holiday calendars, birthdays, public addresses, other
   providers and invitations organised by someone else are read-only; the card says why.
 - **Edit**: *Edit* in the card; type the new title and press Enter, or change the date (and the
-  times of an event) with the wheel and click *Save*. For a recurring event only that occurrence
+  times of an event: click a time to type it, or use the wheel) and click *Save*. For a recurring event only that occurrence
   changes.
 - **Delete**: *Delete* in the card (a recurring event asks: *This event* / *All events*). The item
   disappears and a bar offers **Undo** for 8 seconds (`UndoSeconds`); the request goes to Google
@@ -333,7 +335,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it); a task shown at its time: right-click > *Mark complete* |
 | **Move a Task** | Drag it to another day (3-day, week and month views); right-click or leave the skin to cancel |
 | **Create** | Click an empty spot of the hours (event), of the all-day row or a day number (task), or **+** in the toolbar; type the title, Enter (`ClickToCreate=0` / `ShowCreateButton=0` turn them off) |
-| **Change Date / Time in the Card** | Mouse wheel over the date, start or end |
+| **Change Date / Time in the Card** | Click the start or end and type it (`9`, `930`, `9:30`, `9:30 pm`), Enter; or mouse wheel over the date, start or end |
 | **Details, Edit, Delete** | Right-click an event or task; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`; `RightClickCard=0` shows the skin menu instead) |
 | **Move an Event** | Drag it to another time or day (15-minute steps); right-click or leave the skin to cancel (`DragToMove=0` turns dragging off) |
 | **Move the Skin** | Drag it by an empty area of the toolbar or the day headers: pressing an event, a task, a button or the grid does not move it |

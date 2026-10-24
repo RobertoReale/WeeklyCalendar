@@ -70,9 +70,12 @@ These are the traps of this codebase. Each one has already caused a bug once.
   enough. X/Y are skin coordinates. Enter runs `Command1` (titles with `"`, `#`, `[ ]`, accents
   arrive intact); Esc or any focus loss runs `OnDismissAction`, before the click that caused it.
   The box cannot be closed from the skin: close the card only after the user's click.
+  The start and end times have their own box (`MeasureTimeInput`, `CardTime()` / `TimeSubmit()`).
 - **Live tests:** `type` / `key` in `tools\LiveTest.ps1` refuse to send keys unless a Rainmeter
   window is in the foreground. `-Front` raises the skin, which takes the focus from an open
-  InputText box: one LiveTest run per typing sequence. Click only on spots known to be empty
+  InputText box: one LiveTest run per typing sequence. While the skin is raised (`ZPos 2`),
+  Rainmeter keeps it above the InputText boxes, so screenshots do not show them: take the
+  screenshot of a box in a run without `-Front`. Click only on spots known to be empty
   (a click on an event opens it in the browser); close cards with `lua CardClose()`.
   Measure with a temporary wrapper of the entry points (`os.clock`, `!Log`), never shipped.
 - **Ship checklist:** Settings.inc comment for any new setting (with its default),
