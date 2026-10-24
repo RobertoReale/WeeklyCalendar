@@ -21,9 +21,10 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Google Tasks**: Tasks appear like in Google Calendar (○ open, ✓ completed): in the all-day row, or at their time when they have one. Click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day. Each task shows its list and its details (notes); a new or edited task can go to any of your lists.
 - **Holidays & Birthdays**: Public holidays come from Google's holiday calendars; your contacts' birthdays, which Google's iCal address leaves out, come from the Tasks script.
 - **Create Events and Tasks**: Click an empty spot of the hours (an event at that time), of the all-day row or a day number (a task), or the **+** in the toolbar: a card like Google Calendar's opens, you type the title and press Enter. An event can also get a place, a description, a repeat (every day, weekday, week, month, year) and a calendar; a task its details and its list. The item appears at once and Google saves it.
-- **Details, Edit, Delete**: Right-click an event or task for its details; edit its title, date and times, place and description (all day or not), a task's details and list, one occurrence or every occurrence of a recurring event; or delete it (one occurrence or the whole series) with a few seconds to undo.
+- **Details, Edit, Delete**: Click (or right-click) an event or task for its details; edit its title, date and times, place and description (all day or not), a task's details and list, one occurrence or every occurrence of a recurring event; or delete it (one occurrence or the whole series) with a few seconds to undo.
 - **Drag Events**: Drag an event to another time or day (snapped to 15 minutes, like Google Calendar), or an all-day event to another day; in the month view, events move to another day and keep their time. A click that slips a few pixels stays a click.
-- **Open in Google Calendar**: Click an event to open it in Google Calendar (a task opens its day); middle-click opens the event's video call or link (Meet, Zoom, Teams...). `ClickAction=link` swaps the two.
+- **Open in Google Calendar**: Middle-click an event to open it in Google Calendar (the card has *Open in Google* and *Open link* too). With `ClickAction=calendar` a click opens it there instead (a task opens its day) and the middle click opens its video call or link (Meet, Zoom, Teams...); `ClickAction=link` swaps the two.
+- **Looks like Google Calendar**: past events and completed tasks pale with dark text, completed tasks struck through, a 45-minute event with its title above the time and place, times as "08:30 – 10:30".
 - **Declined Invitations**: Invitations you declined are drawn outlined, like Google Calendar, or can be hidden (`ShowDeclined=0`).
 - **Past Event Fading**: Events fade as soon as they end, just like in Google Calendar.
 - **Detailed Tooltips**: Hover over any event or task to see its full title, start/end time, location and description (rich text and Google Meet details are cleaned up).
@@ -318,9 +319,13 @@ Theme=light
 ; Declined invitations: 1 = show outlined, 0 = hide
 ShowDeclined=1
 
-; What a left click on an event opens: calendar (Google Calendar; the middle click opens the
+; What a left click on an event opens: card (its details in the skin, as the right click; the
+; middle click opens Google Calendar), calendar (Google Calendar; the middle click opens the
 ; event's link) or link (the event's link when it has one; the middle click opens Google Calendar)
-ClickAction=calendar
+ClickAction=card
+
+; Past events and completed tasks: how pale they get (0.7 = like Google Calendar)
+PastFade=0.7
 
 ; Window position: -2 = On Desktop (always visible), -1 = Bottom (hidden in "Show desktop" mode)
 ZPos=-2
@@ -356,7 +361,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Navigate** | Click `<` / `>` buttons in the toolbar, or mouse wheel over the toolbar / day headers: one day, three days or a week, depending on the view. In the month view the wheel anywhere changes the month |
 | **Open a Day** | In the month view, click a day (or its "+N more") to see it in the day view; middle-click opens it in Google Calendar |
 | **Jump to Today** | Click the **Today** button in the toolbar (also resets hour scroll) |
-| **Open an Event** | Click it: opens it in Google Calendar (a task or "+N more": that day). Middle-click: its Meet / Zoom / Teams link |
+| **Open an Event** | Click it: its details (`ClickAction=card`). Middle-click: opens it in Google Calendar. With `ClickAction=calendar` the click opens Google Calendar (a task or "+N more": that day) and the middle click its Meet / Zoom / Teams link |
 | **All-Day Row** | Click `+N more` to show every all-day item (middle-click: open that day in Google Calendar); click ▲ at the left of the row to collapse it |
 | **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it); a task shown at its time: right-click > *Mark complete* |
 | **Move a Task** | Drag it to another day (3-day, week and month views); right-click or leave the skin to cancel |
@@ -364,7 +369,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Place, Description, Details** | Click *Add location*, *Add description* or *Add details* in the card, type, Enter (Ctrl+Enter: a new line) |
 | **Repeat, Calendar, Task List** | Click the choice (▾) in the card and pick another; or scroll over it |
 | **Change Date / Time in the Card** | Click the start or end and type it (`9`, `930`, `9:30`, `9:30 pm`), Enter; or mouse wheel over the date, start or end |
-| **Details, Edit, Delete** | Right-click an event or task; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`; `RightClickCard=0` shows the skin menu instead) |
+| **Details, Edit, Delete** | Click or right-click an event or task; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`; `RightClickCard=0` shows the skin menu instead) |
 | **Move an Event** | Drag it to another time or day (15-minute steps); right-click or leave the skin to cancel (`DragToMove=0` turns dragging off) |
 | **Move the Skin** | Drag it by an empty area of the toolbar or the day headers: pressing an event, a task, a button or the grid does not move it |
 | **Sync Calendar Now** | Click the sync time in the top-right corner, or right-click > *Refresh now* |

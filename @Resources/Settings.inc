@@ -100,7 +100,7 @@ KeepDialogsOnTop=1
 FontFace=Segoe UI
 FontSize=9
 TitleFontSize=16
-EventRadius=8
+EventRadius=5
 BgRadius=16
 
 ;  Colors: R,G,B,A (0-255) format or hex RRGGBB / RRGGBBAA.
@@ -113,8 +113,9 @@ EventColor4=244,81,30,255
 EventColor5=121,134,203,255
 EventColor6=97,97,97,255
 
-;  Past events fade amount (0 = no fade, 1 = invisible; 0.35 = subtle like Google Calendar)
-PastFade=0.35
+;  Past events and completed tasks: how much their color fades into the background
+;  (0 = no fade, 1 = invisible; 0.7 = pale like Google Calendar, with PastTextColor text)
+PastFade=0.7
 
 ;  Invitations you declined: 1 = show them outlined (like Google Calendar), 0 = hide them.
 ;  Your address is detected from the Google iCal URL; for other providers set MyEmail
@@ -122,11 +123,14 @@ PastFade=0.35
 ShowDeclined=1
 
 ;  ClickAction: what a left click on an event or task opens.
+;   card     = its details in the skin, as the right click (edit, delete, complete, and
+;              the buttons to open it in Google Calendar or open its link); the middle
+;              click opens it in Google Calendar.
 ;   calendar = the event in Google Calendar (a task: its day); the middle click opens
 ;              the event's link (Meet, Zoom, Teams...) when it has one.
 ;   link     = the event's link when it has one, otherwise Google Calendar; the middle
 ;              click opens Google Calendar.
-ClickAction=calendar
+ClickAction=card
 
 ;  Creating items from the skin (click an empty spot, or + in the toolbar; README: "Creating
 ;  and editing"). It needs tools\GoogleTasksFeed.gs in one of the calendar slots.
@@ -175,7 +179,7 @@ Theme=light
 ; TodayTextColor=255,255,255,255
 ; NowColor=234,67,53,255
 ; EventTextColor=255,255,255,255
-; PastTextColor=255,255,255,230
+; PastTextColor=60,64,67,200
 ; BadgeBgColor=239,241,241,255
 ; BadgeTextColor=68,71,70,255
 ; BorderColor=218,220,224,255

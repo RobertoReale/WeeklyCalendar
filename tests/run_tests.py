@@ -241,6 +241,7 @@ class Skin:
             'IcalUrl1': 'https://calendar.google.com/calendar/ical/me%40example.com/private-x/basic.ics',
             'CURRENTPATH': self.dir + os.sep,
             '@': os.path.join(self.dir, '@Resources') + os.sep,
+            'ClickAction': 'calendar',  # (test_click_shows_the_card checks card)
             'Language': 'en', 'StartHour': '8', 'EndHour': '20', 'AutoScroll': '1',
             'AutoScrollHour': '14', 'FirstDay': '1',
         })
@@ -954,6 +955,48 @@ def test_click_opens_event_in_google_calendar():
         sk.close()
 
 
+def test_click_shows_the_card():
+    # ClickAction=card: a left click shows the details (as the right click); the middle
+    # click opens Google Calendar, or the link of an event without one
+    sk = google_skin(ClickAction='card')
+    try:
+        m, g = sk.mock, sk.g
+        i = event_meter(sk, 'Lezione')
+        for meter in ('EvBg%d' % i, 'EvT%d' % i):
+            assert m.opt(meter, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "ItemCard(\'ev\', %d)"]' % i
+        assert m.opt('EvBg%d' % i, 'MiddleMouseUpAction') == '["%s"]' % eid_link('abc123')
+        assert sk.tip('EvBg%d' % i).endswith('Middle-click: open in Google Calendar#CRLF#Click: details, edit, delete')
+        run_action(sk, m.opt('EvBg%d' % i, 'LeftMouseUpAction'))
+        assert m.shown('CrCard') and any(t.startswith('Lezione') for t in card_texts(sk)), card_texts(sk)
+        assert 'Open in Google' in card_texts(sk) and 'Open link' in card_texts(sk)
+        g.CardClose()
+        sk.check_clean()
+    finally:
+        sk.close()
+    # All-day chips and the lines of the month view; tasks too
+    sk = Skin(feeds={3: 'tasks.ics'}, ClickAction='card', DragToMove='0')
+    try:
+        sk.start(2027, 3, 3, 12)
+        m, g = sk.mock, sk.g
+        i = [v for k, v in sk.all_day().items() if k.startswith('○ Simulazione')][0]
+        assert m.opt('ADBg%d' % i, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "ItemCard(\'ad\', %d)"]' % i
+        run_action(sk, m.opt('ADBg%d' % i, 'LeftMouseUpAction'))
+        assert m.shown('CrCard') and 'Simulazione Tema di Esame' in card_texts(sk), card_texts(sk)
+        g.CardClose()
+        g.SetView('month')
+        lines = [k for k in range(1, 400) if 'MLn%d' % k in m.sections and m.shown('MLn%d' % k)
+                 and 'Simulazione' in (m.opt('MLn%d' % k, 'Text') or '')]
+        assert lines, 'no month line'
+        act = m.opt('MLn%d' % lines[0], 'LeftMouseUpAction')
+        assert act == '[!CommandMeasure MeasureScript "ItemCard(\'ml\', %d)"]' % lines[0], act
+        run_action(sk, act)
+        assert m.shown('CrCard') and 'Simulazione Tema di Esame' in card_texts(sk), card_texts(sk)
+        g.CardClose()
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_task_check_button():
     sk = Skin(feeds={3: 'tasks.ics'})
     try:
@@ -1082,6 +1125,36 @@ def test_drag_chip_actions():
     try:
         assert sk.mock.opt('ADBg%d' % task_chip(sk), 'LeftMouseDownAction') == NO_DRAG
         assert sk.mock.opt('ADBg%d' % task_chip(sk), 'LeftMouseUpAction') == DAY_LINK
+    finally:
+        sk.close()
+
+
+def test_drag_click_shows_the_card():
+    # ClickAction=card: a click on an item that can be dragged shows its card too
+    sk = drag_skin(ClickAction='card')
+    try:
+        m, g = sk.mock, sk.g
+        i = task_chip(sk)
+        g.DragStart(i)
+        g.DragOver(2)
+        g.DragDrop(2)
+        assert m.shown('CrCard') and 'Simulazione Tema di Esame' in card_texts(sk), card_texts(sk)
+        assert not task_params(sk)
+        g.CardClose()
+        sk.check_clean()
+    finally:
+        sk.close()
+    sk = edit_skin(ClickAction='card')
+    try:
+        m, g = sk.mock, sk.g
+        i = event_meter(sk, 'Lezione')
+        start = slot_of(sk, clock_of(utc(2027, 3, 3, 10)))
+        g.DragEvent(i, 10)
+        g.DragSlot(start)
+        g.DragSlotDrop(start)
+        assert m.shown('CrCard') and card_texts(sk)[0] == 'Lezione', card_texts(sk)
+        g.CardClose()
+        sk.check_clean()
     finally:
         sk.close()
 
@@ -1668,7 +1741,7 @@ def test_create_event_card_and_draft():
         top, h = int(m.opt('CrDraft', 'Y')), int(m.opt('CrDraft', 'H'))
         assert abs(top - hl['10:00']) <= 1 and abs(top + h - hl['11:00']) <= 2, (top, h, hl)
         assert int(m.opt('CrZone2', 'X')) <= int(m.opt('CrDraft', 'X')) < int(m.opt('CrZone3', 'X'))
-        assert m.opt('CrDraftTx', 'Text') == '(no title)#CRLF#10:00 - 11:00', m.opt('CrDraftTx', 'Text')
+        assert m.opt('CrDraftTx', 'Text') == '(no title)#CRLF#10:00 – 11:00', m.opt('CrDraftTx', 'Text')
         texts = card_texts(sk)
         for t in ('Event', 'Task', 'Wed 3 Mar', '10:00', '11:00', 'All day', 'me@example.com', 'Save', 'More options'):
             assert t in texts, (t, texts)
@@ -1869,7 +1942,7 @@ def test_type_the_times_in_the_card():
         g.TimeSubmit()
         assert '14:30' in card_texts(sk) and '15:30' in card_texts(sk), card_texts(sk)
         assert ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] in m.bangs
-        assert m.opt('CrDraftTx', 'Text').endswith('14:30 - 15:30')
+        assert m.opt('CrDraftTx', 'Text').endswith('14:30 – 15:30')
         # The end: after the start, or nothing changes
         run_action(sk, m.opt(card_el(sk, '15:30'), 'LeftMouseUpAction'))
         assert m.opt('MeasureTimeInput', 'DefaultValue') == '15:30'
@@ -2193,6 +2266,8 @@ def test_short_events_show_their_place():
             "SUMMARY:Barbiere\r\nLOCATION:Viale Monza\\, 325\r\nEND:VEVENT\r\n"
             "BEGIN:VEVENT\r\nUID:short@google.com\r\nDTSTART:20270305T163000Z\r\nDTEND:20270305T170000Z\r\n"
             "SUMMARY:Breve\r\nLOCATION:Sala 2\r\nEND:VEVENT\r\n"
+            "BEGIN:VEVENT\r\nUID:mid@google.com\r\nDTSTART:20270302T163000Z\r\nDTEND:20270302T171500Z\r\n"
+            "SUMMARY:Medio\r\nLOCATION:Sala 3\r\nEND:VEVENT\r\n"
             "BEGIN:VEVENT\r\nUID:long@google.com\r\nDTSTART:20270306T090000Z\r\nDTEND:20270306T120000Z\r\n"
             "SUMMARY:Lungo\r\nLOCATION:Aula 5\r\nEND:VEVENT\r\n")
         open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(
@@ -2208,10 +2283,35 @@ def test_short_events_show_their_place():
         start = clock_of(utc(2027, 3, 4, 16, 30))
         # one hour: the title, then the start and the place on one line
         assert lines('Barbiere') == ['Barbiere', start + ', Viale Monza, 325'], lines('Barbiere')
+        # 45 minutes: still the title on its own line, like Google Calendar (less padding)
+        mid = clock_of(utc(2027, 3, 2, 16, 30))
+        assert lines('Medio') == ['Medio', mid + ', Sala 3'], lines('Medio')
+        i = list(event_meters(sk, 'Medio').values())[0]
+        assert int(m.opt('EvD%d' % i, 'Y')) + 16 <= int(m.opt('EvBg%d' % i, 'Y')) + int(m.opt('EvBg%d' % i, 'H')) + 2
         # half an hour: everything on the title's line
         assert lines('Breve') == ['Breve, ' + start + ', Sala 2'], lines('Breve')
         # tall boxes keep the time range and the place on lines of their own
-        assert lines('Lungo')[1:3] == ['%s - %s' % (clock_of(utc(2027, 3, 6, 9)), clock_of(utc(2027, 3, 6, 12))), 'Aula 5']
+        assert lines('Lungo')[1:3] == ['%s – %s' % (clock_of(utc(2027, 3, 6, 9)), clock_of(utc(2027, 3, 6, 12))), 'Aula 5']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_low_box_keeps_its_line_inside():
+    # Every hour visible: a short event gets the smallest box (16 px); its one line is
+    # centered in it instead of running past the bottom
+    sk = edit_skin(StartHour='0', EndHour='24')
+    try:
+        m, g = sk.mock, sk.g
+        extra = ("BEGIN:VEVENT\r\nUID:tiny@google.com\r\nDTSTART:20270301T163000Z\r\nDTEND:20270301T164500Z\r\n"
+                 "SUMMARY:Minimo\r\nEND:VEVENT\r\n")
+        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(
+            EDIT_ICS.replace('END:VCALENDAR\r\n', extra + 'END:VCALENDAR\r\n'))
+        g.Reload(1)
+        i = list(event_meters(sk, 'Minimo').values())[0]
+        top, h = int(m.opt('EvBg%d' % i, 'Y')), int(m.opt('EvBg%d' % i, 'H'))
+        ty, th = int(m.opt('EvT%d' % i, 'Y')), int(m.opt('EvT%d' % i, 'H'))
+        assert h < 20 and top <= ty and ty + th <= top + h + 1, (top, h, ty, th)
         sk.check_clean()
     finally:
         sk.close()
@@ -2232,7 +2332,7 @@ def test_task_with_a_time_shows_once():
         i = cols[2]
         assert not event_meters(sk, 'Simulazione')                  # the free event is left out
         h0 = int(clock_of(utc(2027, 3, 3, 14))[:2])
-        assert '%02d:00 - %02d:00' % (h0, h0 + 1) in m.opt('EvT%d' % i, 'Text') + m.opt('EvD%d' % i, 'Text')
+        assert '%02d:00 – %02d:00' % (h0, h0 + 1) in m.opt('EvT%d' % i, 'Text') + m.opt('EvD%d' % i, 'Text')
         assert sk.tip('EvBg%d' % i).split('#CRLF#')[2] == 'Task · Le mie attività'
         assert m.opt('EvBg%d' % i, 'LeftMouseDownAction') == NO_DRAG  # a task is not dragged by its time
         # The card: a task at that time; editing keeps only the date
@@ -2245,6 +2345,11 @@ def test_task_with_a_time_shows_once():
         open_card(sk, 'EvBg%d' % i)
         g.ItemToggle()
         assert list(event_meters(sk, '✓ Simulazione')) == [2]
+        # struck through like Google Calendar, title and time (not the check mark)
+        assert m.opt('EvT%d' % i, 'InlineSetting') == 'Strikethrough'
+        assert m.opt('EvT%d' % i, 'InlinePattern') == '(?s)^\\S+ (.*)$'
+        assert m.opt('EvD%d' % i, 'InlineSetting') == 'Strikethrough'
+        assert m.opt('EvT%d' % event_meters(sk, 'Ripasso')[0], 'InlineSetting') == ''
         assert 'action=complete' in task_params(sk)[-1]
         m.measure_values['MeasureTaskAction'] = 'OK'
         g.TaskResult()
@@ -2291,7 +2396,7 @@ def test_item_card_details_and_read_only():
             assert m.opt(meter, 'RightMouseUpAction') == '[!CommandMeasure MeasureScript "ItemCard(\'ev\', %d)"]' % i
         assert sk.tip('EvBg%d' % i).endswith('#CRLF#Right-click: details, edit, delete#CRLF#Drag to move this event')
         texts = open_card(sk, 'EvBg%d' % i)
-        when = 'Wed 3 Mar · %s - %s' % (clock_of(utc(2027, 3, 3, 10)), clock_of(utc(2027, 3, 3, 11)))
+        when = 'Wed 3 Mar · %s – %s' % (clock_of(utc(2027, 3, 3, 10)), clock_of(utc(2027, 3, 3, 11)))
         assert texts[0] == 'Lezione' and when in texts, texts
         assert 'Aula 3.0.3#CRLF#Portare il libro & appunti' in texts, texts
         for t in ('Open in Google', 'Open link', 'Edit', 'Delete'):
