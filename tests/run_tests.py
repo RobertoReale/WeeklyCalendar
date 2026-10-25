@@ -3442,6 +3442,138 @@ process.stdout.write(JSON.stringify({
     assert out['allOtherDay'] == ['ERROR bad time', []] and out['allAllDay'][0] == 'ERROR change it in Google Calendar'
 
 
+def test_typed_text_is_cleaned():
+    sk = create_skin()
+    try:
+        clean = sk.lua.eval('function(s, one) return _WC.edit.cleanText(s, one) end')
+        family = '\U0001F468\u200d\U0001F469\u200d\U0001F467'
+        for text, one, want in [
+                ('  Riunione  ', True, 'Riunione'),
+                ('\u00a0\u200b\u3000\ufeff', True, ''),                 # spaces of other scripts, zero-width
+                ('\u2800\u3164\u200e\u202e\t\r\n', True, ''),           # fillers, direction marks
+                ('a\tb  c\r\nd', True, 'a b c d'),                     # one line, single spaces
+                ('a\x00b\x07c\x7fd\u0085e', True, 'abcde'),            # control characters
+                ('riga 1\r\nriga 2\n  ', False, 'riga 1\nriga 2'),     # notes keep their lines
+                ('\u00a0Caff\u00e8 \u00e0 \u00a0', True, 'Caff\u00e8 \u00e0'),
+                (family + ' ', True, family),                           # (a zero-width joiner inside stays)
+                ('.', True, '.')]:
+            assert clean(text, one) == want, (text, clean(text, one), want)
+    finally:
+        sk.close()
+
+
+def test_a_title_that_shows_nothing_is_not_saved():
+    # A title of blanks or invisible characters is no title: the forms say so and send nothing
+    sk = edit_skin(tasks='tasks_v2.ics')
+    try:
+        m, g = sk.mock, sk.g
+        typed = os.path.join(sk.dir, '@Resources', 'ZOrder', 'Typed.txt')
+        os.makedirs(os.path.dirname(typed))
+        n = len(task_params(sk))
+        # Enter on it: the box closes, the reason under the title
+        g.CreateAt(2, zone_y(sk, 2, '16:00'))
+        m.vars['CreateTitle'] = '\u00a0\u200b '
+        g.CreateSubmit()
+        assert len(task_params(sk)) == n and m.shown('CrCard')
+        assert 'Add title' in card_texts(sk) and 'Not saved: add a title' in card_texts(sk), card_texts(sk)
+        # Save: the box opens again to type it, the reason stays
+        m.bangs.clear()
+        run_action(sk, m.opt(card_el(sk, 'Save'), 'LeftMouseUpAction'))
+        assert ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] in m.bangs and len(task_params(sk)) == n
+        assert 'Not saved: add a title' in card_texts(sk)
+        # A title typed: the reason goes; saved on one line, without control characters
+        open(typed, 'w', encoding='utf-8', newline='').write('WC\n\u3000')
+        g.CreateInputClosed()
+        assert 'Not saved: add a title' in card_texts(sk)
+        g.CardTitle()
+        open(typed, 'w', encoding='utf-8', newline='').write('WC\nEsame')
+        g.CreateInputClosed()
+        assert 'Esame' in card_texts(sk) and not any(t.startswith('Not saved') for t in card_texts(sk)), card_texts(sk)
+        g.CardField('loc')
+        m.vars['CreateTitle'] = 'Via Roma 1\r\nMilano '
+        g.CreateSubmit()
+        g.CardTitle()
+        m.vars['CreateTitle'] = ' Esame\tdi  fisica\r\n(orale)\x07 '
+        g.CreateSubmit()
+        assert task_params(sk)[-1].split('&title=')[1].startswith(enc('Esame di fisica (orale)') + '&start='), task_params(sk)[-1]
+        assert '&location=' + enc('Via Roma 1 Milano') in task_params(sk)[-1], task_params(sk)[-1]
+        answer(sk, 'OK n1@google.com')
+        # A task too; its details keep their lines
+        g.CreateAllDay(4)
+        m.vars['CreateTitle'] = '\u3000'
+        g.CreateSubmit()
+        assert len(task_params(sk)) == n + 1 and 'Not saved: add a title' in card_texts(sk)
+        g.CardField('notes')
+        m.vars['CreateTitle'] = 'riga 1\r\nriga 2  '
+        g.CreateSubmit()
+        g.CardTitle()
+        m.vars['CreateTitle'] = 'Compito'
+        g.CreateSubmit()
+        assert task_params(sk)[-1].endswith('&title=Compito&due=2027-03-05&notes=' + enc('riga 1\nriga 2')), task_params(sk)[-1]
+        answer(sk, 'OK t9')
+        # A typed """ breaks the quotes of Command1: the helper's copy has the title
+        g.CreateAt(3, zone_y(sk, 3, '16:00'))
+        open(typed, 'w', encoding='utf-8', newline='').write('WC\nSerata """jazz"""')
+        m.vars['CreateTitle'] = 'Serata '
+        g.CreateSubmit()
+        assert '&title=' + enc('Serata """jazz"""') + '&' in task_params(sk)[-1], task_params(sk)[-1]
+        answer(sk, 'OK n2@google.com')
+        # The edit form: an invisible title keeps the old one, nothing to send
+        k = len(task_params(sk))
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Mia riunione'))
+        g.ItemEdit()
+        m.vars['CreateTitle'] = '\u00a0\u200b'
+        g.CreateSubmit()
+        assert len(task_params(sk)) == k and not m.shown('CrCard')
+        assert event_meter(sk, 'Mia riunione')
+        sk.check_clean()
+    finally:
+        sk.close()
+    # Italian
+    sk = edit_skin(Language='it')
+    try:
+        sk.g.CreateAt(2, zone_y(sk, 2, '16:00'))
+        sk.mock.vars['CreateTitle'] = ' '
+        sk.g.CreateSubmit()
+        assert 'Non salvato: aggiungi un titolo' in card_texts(sk), card_texts(sk)
+    finally:
+        sk.close()
+
+
+def test_google_tasks_script_refuses_blank_titles():
+    node = shutil.which('node')
+    if not node:
+        print('      (skipped: node not installed)')
+        return
+    import json
+    import subprocess
+    script = open(os.path.join(ROOT, 'tools', 'GoogleTasksFeed.gs'), encoding='utf-8').read()
+    harness = script + r"""
+var inserted = [];
+var PropertiesService = { getScriptProperties: function () { return { getProperty: function () { return null; } }; } };
+var ContentService = { MimeType: { ICAL: 'ical' }, createTextOutput: function (s) {
+  return { text: s, setMimeType: function () { return this; } }; } };
+var Tasks = { Tasks: { insert: function (res) { inserted.push(res.title); return { id: 't1' }; } } };
+var Calendar = { Events: { insert: function (res) { inserted.push(res.summary); return { iCalUID: 'e1' }; } } };
+function run(p) { return doGet({ parameter: p }).text; }
+var T = '2027-03-05T10:00:00Z';
+process.stdout.write(JSON.stringify({
+  blankTask: run({ action: 'createtask', title: ' \u00a0\u200b', due: '2027-03-05' }),
+  blankEvent: run({ action: 'createevent', title: '\u3000\u2800', start: T, end: '2027-03-05T11:00:00Z' }),
+  task: run({ action: 'createtask', title: 'Compito', due: '2027-03-05' }),
+  noLength: run({ action: 'createevent', title: 'Promemoria', start: T, end: T }),
+  backwards: run({ action: 'createevent', title: 'X', start: T, end: '2027-03-05T09:00:00Z' }),
+  inserted: inserted }));
+"""
+    res = subprocess.run([node, '-e', harness], capture_output=True, encoding='utf-8')
+    assert res.returncode == 0, res.stderr
+    out = json.loads(res.stdout)
+    assert out['blankTask'] == 'ERROR bad title' and out['blankEvent'] == 'ERROR bad title', out
+    assert out['task'] == 'OK t1' and out['noLength'] == 'OK e1', out
+    assert out['backwards'] == 'ERROR end before start', out
+    assert out['inserted'] == ['Compito', 'Promemoria'], out
+
+
 def test_lua_main_chunk_has_room_for_locals():
     # Lua 5.1 allows 200 local variables per function, the main chunk included: past it
     # Rainmeter refuses the whole script (and a press on the empty skin then moves it).

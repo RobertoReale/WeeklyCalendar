@@ -106,8 +106,11 @@ function moveTask(listId, taskId, due) {
 var DATE = /^\d{4}-\d{2}-\d{2}$/;
 var UTC_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?Z$/;
 
+// A character that shows something (not a blank, a zero-width or format character, a filler)
+var VISIBLE = /[^\s\u0000-\u001f\u007f-\u009f\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180e\u2000-\u200f\u2028-\u202f\u205f-\u206f\u2800\u3000\u3164\ufe00-\ufe0f\ufeff\uffa0]/;
+
 function badTitle(title) {
-  return !title || title.length > 500;
+  return !title || title.length > 500 || !VISIBLE.test(title);
 }
 
 // Notes, places and descriptions: optional, "" clears them
@@ -201,7 +204,8 @@ function eventTimes(p) {
   }
   if (p.start === undefined && p.end === undefined) return null;
   if (!UTC_TIME.test(p.start || '') || !UTC_TIME.test(p.end || '')) return 'ERROR bad time';
-  if (Date.parse(p.end) <= Date.parse(p.start)) return 'ERROR end before start';
+  // (an event of no length, as Google allows, can keep it)
+  if (Date.parse(p.end) < Date.parse(p.start)) return 'ERROR end before start';
   return { start: { dateTime: p.start }, end: { dateTime: p.end } };
 }
 

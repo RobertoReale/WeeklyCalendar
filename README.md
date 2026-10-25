@@ -180,9 +180,12 @@ How it works:
   (▾) to list the others, or scroll over it to go to the next one. *More options*
   opens Google Calendar's own editor, filled in. Esc closes the title box; a click outside closes
   the card. Without the script the card offers *Open in Google Calendar* instead.
+  A title is needed: an empty one, or one of spaces and invisible characters, is not saved (the
+  card says *Not saved: add a title*). What you type is tidied up: spaces at the ends, control
+  characters and line breaks in a title or a place are dropped.
 - **Details**: right-click an event or task. Holiday calendars, birthdays, public addresses, other
   providers and invitations organised by someone else are read-only; the card says why.
-- **Edit**: *Edit* in the card; type the new title and press Enter, or change the date (and the
+- **Edit**: *Edit* in the card; type the new title and press Enter (an emptied title keeps the old one), or change the date (and the
   times of an event: click a time to type it, or use the wheel), the place, the description,
   *All day* (an event that does not repeat), a task's details or list, and click *Save*. Only what
   you changed is sent. A recurring event then asks *This event* or *All events*: all events take
