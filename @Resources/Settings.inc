@@ -48,6 +48,10 @@ FirstDay=1
 ;  Skin dimensions in pixels.
 ;  Tip: if your Windows display scaling is 125% or 150%, reduce Width and Height
 ;  (for example, 1500 x 900 on 1080p).
+;  You can also resize the skin with the mouse (drag the grip in its bottom right corner)
+;  or from the right-click menu (Size: small / medium / large). That size is saved in
+;  Private.inc and wins over these values; right-click > "Original size (from the
+;  settings)" goes back to them.
 Width=1400
 Height=800
 

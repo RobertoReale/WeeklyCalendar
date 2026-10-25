@@ -29,6 +29,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Past Event Fading**: Events fade as soon as they end, just like in Google Calendar.
 - **Detailed Tooltips**: Hover over any event or task to see its full title, start/end time, location and description (rich text and Google Meet details are cleaned up).
 - **Dialogs Always on Top**: Windows and dialogs you open (e.g. "Empty Recycle Bin") always appear above the calendar, even in Windows' "Show desktop" mode.
+- **Resizable**: Drag the grip in the bottom right corner to any size (an outline shows the new size while you drag), or pick *Size: small / medium / large* in the right-click menu. The calendar redraws at once and remembers the size.
 - **Dark & Light Themes**: `Theme=light` or `Theme=dark`, matching Google Calendar; any single color can still be overridden.
 - **English & Italian**: Labels, tooltips and the right-click menu follow `Language`.
 - **Unicode Titles**: Accented and non-Latin characters in event titles display correctly.
@@ -67,6 +68,7 @@ What `Private.inc` holds:
 | `MyEmail` | Optional: your address(es), comma separated, to recognize declined invitations from providers other than Google |
 | `TasksToken` | Optional: the secret that protects the Tasks script's changes (see [Creating and editing](#4-creating-and-editing)) |
 | `View` | The view last picked in the toolbar (written by the skin) |
+| `Width`, `Height` | The size last set with the resize grip or the right-click menu (written by the skin; wins over `Settings.inc`) |
 
 > **Security Warning**: Keep your secret iCal address and the Tasks script's address private! Anyone with them can view your schedule, and with the script's address also change your tasks and events (unless `TasksToken` is set). Do not paste them into `Settings.inc`.
 
@@ -296,8 +298,19 @@ View=week
 ```
 
 ### 8. Dimensions & Appearance
+The easiest way to change the size is the mouse: move the cursor over the calendar, then drag
+the grip that appears in its bottom right corner. While you drag, an outline shows the new size
+(in pixels); the calendar redraws when you release the button. Dragging past the bottom or
+right edge of the screen (onto the taskbar, for example) stretches it to that edge. A right click
+while dragging cancels. The right-click menu also has *Size: small*, *Size: medium* and *Size: large* (55%, 75%
+and 95% of the screen; the calendar moves if it would go past the edges of the screen). The
+smallest size is 800 x 440.
+
+That size is saved in `Private.inc` and wins over `Width` and `Height` of `Settings.inc`.
+Right-click > *Original size (from the settings)* removes it and goes back to them.
+
 ```ini
-; Dimensions in pixels
+; Dimensions in pixels (the resize grip and the right-click menu override them)
 Width=1400
 Height=800
 
@@ -346,6 +359,8 @@ desktop. It uses no CPU while idle and closes by itself when Rainmeter exits.
 
 The same helper keeps what you type in a card when you click *Save* (or another part of the
 card) instead of pressing Enter: Rainmeter's text box gives the skin its text only on Enter.
+While you drag the resize grip it also tells the skin where the cursor is, so the outline of
+the new size follows it: Rainmeter tells a skin only where the mouse was pressed and released.
 It always runs; `KeepDialogsOnTop=0` only turns off its handling of dialogs.
 
 Declined invitations are recognized from the address in your Google iCal URL. For other
@@ -374,9 +389,10 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Change Date / Time in the Card** | Click the start or end and type it (`9`, `930`, `9:30`, `9:30 pm`), Enter; or mouse wheel over the date, start or end |
 | **Details, Edit, Delete** | Click or right-click an event or task; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`; `RightClickCard=0` shows the skin menu instead) |
 | **Move an Event** | Drag it to another time or day (15-minute steps); right-click or leave the skin to cancel (`DragToMove=0` turns dragging off) |
+| **Resize the Skin** | Drag the grip in the bottom right corner (it appears while the cursor is over the skin); right-click while dragging to cancel. Or right-click > *Size: small / medium / large*; *Original size (from the settings)* goes back to `Width` / `Height` of `Settings.inc` |
 | **Move the Skin** | Drag it by an empty area of the toolbar or the day headers: pressing an event, a task, a button or the grid does not move it |
 | **Sync Calendar Now** | Click the sync time in the top-right corner, or right-click > *Refresh now* |
-| **Context Menu** | Right-click an empty area of the skin: refresh, today, hour scrolling, *Calendar settings*, *Calendar addresses* |
+| **Context Menu** | Right-click an empty area of the skin: refresh, today, hour scrolling, *Calendar settings*, *Calendar addresses*, sizes |
 
 ---
 
@@ -411,7 +427,7 @@ WeeklyCalendar/
 │   ├── Calendar.lua          # Core calendar engine (iCal parser, recurrence, layout, cards)
 │   ├── Settings.inc          # User preferences
 │   ├── Private.inc           # Private calendar URLs and secrets (git-ignored, created on first load)
-│   └── ZOrder/               # Helper: keeps dialogs above the skin and what is typed in the cards (C# source + launcher)
+│   └── ZOrder/               # Helper: keeps dialogs above the skin, what is typed in the cards, the cursor while resizing (C# source + launcher)
 ├── tools/
 │   ├── GoogleTasksFeed.gs    # Google Apps Script: tasks and birthdays as iCal feeds; creates, edits, moves and deletes tasks and events
 │   ├── LiveTest.ps1          # Drives the real skin with real mouse and keyboard input (tooltips, dragging, wheel, typing)

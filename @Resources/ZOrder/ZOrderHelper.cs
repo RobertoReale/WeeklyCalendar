@@ -18,6 +18,11 @@
 // When the skin wrote END in it, the cursor goes after the text first: the plugin selects
 // the text it shows, and typing on after a click (e.g. on Task) would replace it.
 //
+// And it lets the skin follow the cursor while its resize grip is held: Rainmeter tells a
+// skin only where the mouse was pressed and released. While Resize.txt exists (the skin
+// creates it, with its config name, when the grip is pressed), the cursor position over the
+// skin's window is sent to Calendar.lua (ResizeMove) the way Rainmeter.exe sends bangs.
+//
 // Built on first load by launch.cmd with the C# compiler included in Windows (.NET 4,
 // C# 5 syntax only). It exits by itself when Rainmeter closes.
 using System;
@@ -47,6 +52,15 @@ static class ZOrderHelper
     [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr param);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp, uint flags, uint ms, out IntPtr result);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wp, StringBuilder lp, uint flags, uint ms, out IntPtr result);
+    [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wp, ref COPYDATASTRUCT lp, uint flags, uint ms, out IntPtr result);
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
+    [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT p);
+    [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out RECT r);
+
+    [StructLayout(LayoutKind.Sequential)] struct POINT { public int X, Y; }
+    [StructLayout(LayoutKind.Sequential)] struct RECT { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] struct COPYDATASTRUCT { public IntPtr dwData; public int cbData; public IntPtr lpData; }
 
     const uint EVENT_SYSTEM_FOREGROUND = 3;
     const uint GW_HWNDPREV = 3;
@@ -56,6 +70,7 @@ static class ZOrderHelper
     const int ES_PASSWORD = 0x20;
     const uint WM_GETTEXT = 0x000D, WM_GETTEXTLENGTH = 0x000E, EM_SETSEL = 0x00B1, EM_SCROLLCARET = 0x00B7;
     const uint SMTO_ABORTIFHUNG = 0x2;
+    const uint WM_COPYDATA = 0x004A, GA_ROOT = 2;
     static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
     static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
     // Same flags Rainmeter uses: SWP_NOSENDCHANGING bypasses the skin's own z-order lock.
@@ -77,6 +92,9 @@ static class ZOrderHelper
     static readonly string noZOrderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NoZOrder.txt");
     static IntPtr typedBox;  // the box and the text last copied
     static string typedText;
+    static readonly string resizePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resize.txt");
+    static IntPtr resizeSkin; // the window of the skin being resized and the bang last sent
+    static string resizeSent;
 
     [STAThread]
     static void Main()
@@ -107,7 +125,7 @@ static class ZOrderHelper
             timer.Start();
             var typing = new System.Windows.Forms.Timer();
             typing.Interval = 40;
-            typing.Tick += delegate { CopyTyped(); };
+            typing.Tick += delegate { CopyTyped(); FollowResize(); };
             typing.Start();
             Application.Run();
         }
@@ -178,6 +196,53 @@ static class ZOrderHelper
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
+    }
+
+    static void FollowResize()
+    {
+        if (rainmeterPid == 0 || !File.Exists(resizePath))
+        {
+            resizeSkin = IntPtr.Zero;
+            resizeSent = null;
+            return;
+        }
+        POINT p;
+        if (!GetCursorPos(out p)) return;
+        if (resizeSkin == IntPtr.Zero || !IsWindow(resizeSkin))
+        {
+            // The grip was just pressed: the window under the cursor is the skin's
+            IntPtr w = GetAncestor(WindowFromPoint(p), GA_ROOT);
+            uint pid;
+            GetWindowThreadProcessId(w, out pid);
+            if (pid != rainmeterPid || ClassOf(w) != "RainmeterMeterWindow") return;
+            resizeSkin = w;
+        }
+        string config;
+        try { config = File.ReadAllText(resizePath).Trim(); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+        RECT r;
+        if (config == "" || config.Contains("\"") || !GetWindowRect(resizeSkin, out r)) return;
+        string bang = string.Format("!CommandMeasure MeasureScript \"ResizeMove({0}, {1}, {2}, {3})\" \"{4}\"",
+            p.X - r.Left, p.Y - r.Top, r.Right - r.Left, r.Bottom - r.Top, config);
+        if (bang == resizeSent) return;
+        resizeSent = bang;
+        Bang(bang);
+    }
+
+    // As Rainmeter.exe passes a bang to the running Rainmeter
+    static void Bang(string command)
+    {
+        IntPtr rainmeter = FindWindow("DummyRainWClass", null);
+        if (rainmeter == IntPtr.Zero) return;
+        IntPtr text = Marshal.StringToHGlobalUni(command);
+        try
+        {
+            var cds = new COPYDATASTRUCT { dwData = new IntPtr(1), cbData = (command.Length + 1) * 2, lpData = text };
+            IntPtr r;
+            SendMessageTimeout(rainmeter, WM_COPYDATA, IntPtr.Zero, ref cds, SMTO_ABORTIFHUNG, 500, out r);
+        }
+        finally { Marshal.FreeHGlobal(text); }
     }
 
     static string ClassOf(IntPtr hwnd)

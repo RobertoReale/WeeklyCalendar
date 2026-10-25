@@ -78,6 +78,11 @@ These are the traps of this codebase. Each one has already caused a bug once.
   `ZOrder\Typed.txt` (`edit.typedStart` / `edit.typedTake`), so a dismissal keeps it; a click on
   Save can be handled before the dismissal (`edit.takeOpenBox`). The helper builds once per exe
   name: bump the number in `launch.cmd` when `ZOrderHelper.cs` changes.
+- **The size changes at runtime** (resize grip, `SetSize`: `edit.applySize` sets `cfg.W` / `cfg.H`
+  and lays out again, no refresh). Place everything from `cfg.W` / `cfg.H` in the Lua: an option
+  written with `#Width#` / `#Height#` in the `.ini` keeps the size the skin started with. The
+  helper of `@Resources\ZOrder` sends `ResizeMove` while `ZOrder\Resize.txt` exists, as a bang
+  through `WM_COPYDATA` to Rainmeter's `DummyRainWClass` window (what `Rainmeter.exe !Bang` does).
 - **Cards' pools:** `CrTx1..20` and 32 shapes of `CrCard` (`CR_TX`, `CARD_SHAPES`). A card that
   needs more logs an error (the tests fail on it): add meters to the `.ini` and raise the constants.
   The fields and pickers of the cards are functions of the `cf` table (`edit.cf` outside the block).

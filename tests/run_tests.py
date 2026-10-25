@@ -3574,6 +3574,160 @@ process.stdout.write(JSON.stringify({
     assert out['inserted'] == ['Compito', 'Promemoria'], out
 
 
+def test_resizing_with_the_grip():
+    sk = Skin(WORKAREAX='0', WORKAREAY='0', WORKAREAWIDTH='1536', WORKAREAHEIGHT='816',
+              CURRENTCONFIGX='100', CURRENTCONFIGY='0', CURRENTCONFIG='WeeklyCalendar')
+    try:
+        os.makedirs(os.path.join(sk.dir, '@Resources', 'ZOrder'))
+        resize_txt = os.path.join(sk.dir, '@Resources', 'ZOrder', 'Resize.txt')
+        sk.start(2027, 3, 3, 12)
+        m, g = sk.mock, sk.g
+        W, H = int(m.vars['Width']), int(m.vars['Height'])
+        assert (m.opt('SzGrip', 'X'), m.opt('SzGrip', 'Y')) == (str(W - 16), str(H - 16))
+        assert not m.shown('SzGrip')
+        g.SizeHover(1)
+        assert m.shown('SzGrip')
+        g.SizeHover(0)
+        assert not m.shown('SzGrip')
+
+        # Pressed 8 px inside the grip: the layer reaches the edges of the work area
+        g.ResizeStart(8, 8)
+        assert m.shown('SzArea') and m.shown('SzPrev')
+        assert (m.opt('SzArea', 'W'), m.opt('SzArea', 'H')) == ('1436', '816')
+        assert open(resize_txt, encoding='utf-8').read() == 'WeeklyCalendar'
+        g.ResizeMove(1000, 600, 1436, 816)
+        assert m.opt('SzTx', 'Text') == '1008 × 608', m.opt('SzTx', 'Text')
+        g.ResizeMove(800, 480, 1149, 653)  # the helper's pixels at 125%
+        assert m.opt('SzTx', 'Text') == '1008 × 608', m.opt('SzTx', 'Text')
+        assert 'Rectangle 1,1,1006,606,' in m.opt('SzPrev', 'Shape')
+        g.ResizeEnd(1000, 600)
+        assert not os.path.exists(resize_txt)
+        assert not m.shown('SzArea') and not m.shown('SzPrev') and not m.shown('SzTx')
+        assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,1008,608,'), m.opt('BG', 'Shape')
+        assert (m.opt('SzGrip', 'X'), m.opt('SzGrip', 'Y')) == ('992', '592')
+        private = os.path.join(sk.dir, '@Resources') + os.sep + 'Private.inc'
+        assert ['!WriteKeyValue', 'Variables', 'Width', 1008, private] in m.bangs
+        assert ['!WriteKeyValue', 'Variables', 'Height', 608, private] in m.bangs
+        assert ['!SetVariable', 'Width', 1008] in m.bangs
+
+        # Never smaller than 800 x 440 nor past the work area
+        g.ResizeStart(16, 16)
+        g.ResizeEnd(50, 30)
+        assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,800,440,')
+        g.ResizeStart(16, 16)
+        g.ResizeMove(3000, 3000, 1436, 816)
+        assert m.opt('SzTx', 'Text') == '1436 × 816'
+        # A right click cancels; the layer stays to take the left button's release (on an
+        # empty hour it would open the card to create an event), which then does nothing
+        g.ResizeCancel(1)
+        assert not m.shown('SzPrev') and not m.shown('SzTx') and not os.path.exists(resize_txt)
+        assert m.shown('SzArea')
+        g.ResizeMove(900, 600, 1436, 816)
+        assert not m.shown('SzPrev')
+        g.ResizeEnd(900, 600)
+        assert not m.shown('SzArea')
+        assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,800,440,')
+        g.ResizeEnd(900, 600)  # (a release after the end does nothing)
+        assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,800,440,')
+        # Leaving the skin (onto the taskbar: the release comes outside) ends it at the size
+        # shown, out to the edge when near it; after a right click it only ends
+        g.ResizeStart(16, 16)
+        g.ResizeMove(950, 795, 1436, 816)
+        g.SizeHover(0)
+        assert not m.shown('SzArea') and not m.shown('SzPrev') and not os.path.exists(resize_txt)
+        assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,950,816,'), m.opt('BG', 'Shape')
+        g.ResizeEnd(900, 600)
+        assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,950,816,')
+        g.ResizeStart(16, 16)
+        g.ResizeMove(1200, 700, 1436, 816)
+        g.ResizeCancel(1)
+        g.SizeHover(0)
+        assert not m.shown('SzArea')
+        assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,950,816,')
+        g.SizeHover(1)
+        assert m.shown('SzGrip')
+
+        # Not while a card is open; the month view has the grip too
+        g.CreateNew()
+        g.ResizeStart(8, 8)
+        assert not m.shown('SzArea')
+        g.CardClose()
+        g.SetView('month')
+        assert (m.opt('SzGrip', 'X'), m.opt('SzGrip', 'Y')) == ('934', '800')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_narrow_toolbar_keeps_the_sync_text_clear():
+    def sync_left(m):
+        text = m.opt('TbSync', 'Text')
+        return int(m.opt('TbSync', 'X')) - (len(text) * 8 * 4 / 3 * 0.52 + 8)
+
+    for width, week, text in ((1400, True, 'Updated at 12:00'), (844, False, 'Updated at 12:00')):
+        sk = Skin(Width=width)
+        try:
+            sk.start(2027, 3, 3, 12)
+            sk.g.Reload(1)
+            m = sk.mock
+            assert m.shown('TbWeek') == week, width
+            assert m.opt('TbSync', 'Text') == text, (width, m.opt('TbSync', 'Text'))
+            right = (int(m.opt('TbWeekBg', 'X')) + int(m.opt('TbWeekBg', 'W'))) if week else \
+                int(m.opt('TbTitle', 'X')) + len(m.opt('TbTitle', 'Text')) * 16 * 4 / 3 * 0.52
+            assert sync_left(m) >= right + 16, (width, sync_left(m), right)
+            sk.check_clean()
+        finally:
+            sk.close()
+    # Even narrower with a problem: the notice stays, the time goes
+    sk = Skin(Width=800)
+    try:
+        sk.start(2027, 3, 3, 12)
+        sk.g.Reload(1)
+        assert sk.mock.opt('TbSync', 'Text') == ''  # (no room for the time)
+        sk.g.NetError(1)
+        sk.g.Update()
+        assert sk.mock.opt('TbSync', 'Text') == 'offline', sk.mock.opt('TbSync', 'Text')
+        assert not sk.mock.shown('TbWeek')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_sizes_from_the_context_menu():
+    sk = Skin(WORKAREAX='0', WORKAREAY='0', WORKAREAWIDTH='1536', WORKAREAHEIGHT='816',
+              CURRENTCONFIGX='100', CURRENTCONFIGY='0')
+    try:
+        sk.start(2027, 3, 3, 12)
+        m, g = sk.mock, sk.g
+        ini = open(INI_FILE, encoding='utf-8').read()
+        for k in range(1, len(g._WC.LANGS.en.ctx) + 1):
+            key = 'ContextTitle' if k == 1 else 'ContextTitle%d' % k
+            assert m.opt('Rainmeter', key) == g._WC.LANGS.en.ctx[k], key
+            assert re.search(r'^ContextAction%s=' % ('' if k == 1 else k), ini, re.M), k
+        assert len(g._WC.LANGS.en.ctx) == len(g._WC.LANGS.it.ctx)
+        assert m.opt('Rainmeter', 'ContextTitle12') == 'Original size (from the settings)'
+
+        g.SetSize('small')  # 55% of the work area, where the skin is
+        assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,844,448,')
+        assert not [b for b in m.bangs if b[0] == '!Move']
+        g.SetSize('large')  # 95%: moved left to stay on the work area
+        assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,1459,775,')
+        assert ['!Move', 77, 0] in m.bangs
+        g.SetSize('bogus')
+        assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,1459,775,')
+
+        # Original size: Width / Height leave Private.inc, the rest stays; then a refresh
+        private = os.path.join(sk.dir, '@Resources', 'Private.inc')
+        open(private, 'wb').write(b'[Variables]\r\nIcalUrl1=https://x\r\nView=week\r\nWidth=1459\r\n'
+                                  b'Height=775\r\nTasksToken=abc\r\n')
+        g.ResetSize()
+        assert open(private, 'rb').read() == b'[Variables]\r\nIcalUrl1=https://x\r\nView=week\r\nTasksToken=abc\r\n'
+        assert m.bangs[-1] == ['!Refresh']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_lua_main_chunk_has_room_for_locals():
     # Lua 5.1 allows 200 local variables per function, the main chunk included: past it
     # Rainmeter refuses the whole script (and a press on the empty skin then moves it).
