@@ -319,6 +319,30 @@ def test_layout_hidden_event_indicators(sk):
     assert not m.shown('HidUp2')  # Wednesday's 11:30 event is inside it
 
 
+def test_small_skin_keeps_the_day_number_clear_of_the_badge():
+    # A narrow column: the name and number of the day move left of "▲ n" (events above the
+    # visible hours); a wide one keeps them centred
+    for w, h in ((800, 440), (900, 520), (1400, 800)):
+        sk = Skin(Width=w, Height=h)
+        try:
+            sk.start(2027, 3, 2, 12)  # Tuesday (index 1, today) has "Early run" at 06:00
+            m = sk.mock
+            assert m.shown('HidUp1') and m.shown('TodayCircle')
+            cx = int(m.opt('DayNum1', 'X'))
+            assert int(m.opt('DayName1', 'X')) == cx
+            assert 'Ellipse %d,' % cx in m.opt('TodayCircle', 'Shape')
+            badge = int(m.opt('HidUpBg1', 'X'))
+            assert cx + 18 + 4 <= badge, (w, cx, badge)                    # the circle, then a gap
+            col0 = int(m.opt('CrZone1', 'X'))                             # the column's left edge
+            col1 = int(m.opt('CrZone2', 'X'))
+            assert cx - 18 >= col0, (w, cx, col0)
+            if w == 1400:
+                assert abs(cx - (col0 + col1) / 2) <= 2, (cx, col0, col1)  # centred
+            sk.check_clean()
+        finally:
+            sk.close()
+
+
 @with_skin
 def test_layout_more_all_day_tooltip(sk):
     sk.start(2027, 3, 3, 12)
@@ -3422,6 +3446,99 @@ def test_event_place_description_repeat_and_calendar():
         m.vars['CreateTitle'] = 'Gita'
         g.CreateSubmit()
         assert task_params(sk)[-1].endswith('?action=createevent&cal=&title=Gita&date=2027-03-02&days=1'), task_params(sk)[-1]
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_duplicate_events_and_tasks():
+    # "Duplicate" in the details: the create form filled in with the item, as in Google Calendar
+    sk = edit_skin(tasks='tasks_v2.ics')
+    try:
+        m, g = sk.mock, sk.g
+        add_event(sk, 1, 'BEGIN:VEVENT\nUID:dup1@google.com\nDTSTART:20270302T090000Z\nDTEND:20270302T103000Z\n'
+                         'RRULE:FREQ=WEEKLY;BYDAY=TU\nSUMMARY:Corso\nLOCATION:Aula 3\n'
+                         'DESCRIPTION:Portare il libro\\ne il quaderno\nEND:VEVENT\n'
+                         'BEGIN:VEVENT\nUID:dup2@google.com\nDTSTART:20270301T150000Z\nDTEND:20270301T160000Z\n'
+                         'RRULE:FREQ=WEEKLY;COUNT=5\nSUMMARY:Ricco\nDESCRIPTION:<b>grassetto</b>\\n-::~:~::~:~::-\\nJoin: https://meet.google.com/abc\\n-::~:~::~:~::-\nEND:VEVENT\n')
+        g.Reload(1)
+
+        def click(text):
+            run_action(sk, m.opt(card_el(sk, text), 'LeftMouseUpAction'))
+
+        # A weekly event with a place and a description
+        texts = open_card(sk, 'EvBg%d' % event_meter(sk, 'Corso'))
+        assert 'Duplicate' in texts, texts
+        m.bangs.clear()
+        click('Duplicate')
+        texts = card_texts(sk)
+        start, end = clock_of(utc(2027, 3, 2, 9)), clock_of(utc(2027, 3, 2, 10, 30))
+        for t in ('Event', 'Task', 'Tue 2 Mar', start, end, 'Weekly on Tuesday' + ARROW, 'Aula 3',
+                  'Portare il libro e il quaderno', 'me@example.com', 'Save'):
+            assert t in texts, (t, texts)
+        assert m.opt(card_el(sk, 'Event'), 'FontColor') == '4,30,73,255'          # selected
+        # the title box opens with the title, the cursor after it
+        assert ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] in m.bangs
+        assert m.opt('MeasureCreateInput', 'DefaultValue') == 'Corso'
+        assert m.opt('CrDraftTx', 'Text').startswith('Corso')
+        press(sk)
+        click('Save')
+        assert task_params(sk)[-1] == ('-s -f -L -m 30 ' + SCRIPT_URL + '?action=createevent&cal=&title=Corso'
+                                       '&start=' + enc(utc_of_local(2027, 3, 2, int(start[:2]), 0))
+                                       + '&end=' + enc(utc_of_local(2027, 3, 2, int(end[:2]), 30))
+                                       + '&location=Aula%203&desc=Portare%20il%20libro%0Ae%20il%20quaderno'
+                                       '&rrule=FREQ%3DWEEKLY'), task_params(sk)[-1]
+        answer(sk, 'OK dupnew@google.com')
+
+        # A rule the form cannot make: not copied (the form shows it); a formatted description is
+        # copied as it is, read-only, without its video call block
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Ricco'))
+        click('Duplicate')
+        texts = card_texts(sk)
+        assert 'Does not repeat' + ARROW in texts and 'grassetto' in texts, texts
+        assert m.opt(card_el(sk, 'grassetto'), 'LeftMouseUpAction') == NO_DRAG
+        assert 'Formatted description' in sk.tip(card_el(sk, 'grassetto'))
+        press(sk)
+        click('Save')
+        assert task_params(sk)[-1].endswith('&title=Ricco&start=' + enc(utc_of_local(2027, 3, 1, int(clock_of(utc(2027, 3, 1, 15))[:2])))
+                                            + '&end=' + enc(utc_of_local(2027, 3, 1, int(clock_of(utc(2027, 3, 1, 16))[:2])))
+                                            + '&desc=' + enc('<b>grassetto</b>')), task_params(sk)[-1]
+        answer(sk, 'OK ricco2@google.com')
+
+        # An all-day event of two days keeps them
+        open_card(sk, 'ADBg%d' % sk.all_day()['Gita'])
+        click('Duplicate')
+        assert 'Thu 4 Mar – Fri 5 Mar' in card_texts(sk), card_texts(sk)
+        press(sk)
+        click('Save')
+        assert task_params(sk)[-1].endswith('?action=createevent&cal=&title=Gita&date=2027-03-04&days=2'), task_params(sk)[-1]
+        answer(sk, 'OK gita2@google.com')
+
+        # A task: its list and its details
+        open_card(sk, 'ADBg%d' % task_chip(sk))
+        click('Duplicate')
+        texts = card_texts(sk)
+        assert 'Le mie attività' + ARROW in texts and 'capitolo 4 esercizi' in texts and 'Wed 3 Mar' in texts, texts
+        assert m.opt(card_el(sk, 'Task'), 'FontColor') == '4,30,73,255'
+        assert m.opt('MeasureCreateInput', 'DefaultValue') == 'Simulazione Tema di Esame'
+        press(sk)
+        click('Save')
+        assert task_params(sk)[-1] == ('-s -f -L -m 30 ' + SCRIPT_URL + '?action=createtask&list=L1'
+                                       '&title=Simulazione%20Tema%20di%20Esame&due=2027-03-03'
+                                       '&notes=capitolo%204%0Aesercizi'), task_params(sk)[-1]
+        answer(sk, 'OK t-dup')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+    # In Italian; without the Tasks script, Duplicate opens Google Calendar's editor filled in
+    sk = edit_skin(IcalUrl3='', Language='it')
+    try:
+        m, g = sk.mock, sk.g
+        texts = open_card(sk, 'EvBg%d' % event_meter(sk, 'Mia riunione'))
+        assert 'Duplica' in texts, texts
+        run_action(sk, m.opt(card_el(sk, 'Duplica'), 'LeftMouseUpAction'))
+        assert 'Apri in Google Calendar' in card_texts(sk), card_texts(sk)
         sk.check_clean()
     finally:
         sk.close()

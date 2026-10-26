@@ -21,7 +21,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Google Tasks**: Tasks appear like in Google Calendar (○ open, ✓ completed): in the all-day row, or at their time when they have one. Click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day. Each task shows its list and its details (notes); a new or edited task can go to any of your lists.
 - **Holidays & Birthdays**: Public holidays come from Google's holiday calendars; your contacts' birthdays, which Google's iCal address leaves out, come from the Tasks script.
 - **Create Events and Tasks**: Click an empty spot of the hours (an event at that time), of the all-day row or a day number (a task), or the **+** in the toolbar: a card like Google Calendar's opens, you type the title and press Enter. An event can also get a place, a description, a repeat (every day, weekday, week, month, year) and a calendar; a task its details and its list. The item appears at once and Google saves it.
-- **Details, Edit, Delete**: Click (or right-click) an event or task for its details; edit its title, date and times, place and description (all day or not), a task's details and list, one occurrence or every occurrence of a recurring event; or delete it (one occurrence or the whole series) with a few seconds to undo.
+- **Details, Edit, Duplicate, Delete**: Click (or right-click) an event or task for its details; edit its title, date and times, place and description (all day or not), a task's details and list, one occurrence or every occurrence of a recurring event; duplicate it (a create form filled in with it, as in Google Calendar); or delete it (one occurrence or the whole series) with a few seconds to undo.
 - **Drag Events**: Drag an event to another time or day (snapped to 15 minutes, like Google Calendar), or an all-day event to another day; in the month view, events move to another day and keep their time. A click that slips a few pixels stays a click.
 - **Open in Google Calendar**: Middle-click an event to open it in Google Calendar (the card has *Open in Google* and *Open link* too). With `ClickAction=calendar` a click opens it there instead (a task opens its day) and the middle click opens its video call or link (Meet, Zoom, Teams...); `ClickAction=link` swaps the two.
 - **Looks like Google Calendar**: past events and completed tasks pale with dark text, completed tasks struck through, a 45-minute event with its title above the time and place, times as "08:30 – 10:30".
@@ -197,6 +197,11 @@ How it works:
   only that one). A task moves to another list with its id there; Google refuses to move a
   repeating task to another list. A description with formatting (written in Google Calendar,
   or with a video call) is changed in Google Calendar.
+- **Duplicate**: *Duplicate* in the card opens the create form filled in with the item: title, day
+  and times (all the days of an all-day event), calendar or task list, place, description or
+  details, and the repeat when the form has it (every day, weekday, week, month, year; another
+  rule shows *Does not repeat*). Change what you need and *Save*. A description with formatting
+  is not copied. Without the Tasks script it opens Google Calendar's editor, filled in.
 - **Delete**: *Delete* in the card (a recurring event asks: *This event* / *All events*). The item
   disappears and a bar offers **Undo** for 8 seconds (`UndoSeconds`); the request goes to Google
   only after that (a skin refresh in those seconds keeps the item).
@@ -391,7 +396,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Place, Description, Details** | Click *Add location*, *Add description* or *Add details* in the card, type, Enter (Ctrl+Enter: a new line) |
 | **Repeat, Calendar, Task List** | Click the choice (▾) in the card and pick another; or scroll over it |
 | **Change Date / Time in the Card** | Click the start or end and type it (`9`, `930`, `9:30`, `9:30 pm`), Enter; or mouse wheel over the date, start or end |
-| **Details, Edit, Delete** | Click or right-click an event or task; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`; `RightClickCard=0` shows the skin menu instead) |
+| **Details, Edit, Duplicate, Delete** | Click or right-click an event or task; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`; `RightClickCard=0` shows the skin menu instead) |
 | **Move an Event** | Drag it to another time or day (15-minute steps); right-click or leave the skin to cancel (`DragToMove=0` turns dragging off) |
 | **Resize the Skin** | Drag the grip in the bottom right corner (it appears while the cursor is over the skin); right-click while dragging to cancel. Or right-click > *Size: small / medium / large*; *Original size (from the settings)* goes back to `Width` / `Height` of `Settings.inc` |
 | **Move the Skin** | Drag it by an empty area of the toolbar or the day headers: pressing an event, a task, a button or the grid does not move it |
