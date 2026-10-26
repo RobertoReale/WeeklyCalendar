@@ -139,10 +139,28 @@ static class ZOrderHelper
             timer.Interval = 250;
             timer.Tick += delegate { Check(); };
             timer.Start();
-            var typing = new System.Windows.Forms.Timer();
+            // The fast timer runs only while Typed.txt or Resize.txt exists: the skin creates one
+            // when it opens a box or when the grip is pressed. A watcher wakes it at once; Check()
+            // does too (every 250 ms) in case the watcher missed the file.
+            typing = new System.Windows.Forms.Timer();
             typing.Interval = 40;
-            typing.Tick += delegate { CopyTyped(); FollowResize(); };
-            typing.Start();
+            typing.Tick += delegate
+            {
+                bool typed = CopyTyped();
+                bool resizing = FollowResize();
+                if (!typed && !resizing) typing.Stop();
+            };
+            var sync = new Control();
+            IntPtr handle = sync.Handle; // (creates the window on this thread: the events arrive here)
+            var watcher = new FileSystemWatcher(AppDomain.CurrentDomain.BaseDirectory);
+            watcher.NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite;
+            watcher.SynchronizingObject = sync;
+            FileSystemEventHandler wake = delegate { WakeTyping(); };
+            watcher.Created += wake;
+            watcher.Changed += wake;
+            watcher.Renamed += delegate { WakeTyping(); };
+            watcher.EnableRaisingEvents = true;
+            WakeTyping();
             Application.Run();
         }
     }
@@ -216,21 +234,30 @@ static class ZOrderHelper
         return (s & 0xFFFF) == 0 && ((s >> 16) & 0xFFFF) == text.Length;
     }
 
-    static void CopyTyped()
+    static System.Windows.Forms.Timer typing; // copies Typed.txt / follows Resize.txt (40 ms)
+
+    // Starts the typing timer when one of its files exists (it stops itself when neither does)
+    static void WakeTyping()
+    {
+        if (typing != null && !typing.Enabled && (File.Exists(typedPath) || File.Exists(resizePath))) typing.Start();
+    }
+
+    // False when there is nothing to copy (no Typed.txt): the timer may stop
+    static bool CopyTyped()
     {
         if (rainmeterPid == 0 || !File.Exists(typedPath))
         {
             typedBox = IntPtr.Zero;
-            return;
+            return false;
         }
         IntPtr fg = GetForegroundWindow();
         uint pid;
         uint thread = GetWindowThreadProcessId(fg, out pid);
-        if (fg == IntPtr.Zero || pid != rainmeterPid || ClassOf(fg) == "RainmeterMeterWindow") return;
+        if (fg == IntPtr.Zero || pid != rainmeterPid || ClassOf(fg) == "RainmeterMeterWindow") return true;
         IntPtr box = TextBoxOf(fg);
-        if (box == IntPtr.Zero || FocusOf(thread) != box) return;
+        if (box == IntPtr.Zero || FocusOf(thread) != box) return true;
         string text = TextOf(box);
-        if (text == null) return;
+        if (text == null) return true;
         if (text.IndexOf('\x7f') >= 0) text = DeleteWords(box, text);
         try
         {
@@ -248,12 +275,12 @@ static class ZOrderHelper
             {
                 CaretToEnd(box, text); // the plugin selected it again
             }
-            if (box == typedBox && text == typedText && copied) return;
+            if (box == typedBox && text == typedText && copied) return true;
             if (text != "") emptyBox = IntPtr.Zero;
             else if (copied && had.Length > 3 && box != emptyBox)
             {
                 emptyBox = box;
-                return;
+                return true;
             }
             byte[] data = new UTF8Encoding(false).GetBytes("WC\n" + text);
             // Truncate: never creates the file the skin has deleted
@@ -266,38 +293,41 @@ static class ZOrderHelper
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
+        return true;
     }
 
-    static void FollowResize()
+    // False when there is nothing to follow (no Resize.txt): the timer may stop
+    static bool FollowResize()
     {
         if (rainmeterPid == 0 || !File.Exists(resizePath))
         {
             resizeSkin = IntPtr.Zero;
             resizeSent = null;
-            return;
+            return false;
         }
         POINT p;
-        if (!GetCursorPos(out p)) return;
+        if (!GetCursorPos(out p)) return true;
         if (resizeSkin == IntPtr.Zero || !IsWindow(resizeSkin))
         {
             // The grip was just pressed: the window under the cursor is the skin's
             IntPtr w = GetAncestor(WindowFromPoint(p), GA_ROOT);
             uint pid;
             GetWindowThreadProcessId(w, out pid);
-            if (pid != rainmeterPid || ClassOf(w) != "RainmeterMeterWindow") return;
+            if (pid != rainmeterPid || ClassOf(w) != "RainmeterMeterWindow") return true;
             resizeSkin = w;
         }
         string config;
         try { config = File.ReadAllText(resizePath).Trim(); }
-        catch (IOException) { return; }
-        catch (UnauthorizedAccessException) { return; }
+        catch (IOException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
         RECT r;
-        if (config == "" || config.Contains("\"") || !GetWindowRect(resizeSkin, out r)) return;
+        if (config == "" || config.Contains("\"") || !GetWindowRect(resizeSkin, out r)) return true;
         string bang = string.Format("!CommandMeasure MeasureScript \"ResizeMove({0}, {1}, {2}, {3})\" \"{4}\"",
             p.X - r.Left, p.Y - r.Top, r.Right - r.Left, r.Bottom - r.Top, config);
-        if (bang == resizeSent) return;
+        if (bang == resizeSent) return true;
         resizeSent = bang;
         Bang(bang);
+        return true;
     }
 
     // As Rainmeter.exe passes a bang to the running Rainmeter
@@ -348,6 +378,7 @@ static class ZOrderHelper
         }
         missing = 0;
         GetWindowThreadProcessId(helper, out rainmeterPid);
+        WakeTyping();
 
         // KeepDialogsOnTop=0: the skin leaves this file, and only the typing is kept
         if (File.Exists(noZOrderPath))

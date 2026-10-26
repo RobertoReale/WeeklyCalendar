@@ -85,7 +85,9 @@ These are the traps of this codebase. Each one has already caused a bug once.
   getting the keyboard (the plugin logs an `ObjectDisposedException`) opens again, once. The
   helper reads a box only while it has the keyboard, copies an emptied box only when it stays
   empty (a closing box reads as empty for a moment) and turns Ctrl+Backspace (a DEL character
-  in the WinForms box) into deleting the word before the cursor. It builds once per exe
+  in the WinForms box) into deleting the word before the cursor. Its 40 ms timer runs only while
+  `Typed.txt` or `Resize.txt` exists (a `FileSystemWatcher` wakes it, `Check()` too every 250 ms):
+  it used to run, and hit the disk, all the time. It builds once per exe
   name: bump the number in `launch.cmd` when `ZOrderHelper.cs` changes.
 - **The size changes at runtime** (resize grip, `SetSize`: `edit.applySize` sets `cfg.W` / `cfg.H`
   and lays out again, no refresh). Place everything from `cfg.W` / `cfg.H` in the Lua: an option
