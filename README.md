@@ -169,7 +169,8 @@ the feeds does not need the token.
 How it works:
 - **Create**: click an empty spot of the hours (an event at that half hour, one hour long), of
   the all-day row or a day number (a task for that day), or **+** in the toolbar (today, the next
-  half hour). Type the title and press **Enter** or click *Save*. Before that you can switch *Event* / *Task*,
+  half hour). Type the title and press **Enter** or click *Save*. Before that you can switch *Event* / *Task*
+  (the title you typed stays, however quick the click),
   tick *All day*, and change the times: click one and type it (`9`, `930`, `9:30`, `9:30 pm`),
   then Enter; a new start keeps the event's length. The **mouse wheel** over the date or a time
   changes it too (a day, 15 minutes).
@@ -181,7 +182,8 @@ How it works:
   of `@Resources\ZOrder`, see [Dimensions & Appearance](#8-dimensions--appearance)). Click a choice
   (▾) to list the others, or scroll over it to go to the next one. *More options*
   opens Google Calendar's own editor, filled in. Esc closes the title box; a click outside closes
-  the card. Without the script the card offers *Open in Google Calendar* instead.
+  the card. In the boxes the usual keys work: Ctrl+A, Ctrl+X / Ctrl+C / Ctrl+V, Ctrl+Z, Home / End,
+  and Ctrl+Backspace deletes the word before the cursor (with the helper). Without the script the card offers *Open in Google Calendar* instead.
   A title is needed: an empty one, or one of spaces and invisible characters, is not saved (the
   card says *Not saved: add a title*). What you type is tidied up: spaces at the ends, control
   characters and line breaks in a title or a place are dropped.
@@ -359,6 +361,8 @@ desktop. It uses no CPU while idle and closes by itself when Rainmeter exits.
 
 The same helper keeps what you type in a card when you click *Save* (or another part of the
 card) instead of pressing Enter: Rainmeter's text box gives the skin its text only on Enter.
+It also makes Ctrl+Backspace delete the word before the cursor (Rainmeter's text box would type
+a small square instead).
 While you drag the resize grip it also tells the skin where the cursor is, so the outline of
 the new size follows it: Rainmeter tells a skin only where the mouse was pressed and released.
 It always runs; `KeepDialogsOnTop=0` only turns off its handling of dialogs.

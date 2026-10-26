@@ -1683,6 +1683,13 @@ def run_action(sk, action):
         sk.lua.execute(lua)
 
 
+def press(sk):
+    """The press of a click on the skin: the plugin closes the open box (its OnDismissAction)."""
+    b = sk.lua.eval('_WC.edit.box')
+    if b:
+        run_action(sk, sk.mock.opt(b.m, 'OnDismissAction'))
+
+
 def enc(s):
     from urllib.parse import quote
     return quote(s, safe='')
@@ -1914,6 +1921,173 @@ def test_text_typed_before_a_click():
         sk.close()
 
 
+def test_quick_clicks_keep_what_was_typed():
+    # The plugin closes the open box on the press of a click but tells the skin up to 44 ms
+    # later: a quick click (a touchpad tap) is handled first. What was typed stays in its own
+    # field, the close of that box changes nothing more, and the box the click asked for opens
+    # once the plugin has closed the one before (CardBoxes, a moment after the close).
+    sk = Skin(feeds={3: 'tasks_v2.ics'}, IcalUrl3=SCRIPT_URL)
+    sk.start(2027, 3, 3, 12)
+    try:
+        m, g = sk.mock, sk.g
+        typed = os.path.join(sk.dir, '@Resources', 'ZOrder', 'Typed.txt')
+        os.makedirs(os.path.dirname(typed))
+        batch = ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1']
+        later = '[!Delay 50][!CommandMeasure MeasureScript "CardBoxes()"]'
+
+        def helper(text):
+            assert os.path.exists(typed)               # a box is open
+            open(typed, 'w', encoding='utf-8', newline='').write('WC\n' + text)
+
+        def box():
+            b = g._WC.edit.box
+            return b and (b.m, b.n, b.field, bool(b.taken))
+
+        def close(measure='MeasureCreateInput'):
+            run_action(sk, m.opt(measure, 'OnDismissAction'))
+
+        def click(text):
+            run_action(sk, m.opt(card_el(sk, text), 'LeftMouseUpAction'))
+
+        # Typed, then a quick click on Task: the title stays, the box opens again after the close
+        g.CreateAt(2, zone_y(sk, 2, '10:20'))
+        assert box() == ('MeasureCreateInput', 1, 'title', False)
+        assert m.opt('MeasureCreateInput', 'OnDismissAction') == '[!CommandMeasure MeasureScript "CreateInputClosed(1)"]'
+        assert m.opt('MeasureCreateInput', 'Command1') == \
+            '[!SetVariable CreateTitle """$UserInput$"""][!CommandMeasure MeasureScript "CreateSubmit(1)"]'
+        helper('Comprare il latte')
+        m.bangs.clear()
+        click('Task')
+        assert m.opt('CrDraftTx', 'Text') == '○ Comprare il latte' and 'Comprare il latte' in card_texts(sk)
+        assert batch not in m.bangs and box() == ('MeasureCreateInput', 1, 'title', True)
+        assert ['[!Delay 700][!CommandMeasure MeasureScript "CardBoxes(1)"]'] in m.bangs
+        close()                                        # the close of box 1, later
+        assert box() is None and batch not in m.bangs and [later] in m.bangs
+        assert m.opt('CrDraftTx', 'Text') == '○ Comprare il latte'
+        g.CardBoxes()
+        assert batch in m.bangs and box() == ('MeasureCreateInput', 2, 'title', False)
+        assert m.opt('MeasureCreateInput', 'DefaultValue') == 'Comprare il latte'
+        assert open(typed, encoding='utf-8').read() == 'END'
+        g.CardBoxes(1)                                 # the fallback for box 1: nothing more
+        assert box() == ('MeasureCreateInput', 2, 'title', False)
+        # changed, then back to Event with a quick click: the new title in the box
+        helper('Comprare il latte e il pane')
+        click('Event')
+        close()
+        g.CardBoxes()
+        assert m.opt('MeasureCreateInput', 'DefaultValue') == 'Comprare il latte e il pane'
+        assert g._WC.edit.card.title == 'Comprare il latte e il pane' and g._WC.edit.card.type == 'event'
+        # and a slow click (the close first) still keeps it
+        close()
+        click('Task')
+        assert m.opt('MeasureCreateInput', 'DefaultValue') == 'Comprare il latte e il pane'
+        assert box() == ('MeasureCreateInput', 4, 'title', False)
+
+        # A quick click on Add details: the title stays the title, the details box opens empty
+        helper('Titolo X')
+        click('Add details')
+        close()
+        assert g._WC.edit.card.notes == '' and g._WC.edit.card.title == 'Titolo X'
+        g.CardBoxes()
+        assert box() == ('MeasureCreateInput', 5, 'notes', False)
+        assert m.opt('MeasureCreateInput', 'DefaultValue') == '' and m.opt('MeasureCreateInput', 'FontSize') == '9'
+        helper('una nota')
+        m.vars['CreateTitle'] = 'una nota'
+        close_cmd = m.opt('MeasureCreateInput', 'Command1')
+        run_action(sk, close_cmd)                      # Enter
+        assert g._WC.edit.card.notes == 'una nota' and g._WC.edit.card.title == 'Titolo X'
+        assert 'Titolo X' in card_texts(sk) and 'una nota' in card_texts(sk)
+
+        # A quick click on the list picker: the title stays, no box under the list
+        click('Titolo X')                              # the title box again
+        helper('Titolo XY')
+        click('Le mie attività' + ARROW)
+        close()
+        assert g._WC.edit.card.title == 'Titolo XY' and later not in [b[0] for b in m.bangs[-3:]]
+        assert card_texts(sk)[0] == 'Task list'
+        run_action(sk, m.opt(card_el(sk, 'Sport, palestra'), 'LeftMouseUpAction'))
+        assert 'Titolo XY' in card_texts(sk) and 'Sport, palestra' + ARROW in card_texts(sk)
+
+        # Event again; a quick click on the start time: the title stays, the time box opens after
+        click('Event')                                 # (the title box opens)
+        helper('Titolo Z')
+        m.bangs.clear()
+        click('10:00')
+        assert ['!CommandMeasure', 'MeasureTimeInput', 'ExecuteBatch 1'] not in m.bangs
+        close()
+        g.CardBoxes()
+        assert ['!CommandMeasure', 'MeasureTimeInput', 'ExecuteBatch 1'] in m.bangs
+        assert box() == ('MeasureTimeInput', 8, 'start', False) and g._WC.edit.card.title == 'Titolo Z'
+        assert m.opt('MeasureTimeInput', 'OnDismissAction') == '[!CommandMeasure MeasureScript "TimeInputClosed(8)"]'
+        # typed, then a quick click on Save: the time and the title go out
+        helper('11:30')
+        click('Save')
+        assert task_params(sk)[-1].startswith('-s -f -L -m 30 ' + SCRIPT_URL + '?action=createevent&cal=&title=Titolo%20Z&start='
+                                              + enc(utc_of_local(2027, 3, 3, 11, 30))), task_params(sk)[-1]
+        close('MeasureTimeInput')                      # the close, later: nothing more
+        assert not m.shown('CrCard') and box() is None
+        answer(sk, 'OK ev1@google.com')
+
+        # A close that never comes (the plugin did not open that box): the skin stops waiting
+        g.CreateAt(3, zone_y(sk, 3, '10:20'))
+        n = box()[1]
+        helper('Senza chiusura')
+        click('Task')
+        assert box() == ('MeasureCreateInput', n, 'title', True)
+        g.CardBoxes(n)                                 # 700 ms later
+        assert box() == ('MeasureCreateInput', n + 1, 'title', False)
+        assert m.opt('MeasureCreateInput', 'DefaultValue') == 'Senza chiusura'
+        # its close, should it come after all, is ignored: the new box stays the open one
+        helper('Senza chiusura!')
+        g.CreateInputClosed(n)
+        assert box() == ('MeasureCreateInput', n + 1, 'title', False) and os.path.exists(typed)
+        assert g._WC.edit.card.title == 'Senza chiusura'
+
+        # Everything selected and deleted, then a click elsewhere: no title (Save asks for one)
+        helper('')
+        close()
+        assert 'Add title' in card_texts(sk)
+        n = len(task_params(sk))
+        click('Save')
+        assert len(task_params(sk)) == n and 'Not saved: add a title' in card_texts(sk)
+        assert box()[0] == 'MeasureCreateInput' and box()[2:] == ('title', False)
+        g.CardClose()
+        close()                                        # the box closes with the card
+        assert box() is None and not os.path.exists(typed)
+
+        # A box the plugin could not open (it got no keyboard: the helper never saw it) closes
+        # at once: it opens again, once
+        g.CreateAt(5, zone_y(sk, 5, '10:20'))
+        n = box()[1]
+        assert open(typed, encoding='utf-8').read() == 'END'
+        m.bangs.clear()
+        close()
+        assert box() is None and [later] in m.bangs and batch not in m.bangs
+        g.CardBoxes()
+        assert box() == ('MeasureCreateInput', n + 1, 'title', False)
+        close()                                        # again: that was the one try
+        g.CardBoxes()
+        assert box() is None and 'Add title' in card_texts(sk)
+        g.CardClose()
+        # closed later (Esc), or after the helper saw it: closed
+        g.CreateAt(5, zone_y(sk, 5, '10:20'))
+        clock = g._WC.edit.clock
+        g._WC.edit.clock = lambda: 1e9
+        close()
+        g._WC.edit.clock = clock
+        g.CardBoxes()
+        assert box() is None and 'Add title' in card_texts(sk)
+        click('Add title')
+        helper('')
+        close()
+        g.CardBoxes()
+        assert box() is None and 'Add title' in card_texts(sk)
+        g.CardClose()
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_type_the_times_in_the_card():
     sk = create_skin()
     try:
@@ -1929,6 +2103,7 @@ def test_type_the_times_in_the_card():
         start = card_el(sk, '10:00')
         assert m.opt(start, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "CardTime(\'start\')"]'
         m.bangs.clear()
+        press(sk)
         run_action(sk, m.opt(start, 'LeftMouseUpAction'))
         assert ['!CommandMeasure', 'MeasureTimeInput', 'ExecuteBatch 1'] in m.bangs
         assert m.opt('MeasureTimeInput', 'DefaultValue') == '10:00'
@@ -1944,19 +2119,23 @@ def test_type_the_times_in_the_card():
         assert ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] in m.bangs
         assert m.opt('CrDraftTx', 'Text').endswith('14:30 – 15:30')
         # The end: after the start, or nothing changes
+        press(sk)
         run_action(sk, m.opt(card_el(sk, '15:30'), 'LeftMouseUpAction'))
         assert m.opt('MeasureTimeInput', 'DefaultValue') == '15:30'
         m.vars['CreateTime'] = '13'
         g.TimeSubmit()
         assert '15:30' in card_texts(sk)
+        press(sk)
         run_action(sk, m.opt(card_el(sk, '15:30'), 'LeftMouseUpAction'))
         m.vars['CreateTime'] = '17:45'
         g.TimeSubmit()
         assert '14:30' in card_texts(sk) and '17:45' in card_texts(sk)
         # Esc: nothing changes; a late start keeps the event inside the day
+        press(sk)
         run_action(sk, m.opt(card_el(sk, '14:30'), 'LeftMouseUpAction'))
         g.TimeInputClosed()
         assert '14:30' in card_texts(sk)
+        press(sk)
         run_action(sk, m.opt(card_el(sk, '14:30'), 'LeftMouseUpAction'))
         m.vars['CreateTime'] = '23:30'
         g.TimeSubmit()
@@ -1975,6 +2154,7 @@ def test_type_the_times_in_the_card():
         open_card(sk, 'EvBg%d' % event_meter(sk, 'Lezione'))
         g.ItemEdit()
         h0 = int(clock_of(utc(2027, 3, 3, 10))[:2])
+        press(sk)
         run_action(sk, m.opt(card_el(sk, '%02d:00' % h0), 'LeftMouseUpAction'))
         m.vars['CreateTime'] = '%d:15' % (h0 + 2)
         g.TimeSubmit()
@@ -2082,6 +2262,7 @@ def test_create_task_from_all_day_row():
         assert m.shown('ADChk%d' % i)                                 # from the feed: checkable again
         # An all-day event from the all-day row: Event keeps "All day"
         g.CreateAllDay(1)
+        press(sk)
         g.CreateType('event')
         assert 'Tue 2 Mar' in card_texts(sk) and '09:00' not in card_texts(sk)
         m.vars['CreateTitle'] = 'Gita'
@@ -3071,6 +3252,7 @@ def test_task_lists_details_and_moves():
         assert not any('update the' in t for t in texts)
         el = card_el(sk, 'Le mie attività' + ARROW)
         assert sk.tip(el) == 'Click to choose, scroll to change'
+        press(sk)
         run_action(sk, m.opt(el, 'LeftMouseUpAction'))
         texts = card_texts(sk)
         assert texts[:4] == ['Task list', 'Le mie attività', 'Analisi Matematica 1 - 1° Parziale', 'Sport, palestra'], texts
@@ -3081,6 +3263,7 @@ def test_task_lists_details_and_moves():
         run_action(sk, m.opt(card_el(sk, 'Sport, palestra' + ARROW), 'MouseScrollUpAction'))  # the wheel
         assert 'Analisi Matematica 1 - 1° Parziale' + ARROW in card_texts(sk)
         # Details: a smaller box, two lines tall; Ctrl+Enter lines arrive as CR LF
+        press(sk)
         run_action(sk, m.opt(card_el(sk, 'Add details'), 'LeftMouseUpAction'))
         assert m.opt('MeasureCreateInput', 'FontSize') == '9' and m.opt('MeasureCreateInput', 'DefaultValue') == ''
         assert m.opt('MeasureCreateInput', 'H') == '44' and m.opt('MeasureCreateInput', 'InputLimit') == '1500'
@@ -3104,6 +3287,7 @@ def test_task_lists_details_and_moves():
         assert 'capitolo 4 esercizi' in texts and 'Le mie attività' + ARROW in texts, texts
         g.CardCycle('list', 2)
         assert 'Sport, palestra' + ARROW in card_texts(sk)
+        press(sk)
         g.CardField('notes')
         assert m.opt('MeasureCreateInput', 'DefaultValue') == 'capitolo 4\r\nesercizi'
         m.vars['CreateTitle'] = 'capitolo 4\r\nesercizi'            # Enter without changes
@@ -3148,6 +3332,7 @@ def test_task_lists_details_and_moves():
         open_card(sk, 'ADBg%d' % task_chip(sk, '○ Ritirare'))
         g.ItemEdit()
         g.CardCycle('list', -1)
+        press(sk)
         g.ItemSave()
         assert task_params(sk)[-1].endswith('?action=movetask&list=L3&task=t-sport&tolist=L2')
         answer(sk, 'ERROR Recurrent tasks cannot currently be moved between lists')
@@ -3184,12 +3369,14 @@ def test_event_place_description_repeat_and_calendar():
         texts = card_texts(sk)
         for t in ('Does not repeat' + ARROW, 'Add location', 'Add description', 'me@example.com' + ARROW, 'More options'):
             assert t in texts, (t, texts)
+        press(sk)
         g.CardMenu('repeat')
         texts = card_texts(sk)
         assert texts[:7] == ['Repeat', 'Does not repeat', 'Every day', 'Every weekday (Monday to Friday)',
                              'Weekly on Wednesday', 'Monthly on day 3', 'Annually on March 3'], texts
         g.CardPick(4)
         assert 'Weekly on Wednesday' + ARROW in card_texts(sk)
+        press(sk)
         g.CardField('loc')
         assert m.opt('MeasureCreateInput', 'H') == '24'           # one line for a place
         m.vars['CreateTitle'] = 'Aula 3'
@@ -3202,6 +3389,7 @@ def test_event_place_description_repeat_and_calendar():
         g.CardPick(2)
         assert 'Famiglia' + ARROW in card_texts(sk) and 'Aula 3' in card_texts(sk) and 'Portare il libro' in card_texts(sk)
         assert 'Fill Color 11,128,67,255' in m.opt('CrDraft', 'Shape')        # the color of slot 2
+        press(sk)
         g.CardTitle()
         m.vars['CreateTitle'] = 'Lezione nuova'
         g.CreateSubmit()
@@ -3218,6 +3406,7 @@ def test_event_place_description_repeat_and_calendar():
         answer(sk, 'OK new1@google.com')
         # "More options" takes them to Google Calendar's editor
         g.CreateAt(3, zone_y(sk, 3, '15:00'))
+        press(sk)
         g.CardField('loc')
         m.vars['CreateTitle'] = 'Via Roma 1'
         g.CreateSubmit()
@@ -3228,6 +3417,7 @@ def test_event_place_description_repeat_and_calendar():
         assert url.endswith('&location=Via%20Roma%201&recur=RRULE%3AFREQ%3DDAILY"]'), url
         # All day, without a repeat
         g.CreateAllDay(1)
+        press(sk)
         g.CreateType('event')
         m.vars['CreateTitle'] = 'Gita'
         g.CreateSubmit()
@@ -3246,6 +3436,7 @@ def test_edit_event_fields_all_day_and_series():
         g.ItemEdit()
         texts = card_texts(sk)
         assert 'Add location' in texts and 'Add description' in texts and 'All day' in texts, texts
+        press(sk)
         g.CardField('loc')
         m.vars['CreateTitle'] = 'Sala B'
         g.CreateSubmit()

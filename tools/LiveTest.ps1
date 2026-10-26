@@ -8,14 +8,17 @@
     move X Y          put the cursor there
     glide X Y [MS]    move there in 20 steps (Rainmeter sees every step)
     down / up         left button        rdown / rup   right button
+    tap               a quick click (press and release at once, as a touchpad tap)
     wheel N           mouse wheel (120 = one notch up, -120 down)
     type TEXT         type text into the focused window (Unicode, e.g. a title in InputText)
-    key NAME          press a key: enter, esc, tab, back, end, home; ctrl+enter etc. with Ctrl
+    key NAME          press a key: enter, esc, tab, back, delete, end, home, left, right, a-z;
+                      with ctrl+ / shift+ in front (ctrl+a, ctrl+back, shift+home, ctrl+shift+left)
     wait MS           pause
     lua CODE          !CommandMeasure MeasureScript "CODE" (e.g. SetView('month'))
     shot FILE X Y W H screenshot of a skin area, tooltips included
     pos               print the skin position from Rainmeter.ini (did a press move it?)
     fg                print the foreground window (does an InputText box have the keyboard?)
+    log [N]           print the last N lines (default 5) of Rainmeter.log
 
   -Front brings the skin above other windows for the test (!ZPos 2) and back to the
   desktop at the end (!ZPos -2); "shot" then raises the tooltip above the skin again.
@@ -134,6 +137,8 @@ try {
                 $cur = $to }
       'down'  { if ([LiveTest]::Mouse(0x0002, $cur[0], $cur[1], 0) -ne 1) { throw 'SendInput failed' }; Start-Sleep -Milliseconds 80 }
       'up'    { [LiveTest]::Mouse(0x0004, $cur[0], $cur[1], 0) | Out-Null; Start-Sleep -Milliseconds 80 }
+      'tap'   { [LiveTest]::Mouse(0x0002, $cur[0], $cur[1], 0) | Out-Null; [LiveTest]::Mouse(0x0004, $cur[0], $cur[1], 0) | Out-Null
+                Start-Sleep -Milliseconds 80 }
       'rdown' { [LiveTest]::Mouse(0x0008, $cur[0], $cur[1], 0) | Out-Null; Start-Sleep -Milliseconds 80 }
       'rup'   { [LiveTest]::Mouse(0x0010, $cur[0], $cur[1], 0) | Out-Null; Start-Sleep -Milliseconds 80 }
       'wheel' { [LiveTest]::Mouse(0x0800, $cur[0], $cur[1], [int]$arg) | Out-Null; Start-Sleep -Milliseconds 400 }
@@ -142,17 +147,21 @@ try {
       'type'  { foreach ($ch in $arg.ToCharArray()) {
                   [LiveTest]::Key(0, $ch, $false) | Out-Null; [LiveTest]::Key(0, $ch, $true) | Out-Null
                   Start-Sleep -Milliseconds 15 } }
-      'key'   { $ctrl = $arg -like 'ctrl+*'
-                $vk = @{ enter = 0x0D; esc = 0x1B; tab = 0x09; back = 0x08; end = 0x23; home = 0x24 }[($arg -replace '^ctrl\+', '')]
+      'key'   { $mods = @(); $name = $arg
+                while ($name -match '^(ctrl|shift)\+(.+)$') { $mods += @{ ctrl = 0x11; shift = 0x10 }[$Matches[1]]; $name = $Matches[2] }
+                $vk = @{ enter = 0x0D; esc = 0x1B; tab = 0x09; back = 0x08; delete = 0x2E; end = 0x23; home = 0x24
+                         left = 0x25; right = 0x27 }[$name]
+                if (-not $vk -and $name -match '^[a-z]$') { $vk = [int][char]$name.ToUpper() }
                 if (-not $vk) { throw "unknown key: $arg" }
-                if ($ctrl) { [LiveTest]::Key(0x11, [char]0, $false) | Out-Null }
+                foreach ($k in $mods) { [LiveTest]::Key($k, [char]0, $false) | Out-Null }
                 [LiveTest]::Key($vk, [char]0, $false) | Out-Null; [LiveTest]::Key($vk, [char]0, $true) | Out-Null
-                if ($ctrl) { [LiveTest]::Key(0x11, [char]0, $true) | Out-Null }
+                foreach ($k in $mods) { [LiveTest]::Key($k, [char]0, $true) | Out-Null }
                 Start-Sleep -Milliseconds 100 }
       'wait'  { Start-Sleep -Milliseconds ([int]$arg) }
       'lua'   { & $rm '!CommandMeasure' 'MeasureScript' $arg $Config; Start-Sleep -Milliseconds 300 }
       'pos'   { $px, $py = SkinPos; "skin at $px,$py" }
       'fg'    { "foreground: " + [LiveTest]::ForegroundName() + " (Rainmeter: pid " + (Get-Process Rainmeter).Id + ")" }
+      'log'   { $n = if ($arg) { [int]$arg } else { 5 }; Get-Content "$env:APPDATA\Rainmeter\Rainmeter.log" -Tail $n }
       'shot'  { [LiveTest]::RaiseTooltips((Get-Process Rainmeter).Id); Start-Sleep -Milliseconds 100
                 $hbm = [LiveTest]::Capture((PX $v[1]), (PY $v[2]), [int]([double]$v[3] * $scale), [int]([double]$v[4] * $scale))
                 $bmp = [System.Drawing.Image]::FromHbitmap($hbm); [LiveTest]::DeleteObject($hbm) | Out-Null

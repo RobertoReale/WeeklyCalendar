@@ -16,7 +16,11 @@
 // opens a box and deletes it when the box closes), the text of the Rainmeter text box that
 // has the keyboard is copied into it, after a "WC" line (see edit.typedTake in Calendar.lua).
 // When the skin wrote END in it, the cursor goes after the text first: the plugin selects
-// the text it shows, and typing on after a click (e.g. on Task) would replace it.
+// the text it shows, and typing on after a click (e.g. on Task) would replace it. The box is
+// read only while it has the keyboard (the plugin selects the text when it gets it), and a
+// box that becomes empty is copied only when it stays so: a closing box reads as empty for
+// a moment. Ctrl+Backspace, which types a DEL character in the plugin's box (a WinForms text
+// box), deletes the word before the cursor instead, as in other text boxes.
 //
 // And it lets the skin follow the cursor while its resize grip is held: Rainmeter tells a
 // skin only where the mouse was pressed and released. While Resize.txt exists (the skin
@@ -52,15 +56,23 @@ static class ZOrderHelper
     [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr param);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp, uint flags, uint ms, out IntPtr result);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wp, StringBuilder lp, uint flags, uint ms, out IntPtr result);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wp, string lp, uint flags, uint ms, out IntPtr result);
     [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wp, ref COPYDATASTRUCT lp, uint flags, uint ms, out IntPtr result);
     [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
     [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT p);
     [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out RECT r);
+    [DllImport("user32.dll")] static extern bool GetGUIThreadInfo(uint thread, ref GUITHREADINFO info);
 
     [StructLayout(LayoutKind.Sequential)] struct POINT { public int X, Y; }
     [StructLayout(LayoutKind.Sequential)] struct RECT { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] struct COPYDATASTRUCT { public IntPtr dwData; public int cbData; public IntPtr lpData; }
+    [StructLayout(LayoutKind.Sequential)] struct GUITHREADINFO
+    {
+        public int cbSize, flags;
+        public IntPtr hwndActive, hwndFocus, hwndCapture, hwndMenuOwner, hwndMoveSize, hwndCaret;
+        public RECT rcCaret;
+    }
 
     const uint EVENT_SYSTEM_FOREGROUND = 3;
     const uint GW_HWNDPREV = 3;
@@ -68,7 +80,7 @@ static class ZOrderHelper
     const int WS_EX_TOPMOST = 0x8;
     const int GWL_STYLE = -16;
     const int ES_PASSWORD = 0x20;
-    const uint WM_GETTEXT = 0x000D, WM_GETTEXTLENGTH = 0x000E, EM_SETSEL = 0x00B1, EM_SCROLLCARET = 0x00B7;
+    const uint WM_SETTEXT = 0x000C, WM_GETTEXT = 0x000D, WM_GETTEXTLENGTH = 0x000E, EM_GETSEL = 0x00B0, EM_SETSEL = 0x00B1, EM_SCROLLCARET = 0x00B7;
     const uint SMTO_ABORTIFHUNG = 0x2;
     const uint WM_COPYDATA = 0x004A, GA_ROOT = 2;
     static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
@@ -92,6 +104,10 @@ static class ZOrderHelper
     static readonly string noZOrderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NoZOrder.txt");
     static IntPtr typedBox;  // the box and the text last copied
     static string typedText;
+    static IntPtr caretBox;  // the box whose cursor went after its text, and until when to keep it there
+    static string caretText;
+    static int caretUntil;
+    static IntPtr emptyBox;  // a box seen empty once (copied when seen so again)
     static readonly string resizePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resize.txt");
     static IntPtr resizeSkin; // the window of the skin being resized and the bang last sent
     static string resizeSent;
@@ -158,6 +174,48 @@ static class ZOrderHelper
         return sb.ToString();
     }
 
+    // The window that has the keyboard in a thread
+    static IntPtr FocusOf(uint thread)
+    {
+        var info = new GUITHREADINFO();
+        info.cbSize = Marshal.SizeOf(info);
+        return GetGUIThreadInfo(thread, ref info) ? info.hwndFocus : IntPtr.Zero;
+    }
+
+    static void CaretToEnd(IntPtr box, string text)
+    {
+        IntPtr r;
+        SendMessageTimeout(box, EM_SETSEL, new IntPtr(text.Length), new IntPtr(text.Length), SMTO_ABORTIFHUNG, 200, out r);
+        SendMessageTimeout(box, EM_SCROLLCARET, IntPtr.Zero, IntPtr.Zero, SMTO_ABORTIFHUNG, 200, out r);
+    }
+
+    // Ctrl+Backspace typed DEL characters: each deletes itself and the word before it
+    static string DeleteWords(IntPtr box, string text)
+    {
+        int caret = 0;
+        for (int i = text.IndexOf('\x7f'); i >= 0; i = text.IndexOf('\x7f'))
+        {
+            int j = i;
+            while (j > 0 && char.IsWhiteSpace(text[j - 1])) j--;
+            while (j > 0 && !char.IsWhiteSpace(text[j - 1])) j--;
+            text = text.Substring(0, j) + text.Substring(i + 1);
+            caret = j;
+        }
+        IntPtr r;
+        SendMessageTimeout(box, WM_SETTEXT, IntPtr.Zero, text, SMTO_ABORTIFHUNG, 200, out r);
+        SendMessageTimeout(box, EM_SETSEL, new IntPtr(caret), new IntPtr(caret), SMTO_ABORTIFHUNG, 200, out r);
+        return text;
+    }
+
+    // True when all the text of the box is selected
+    static bool SelectsAll(IntPtr box, string text)
+    {
+        IntPtr sel;
+        if (text.Length == 0 || SendMessageTimeout(box, EM_GETSEL, IntPtr.Zero, IntPtr.Zero, SMTO_ABORTIFHUNG, 200, out sel) == IntPtr.Zero) return false;
+        long s = sel.ToInt64();
+        return (s & 0xFFFF) == 0 && ((s >> 16) & 0xFFFF) == text.Length;
+    }
+
     static void CopyTyped()
     {
         if (rainmeterPid == 0 || !File.Exists(typedPath))
@@ -167,23 +225,35 @@ static class ZOrderHelper
         }
         IntPtr fg = GetForegroundWindow();
         uint pid;
-        GetWindowThreadProcessId(fg, out pid);
+        uint thread = GetWindowThreadProcessId(fg, out pid);
         if (fg == IntPtr.Zero || pid != rainmeterPid || ClassOf(fg) == "RainmeterMeterWindow") return;
         IntPtr box = TextBoxOf(fg);
-        if (box == IntPtr.Zero) return;
+        if (box == IntPtr.Zero || FocusOf(thread) != box) return;
         string text = TextOf(box);
         if (text == null) return;
+        if (text.IndexOf('\x7f') >= 0) text = DeleteWords(box, text);
         try
         {
             // (no copy in it: the skin opened another box since the last one)
             string had = File.ReadAllText(typedPath);
             bool copied = had.StartsWith("WC\n");
-            if (box == typedBox && text == typedText && copied) return;
             if (had == "END")
             {
-                IntPtr r;
-                SendMessageTimeout(box, EM_SETSEL, new IntPtr(text.Length), new IntPtr(text.Length), SMTO_ABORTIFHUNG, 200, out r);
-                SendMessageTimeout(box, EM_SCROLLCARET, IntPtr.Zero, IntPtr.Zero, SMTO_ABORTIFHUNG, 200, out r);
+                CaretToEnd(box, text);
+                caretBox = box;
+                caretText = text;
+                caretUntil = Environment.TickCount + 250;
+            }
+            else if (box == caretBox && text == caretText && Environment.TickCount - caretUntil < 0 && SelectsAll(box, text))
+            {
+                CaretToEnd(box, text); // the plugin selected it again
+            }
+            if (box == typedBox && text == typedText && copied) return;
+            if (text != "") emptyBox = IntPtr.Zero;
+            else if (copied && had.Length > 3 && box != emptyBox)
+            {
+                emptyBox = box;
+                return;
             }
             byte[] data = new UTF8Encoding(false).GetBytes("WC\n" + text);
             // Truncate: never creates the file the skin has deleted

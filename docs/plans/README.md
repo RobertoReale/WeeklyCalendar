@@ -75,8 +75,17 @@ These are the traps of this codebase. Each one has already caused a bug once.
   `CardField()`); `layoutCard` sets its size, font size and `InputLimit` for each. The 4.5 plugin
   trims what was typed, inserts a new line with Ctrl+Enter, selects the text it shows and drops
   the text on a dismissal. The helper of `@Resources\ZOrder` copies the text of the open box into
-  `ZOrder\Typed.txt` (`edit.typedStart` / `edit.typedTake`), so a dismissal keeps it; a click on
-  Save can be handled before the dismissal (`edit.takeOpenBox`). The helper builds once per exe
+  `ZOrder\Typed.txt` (`edit.typedStart` / `edit.typedTake`), so a dismissal keeps it. The plugin
+  checks its box only every 44 ms, so a quick click (a touchpad tap) on the card is handled
+  *before* the dismissal: every click action of a form starts with `edit.takeOpenBox`, which puts
+  the text of the open box in its field. The plugin opens no box of a measure while one is open or
+  while it runs that box's actions: `edit.box` is the box it has open (`edit.openBox` gives each
+  one a number, which its `Command1` / `OnDismissAction` give back), and a box asked for meanwhile
+  opens with `[!Delay 50]` after the close (`CardBoxes`). A box that closes at once without ever
+  getting the keyboard (the plugin logs an `ObjectDisposedException`) opens again, once. The
+  helper reads a box only while it has the keyboard, copies an emptied box only when it stays
+  empty (a closing box reads as empty for a moment) and turns Ctrl+Backspace (a DEL character
+  in the WinForms box) into deleting the word before the cursor. It builds once per exe
   name: bump the number in `launch.cmd` when `ZOrderHelper.cs` changes.
 - **The size changes at runtime** (resize grip, `SetSize`: `edit.applySize` sets `cfg.W` / `cfg.H`
   and lays out again, no refresh). Place everything from `cfg.W` / `cfg.H` in the Lua: an option
@@ -97,6 +106,9 @@ These are the traps of this codebase. Each one has already caused a bug once.
   screenshot of a box in a run without `-Front`. Click only on spots known to be empty
   (a click on an event opens it in the browser); close cards with `lua CardClose()`.
   Measure with a temporary wrapper of the entry points (`os.clock`, `!Log`), never shipped.
+  A `lua` step while a box is open can take the keyboard from it (it starts `Rainmeter.exe`):
+  read the state after the box has closed. `tap` is a quick click (it reaches the skin before the
+  box's dismissal).
 - **Ship checklist:** Settings.inc comment for any new setting (with its default),
   README (Features, Configuration, Controls table), `Version=` in `[Metadata]`, tests.
   Then refresh the real skin
