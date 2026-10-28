@@ -11,7 +11,7 @@
     tap               a quick click (press and release at once, as a touchpad tap)
     wheel N           mouse wheel (120 = one notch up, -120 down)
     type TEXT         type text into the focused window (Unicode, e.g. a title in InputText)
-    key NAME          press a key: enter, esc, tab, back, delete, end, home, left, right, a-z;
+    key NAME          press a key: enter, esc, tab, back, delete, end, home, left, right, up, down, a-z;
                       with ctrl+ / shift+ in front (ctrl+a, ctrl+back, shift+home, ctrl+shift+left)
     wait MS           pause
     lua CODE          !CommandMeasure MeasureScript "CODE" (e.g. SetView('month'))
@@ -150,7 +150,7 @@ try {
       'key'   { $mods = @(); $name = $arg
                 while ($name -match '^(ctrl|shift)\+(.+)$') { $mods += @{ ctrl = 0x11; shift = 0x10 }[$Matches[1]]; $name = $Matches[2] }
                 $vk = @{ enter = 0x0D; esc = 0x1B; tab = 0x09; back = 0x08; delete = 0x2E; end = 0x23; home = 0x24
-                         left = 0x25; right = 0x27 }[$name]
+                         left = 0x25; right = 0x27; up = 0x26; down = 0x28 }[$name]
                 if (-not $vk -and $name -match '^[a-z]$') { $vk = [int][char]$name.ToUpper() }
                 if (-not $vk) { throw "unknown key: $arg" }
                 foreach ($k in $mods) { [LiveTest]::Key($k, [char]0, $false) | Out-Null }

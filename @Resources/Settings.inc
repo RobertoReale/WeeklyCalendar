@@ -170,6 +170,16 @@ UndoSeconds=8
 ;  default 60).
 NewEventMinutes=60
 
+;  PlaceSuggestions=1: while you type the place of an event, a list under it suggests addresses
+;  and places, as in Google Calendar (click one, or Up / Down and Enter; Esc hides the list).
+;  They come from OpenStreetMap through the free Photon service (photon.komoot.io): what you type
+;  in the place box is sent there, nothing else. 0 = off (nothing is sent).
+PlaceSuggestions=1
+;  PlaceSearchNear: where places are looked for first. Empty (default) = the town most of your
+;  events' addresses are in (else your Windows country); or a town (Milano) or coordinates
+;  (45.4642,9.19).
+PlaceSearchNear=
+
 ;  Theme: light or dark (Google Calendar Material 3 colors).
 Theme=light
 

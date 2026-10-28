@@ -3451,6 +3451,186 @@ def test_event_place_description_repeat_and_calendar():
         sk.close()
 
 
+def test_place_suggestions():
+    # While the place of an event is typed, the ZOrder helper looks for places (Places.txt
+    # says which box) and gives them back in PlacesOut.txt (PlaceList): a list under the field
+    sk = edit_skin(tasks='tasks_v2.ics')
+    try:
+        m, g = sk.mock, sk.g
+        zdir = os.path.join(sk.dir, '@Resources', 'ZOrder')
+        os.makedirs(zdir)
+        places, out, typed = (os.path.join(zdir, f) for f in ('Places.txt', 'PlacesOut.txt', 'Typed.txt'))
+        m.vars['CURRENTCONFIG'] = 'WeeklyCalendar'
+        add_event(sk, 1, 'BEGIN:VEVENT\nUID:far1@google.com\nDTSTART:20270201T090000Z\nDTEND:20270201T100000Z\n'
+                         'SUMMARY:Visita\nLOCATION:Viale Monza\\, 325\\, 20126 Milano MI\\, Italy\nEND:VEVENT\n'
+                         'BEGIN:VEVENT\nUID:far2@google.com\nDTSTART:20270202T090000Z\nDTEND:20270202T100000Z\n'
+                         'SUMMARY:Gara\nLOCATION:Autodromo\\, 20900 Monza MB\\, Italy\nEND:VEVENT\n'
+                         'BEGIN:VEVENT\nUID:far3@google.com\nDTSTART:20270203T090000Z\nDTEND:20270203T100000Z\n'
+                         'SUMMARY:Cena\nLOCATION:Viale Luigi Majno\\, 12\\, 20129 Milano MI\\, Italy\nEND:VEVENT\n')
+        g.Reload(1)
+
+        def box():
+            return sk.lua.eval('_WC.edit.box')
+
+        def answer(n, rows):
+            open(out, 'w', encoding='utf-8', newline='').write('WC %d\n' % n + '\n'.join('\t'.join(r) for r in rows))
+            g.PlaceList(n)
+
+        def shown_rows():
+            return [(m.opt('PlRow%d' % k, 'Text'), m.opt('PlSub%d' % k, 'Text'))
+                    for k in range(1, 6) if m.shown('PlRow%d' % k)]
+
+        rows = [('Viale Romagna', 'Milan, Lombardy, Italy', 'Viale Romagna, 20133 Milan, Italy'),
+                ('Viale Romagna', 'Rozzano, Milan, Italy', 'Viale Romagna, 20089 Rozzano, Italy'),
+                ('Esselunga', 'Via Mercato, 1, Milan, Italy', 'Esselunga, Via Mercato, 1, 20121 Milan, Italy')]
+        g.CreateAt(2, zone_y(sk, 2, '16:00'))
+        assert not os.path.exists(places)                 # the title box: no places
+        press(sk)
+        g.CardField('loc')
+        n = box().n
+        # where to look first: the town most of the events' addresses are in
+        assert open(places, encoding='utf-8').read() == 'WeeklyCalendar\n%d\nen\nMilano, Italy' % n
+        answer(n, rows)
+        assert m.shown('PlBox') and shown_rows() == [r[:2] for r in rows], shown_rows()
+        # the field being typed has no tooltip: it would cover the list
+        loc_field = [k for k in range(1, 21) if "CardField('loc')" in (m.opt('CrTx%d' % k, 'LeftMouseUpAction') or '')]
+        assert len(loc_field) == 1 and sk.tip('CrTx%d' % loc_field[0]) == ''
+        assert m.opt('PlFoot', 'Text') == '© OpenStreetMap contributors' and m.shown('PlFoot')
+        # above the field when it does not fit under it (the skin is 800 high), inside the
+        # skin, the rows one under the other
+        def list_box():
+            return [int(m.opt('PlBox', o)) + d for o, d in (('X', 12), ('Y', 12), ('W', -24), ('H', -24))]
+
+        def field():
+            return [int(m.opt('MeasureCreateInput', o)) for o in ('X', 'Y', 'W', 'H')]
+
+        bx, by, bw, bh = list_box()
+        fx, fy, fw, fh = field()
+        assert by + bh <= fy - 6 and by >= 8 and bh == 6 + 3 * 46 + 24, (list_box(), field())
+        assert bx == fx - 16 and bw == fw + 32
+        assert int(m.opt('PlRow2', 'Y')) - int(m.opt('PlRow1', 'Y')) == 46 and int(m.opt('PlRow1', 'Y')) == by + 6
+        assert m.opt('PlRow1', 'LeftMouseUpAction') is None    # (from the .ini: PlacePick(1))
+        # Up / Down in the box (the helper), the mouse over a row: that row is drawn chosen
+        empty = 'Rectangle 0,0,1,1 | Fill Color 0,0,0,0 | StrokeWidth 0'
+        assert m.opt('PlBox', 'Shape5') == empty
+        g.PlaceSel(n, 2)
+        assert 'Fill Color 239,241,241,255' in m.opt('PlBox', 'Shape5') and ',' + str(12 + 6 + 46) + ',' in m.opt('PlBox', 'Shape5')
+        g.PlaceHover(1)
+        assert ',' + str(12 + 6) + ',' in m.opt('PlBox', 'Shape5'), m.opt('PlBox', 'Shape5')
+        g.PlaceHover(-1)
+        g.PlaceSync()
+        assert m.opt('PlBox', 'Shape5') == empty
+        g.PlaceList(n - 1)                                 # (an older box: ignored)
+        assert m.shown('PlBox')
+        # A quick tap on a row: before the plugin closes the box
+        open(typed, 'w', encoding='utf-8', newline='').write('WC\nviale rom')
+        g.PlacePick(2)
+        assert not m.shown('PlBox') and not m.shown('PlRow1') and not os.path.exists(places)
+        assert 'Viale Romagna, 20089 Rozzano, Italy' in card_texts(sk), card_texts(sk)
+        g.CreateInputClosed(n)                             # the close that follows changes nothing
+        assert 'Viale Romagna, 20089 Rozzano, Italy' in card_texts(sk)
+
+        # A slower click: the press closes the box, the list stays for the release
+        g.CardField('loc')
+        n = box().n
+        answer(n, rows)
+        g.PlacePress(3)
+        open(typed, 'w', encoding='utf-8', newline='').write('WC\nesse')
+        g.CreateInputClosed(n)
+        assert m.shown('PlBox') and 'esse' in card_texts(sk)
+        g.PlaceExpire(n)                                   # (still pressed: it stays)
+        assert m.shown('PlBox')
+        g.PlacePick(3)
+        assert not m.shown('PlBox') and sk.lua.eval('_WC.edit.card.loc') == 'Esselunga, Via Mercato, 1, 20121 Milan, Italy'
+
+        # Esc or a click elsewhere: the list goes, the text typed stays
+        g.CardField('loc')
+        n = box().n
+        answer(n, rows)
+        open(typed, 'w', encoding='utf-8', newline='').write('WC\nvia roma')
+        g.CreateInputClosed(n)
+        assert m.shown('PlBox')
+        g.PlaceExpire(n)
+        assert not m.shown('PlBox') and 'via roma' in card_texts(sk)
+        # a click on another field hides it at once
+        g.CardField('loc')
+        n = box().n
+        answer(n, rows)
+        g.CardField('desc')
+        assert not m.shown('PlBox') and not os.path.exists(places)
+        g.CreateInputClosed(n)
+        g.CardBoxes()                                      # (the desc box opens after it)
+        g.CreateInputClosed(box().n)
+        # Enter (the helper put the chosen place in the box) keeps it; the list goes
+        g.CardField('loc')
+        n = box().n
+        answer(n, rows)
+        m.vars['CreateTitle'] = 'Viale Romagna, 20133 Milan, Italy'
+        g.CreateSubmit(n)
+        assert not m.shown('PlBox') and 'Viale Romagna, 20133 Milan, Italy' in card_texts(sk)
+        # the helper found nothing (or Esc): no list
+        g.CardField('loc')
+        n = box().n
+        answer(n, rows)
+        answer(n, [])
+        assert not m.shown('PlBox')
+        g.CreateInputClosed(n)
+        # saved with the place chosen
+        g.CardTitle()
+        m.vars['CreateTitle'] = 'Spesa'
+        g.CreateSubmit()
+        assert task_params(sk)[-1].endswith('&location=' + enc('Viale Romagna, 20133 Milan, Italy')), task_params(sk)[-1]
+        # Under the field where it fits; the list goes with the card
+        g.CreateAt(3, zone_y(sk, 3, '10:00'))
+        press(sk)
+        g.CardField('loc')
+        answer(box().n, rows)
+        bx, by, bw, bh = list_box()
+        fx, fy, fw, fh = field()
+        assert by == fy + fh + 6 and by + bh <= 800 - 8, (list_box(), field())
+        g.CardClose()
+        assert not m.shown('PlBox') and not m.shown('PlRow1')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_place_suggestions_settings():
+    # PlaceSuggestions=0: nothing is looked for; PlaceSearchNear says where to look first
+    sk = edit_skin(tasks='tasks_v2.ics', PlaceSuggestions=0)
+    try:
+        m, g = sk.mock, sk.g
+        zdir = os.path.join(sk.dir, '@Resources', 'ZOrder')
+        os.makedirs(zdir)
+        g.CreateAt(2, zone_y(sk, 2, '16:00'))
+        press(sk)
+        g.CardField('loc')
+        assert not os.path.exists(os.path.join(zdir, 'Places.txt'))
+        n = sk.lua.eval('_WC.edit.box').n
+        open(os.path.join(zdir, 'PlacesOut.txt'), 'w', encoding='utf-8').write('WC %d\nA\tB\tA, B' % n)
+        g.PlaceList(n)
+        assert not m.shown('PlBox')
+        sk.check_clean()
+    finally:
+        sk.close()
+    sk = edit_skin(tasks='tasks_v2.ics', PlaceSearchNear=' 45.46,9.19 ', Language='it')
+    try:
+        m, g = sk.mock, sk.g
+        zdir = os.path.join(sk.dir, '@Resources', 'ZOrder')
+        os.makedirs(zdir)
+        g.CreateAt(2, zone_y(sk, 2, '16:00'))
+        press(sk)
+        g.CardField('loc')
+        n = sk.lua.eval('_WC.edit.box').n
+        assert open(os.path.join(zdir, 'Places.txt'), encoding='utf-8').read().endswith('\n%d\nit\n45.46,9.19' % n)
+        open(os.path.join(zdir, 'PlacesOut.txt'), 'w', encoding='utf-8').write('WC %d\nA\tB\tA, B' % n)
+        g.PlaceList(n)
+        assert m.opt('PlFoot', 'Text') == '© contributori di OpenStreetMap'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_duplicate_events_and_tasks():
     # "Duplicate" in the details: the create form filled in with the item, as in Google Calendar
     sk = edit_skin(tasks='tasks_v2.ics')

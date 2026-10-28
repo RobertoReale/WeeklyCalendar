@@ -21,6 +21,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Google Tasks**: Tasks appear like in Google Calendar (○ open, ✓ completed): in the all-day row, or at their time when they have one. Click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day. Each task shows its list and its details (notes); a new or edited task can go to any of your lists.
 - **Holidays & Birthdays**: Public holidays come from Google's holiday calendars; your contacts' birthdays, which Google's iCal address leaves out, come from the Tasks script.
 - **Create Events and Tasks**: Click an empty spot of the hours (an event at that time), of the all-day row or a day number (a task), or the **+** in the toolbar: a card like Google Calendar's opens, you type the title and press Enter. An event can also get a place, a description, a repeat (every day, weekday, week, month, year) and a calendar; a task its details and its list. The item appears at once and Google saves it.
+- **Place Suggestions**: While you type the place of an event, addresses and places show under it as in Google Calendar (from OpenStreetMap, nearest first); pick one with the mouse or with ↑ / ↓ and Enter. `PlaceSuggestions=0` turns them off.
 - **Details, Edit, Duplicate, Delete**: Click (or right-click) an event or task for its details; edit its title, date and times, place and description (all day or not), a task's details and list, one occurrence or every occurrence of a recurring event; duplicate it (a create form filled in with it, as in Google Calendar); or delete it (one occurrence or the whole series) with a few seconds to undo.
 - **Drag Events**: Drag an event to another time or day (snapped to 15 minutes, like Google Calendar), or an all-day event to another day; in the month view, events move to another day and keep their time. A click that slips a few pixels stays a click.
 - **Open in Google Calendar**: Middle-click an event to open it in Google Calendar (the card has *Open in Google* and *Open link* too). With `ClickAction=calendar` a click opens it there instead (a task opens its day) and the middle click opens its video call or link (Meet, Zoom, Teams...); `ClickAction=link` swaps the two.
@@ -187,6 +188,16 @@ How it works:
   A title is needed: an empty one, or one of spaces and invisible characters, is not saved (the
   card says *Not saved: add a title*). What you type is tidied up: spaces at the ends, control
   characters and line breaks in a title or a place are dropped.
+- **Place suggestions**: while you type a place (3 letters or more), a list under it shows the
+  addresses and places that match, the nearest first, as in Google Calendar: click one, or choose it
+  with **↑ / ↓** and press **Enter**; **Esc** hides the list (a second Esc closes the box). The place
+  is kept as an address ("Viale Romagna, 12, 20133 Milano, Italia"). They come from
+  [OpenStreetMap](https://www.openstreetmap.org/copyright) through the free
+  [Photon](https://photon.komoot.io/) service, searched by the helper of `@Resources\ZOrder` a
+  moment after you stop typing: what you type in the place box is sent to it, nothing else. "Nearest"
+  means near the town most of your events' addresses are in, or your Windows country; set
+  `PlaceSearchNear` in `Settings.inc` to a town or to coordinates to choose it, and
+  `PlaceSuggestions=0` to turn the suggestions off (nothing is sent then).
 - **Details**: right-click an event or task. Holiday calendars, birthdays, public addresses, other
   providers and invitations organised by someone else are read-only; the card says why.
 - **Edit**: *Edit* in the card; type the new title and press Enter (an emptied title keeps the old one), or change the date (and the
@@ -367,7 +378,8 @@ desktop. It uses no CPU while idle and closes by itself when Rainmeter exits.
 The same helper keeps what you type in a card when you click *Save* (or another part of the
 card) instead of pressing Enter: Rainmeter's text box gives the skin its text only on Enter.
 It also makes Ctrl+Backspace delete the word before the cursor (Rainmeter's text box would type
-a small square instead).
+a small square instead), and it looks for the places suggested while you type the place of an
+event (`PlaceSuggestions`).
 While you drag the resize grip it also tells the skin where the cursor is, so the outline of
 the new size follows it: Rainmeter tells a skin only where the mouse was pressed and released.
 It always runs; `KeepDialogsOnTop=0` only turns off its handling of dialogs.
@@ -394,6 +406,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Move a Task** | Drag it to another day (3-day, week and month views); right-click or leave the skin to cancel |
 | **Create** | Click an empty spot of the hours (event), of the all-day row or a day number (task), or **+** in the toolbar; type the title, Enter or *Save* (`ClickToCreate=0` / `ShowCreateButton=0` turn them off) |
 | **Place, Description, Details** | Click *Add location*, *Add description* or *Add details* in the card, type, Enter (Ctrl+Enter: a new line) |
+| **Pick a Suggested Place** | While typing a place: click a suggestion, or ↑ / ↓ then Enter; Esc hides the list (`PlaceSuggestions=0` turns it off) |
 | **Repeat, Calendar, Task List** | Click the choice (▾) in the card and pick another; or scroll over it |
 | **Change Date / Time in the Card** | Click the start or end and type it (`9`, `930`, `9:30`, `9:30 pm`), Enter; or mouse wheel over the date, start or end |
 | **Details, Edit, Duplicate, Delete** | Click or right-click an event or task; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`; `RightClickCard=0` shows the skin menu instead) |

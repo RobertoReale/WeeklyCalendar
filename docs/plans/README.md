@@ -89,6 +89,15 @@ These are the traps of this codebase. Each one has already caused a bug once.
   `Typed.txt` or `Resize.txt` exists (a `FileSystemWatcher` wakes it, `Check()` too every 250 ms):
   it used to run, and hit the disk, all the time. It builds once per exe
   name: bump the number in `launch.cmd` when `ZOrderHelper.cs` changes.
+- **Place suggestions** (`PlaceSuggestions`): `edit.openBox` of the place field writes
+  `ZOrder\Places.txt` (config, box number, language, `PlaceSearchNear` or `edit.homeTown()`);
+  `edit.typedTake` deletes it. The helper searches Photon a moment after the typing stops (one
+  request at a time, a cache, a longer wait after a refusal or no answer), writes `PlacesOut.txt`
+  and calls `PlaceList(n)`. Its keyboard hook (a thread of its own, set only while places show)
+  turns Up / Down into `PlaceSel`, puts the chosen place in the box on Enter and hides the list on
+  Esc. A press on a row closes the box before its release: `PlacePress` keeps the list
+  (`edit.places.pressed` / `closing`) until `PlacePick` or `PlaceExpire`. The field being typed has
+  no tooltip (it would cover the list).
 - **The size changes at runtime** (resize grip, `SetSize`: `edit.applySize` sets `cfg.W` / `cfg.H`
   and lays out again, no refresh). Place everything from `cfg.W` / `cfg.H` in the Lua: an option
   written with `#Width#` / `#Height#` in the `.ini` keeps the size the skin started with. The
