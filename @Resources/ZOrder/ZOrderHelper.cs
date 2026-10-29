@@ -27,6 +27,9 @@
 // creates it, with its config name, when the grip is pressed), the cursor position over the
 // skin's window is sent to Calendar.lua (ResizeMove) the way Rainmeter.exe sends bangs.
 //
+// And it tells the skin when a drag of its window ends (Rainmeter tells a skin nothing then,
+// and its KeepOnScreen lets the skin end up under the taskbar): KeepInWorkArea puts it back.
+//
 // And it suggests places while the place of an event is typed, as Google Calendar does:
 // while Places.txt exists (the skin writes it when it opens that box), what is typed there
 // is searched on photon.komoot.io (OpenStreetMap data) a moment after the typing stops, and
@@ -73,6 +76,7 @@ static class ZOrderHelper
     [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
     [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT p);
     [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hwnd, StringBuilder s, int n);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out RECT r);
     [DllImport("user32.dll")] static extern bool GetGUIThreadInfo(uint thread, ref GUITHREADINFO info);
     [DllImport("user32.dll")] static extern IntPtr SetWindowsHookEx(int id, KeyboardProc proc, IntPtr mod, uint thread);
@@ -97,6 +101,7 @@ static class ZOrderHelper
     }
 
     const uint EVENT_SYSTEM_FOREGROUND = 3;
+    const uint EVENT_SYSTEM_MOVESIZEEND = 0x000B;
     const uint GW_HWNDPREV = 3;
     const int GWL_EXSTYLE = -20;
     const int WS_EX_TOPMOST = 0x8;
@@ -119,6 +124,7 @@ static class ZOrderHelper
 
     static readonly List<IntPtr> lowered = new List<IntPtr>();
     static WinEventProc hookProc; // referenced so the delegate is not garbage collected
+    static WinEventProc movedProc;
     static int missing;
     static uint rainmeterPid;
 
@@ -157,6 +163,8 @@ static class ZOrderHelper
             if (!first) return;
             hookProc = (h, e, hwnd, o, c, t, tm) => Check();
             SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, hookProc, 0, 0, 0);
+            movedProc = (h, e, hwnd, o, c, t, tm) => { if (o == 0) Moved(hwnd); };
+            SetWinEventHook(EVENT_SYSTEM_MOVESIZEEND, EVENT_SYSTEM_MOVESIZEEND, IntPtr.Zero, movedProc, 0, 0, 0);
             var timer = new System.Windows.Forms.Timer();
             timer.Interval = 250;
             timer.Tick += delegate { Check(); };
@@ -354,6 +362,28 @@ static class ZOrderHelper
         resizeSent = bang;
         Bang(bang);
         return true;
+    }
+
+    // A move (or a resize) of a window ended: when it is this skin's (Rainmeter titles a skin's
+    // window with the path of its .ini, which is in the skin's folder, two above this helper),
+    // the skin checks it is still above the taskbar
+    static readonly string skinDir = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\.."));
+
+    static void Moved(IntPtr hwnd)
+    {
+        uint pid;
+        GetWindowThreadProcessId(hwnd, out pid);
+        if (pid == 0 || pid != rainmeterPid || ClassOf(hwnd) != "RainmeterMeterWindow") return;
+        var sb = new StringBuilder(520);
+        GetWindowText(hwnd, sb, sb.Capacity);
+        string dir;
+        try { dir = Path.GetDirectoryName(sb.ToString()); }
+        catch (ArgumentException) { return; }
+        catch (PathTooLongException) { return; }
+        if (dir == null || !string.Equals(dir.TrimEnd('\\'), skinDir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return;
+        string config = Path.GetFileName(skinDir.TrimEnd('\\'));
+        if (config == "" || config.Contains("\"")) return;
+        Bang(string.Format("!CommandMeasure MeasureScript \"KeepInWorkArea()\" \"{0}\"", config));
     }
 
     // As Rainmeter.exe passes a bang to the running Rainmeter

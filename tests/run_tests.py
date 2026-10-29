@@ -61,6 +61,20 @@ def ini_sections():
     return set(re.findall(r'^\[([^\]]+)\]', text, re.M))
 
 
+def ini_meters():
+    """{meter: (group, hidden at load)} of WeeklyCalendar.ini (groups come from StyCal / StyMini)."""
+    text = open(INI_FILE, encoding='utf-8-sig').read()
+    out = {}
+    for sec in re.split(r'(?m)^(?=\[)', text):
+        m = re.match(r'\[([^\]]+)\]', sec)
+        if not m or not re.search(r'(?m)^Meter=', sec):
+            continue
+        style = (re.search(r'(?m)^MeterStyle=(.*)$', sec) or re.search('()', '')).group(1) or ''
+        group = 'Cal' if 'StyCal' in style else ('Mini' if 'StyMini' in style else None)
+        out[m.group(1)] = (group, 'StyHidden' in style or bool(re.search(r'(?m)^Hidden=1', sec)))
+    return out
+
+
 # Harmless press action of every item: without one, Rainmeter drags the whole skin
 NO_DRAG = '[!SetVariable WCPressed 1]'
 
@@ -104,6 +118,11 @@ class MockSkin:
             self.visible[a[1]] = True
         elif name == '!HideMeter':
             self.visible[a[1]] = False
+        elif name in ('!HideMeterGroup', '!ShowMeterGroup'):
+            meters = [k for k, (g, _) in ini_meters().items() if g == a[1]]
+            assert meters, 'no meter in the group %s' % a[1]
+            for k in meters:
+                self.visible[k] = name == '!ShowMeterGroup'
         elif name == '!Log':
             self.logs.append(tuple(a[1:]))
 
@@ -244,6 +263,8 @@ class Skin:
             'ClickAction': 'calendar',  # (test_click_shows_the_card checks card)
             'Language': 'en', 'StartHour': '8', 'EndHour': '20', 'AutoScroll': '1',
             'AutoScrollHour': '14', 'FirstDay': '1',
+            # the wallpaper settings as before 1.19 (their own tests turn them on)
+            'BgOpacity': '100', 'IdleOpacity': '100', 'HideEmptyHours': '0',
         })
         variables.update({k: str(v) for k, v in overrides.items()})
         self.mock = MockSkin(variables, ini_sections())
@@ -823,7 +844,8 @@ def test_pressing_an_item_does_not_move_the_skin():
         if m and re.search(r'(?m)^LeftMouseUpAction=', sec) and not m.group(1).startswith('Drag') \
                 and not re.search(r'(?m)^LeftMouseDownAction=', sec) and 'StyItem' not in sec:
             bad.append(m.group(1))
-    assert bad == [], bad
+    # (the tile of the minimized skin is dragged like the skin: a click opens the calendar)
+    assert bad == ['MiniBg'], bad
 
 
 def test_lua_file_is_utf16_with_bom():
@@ -4152,12 +4174,17 @@ def test_narrow_toolbar_keeps_the_sync_text_clear():
         text = m.opt('TbSync', 'Text')
         return int(m.opt('TbSync', 'X')) - (len(text) * 8 * 4 / 3 * 0.52 + 8)
 
-    for width, week, text in ((1400, True, 'Updated at 12:00'), (844, False, 'Updated at 12:00')):
-        sk = Skin(Width=width)
+    # (the minimize button takes 40 px)
+    for width, week, text, btn in ((1400, True, 'Updated at 12:00', 1), (844, False, 'Updated at 12:00', 0),
+                                   (884, False, 'Updated at 12:00', 1), (844, False, '', 1)):
+        sk = Skin(Width=width, ShowMinimizeButton=btn)
         try:
             sk.start(2027, 3, 3, 12)
             sk.g.Reload(1)
             m = sk.mock
+            assert m.shown('BtnMini') == bool(btn), width
+            if btn:
+                assert int(m.opt('ViewSegBg', 'X')) + 8 <= int(m.opt('BtnMini', 'X')), width
             assert m.shown('TbWeek') == week, width
             assert m.opt('TbSync', 'Text') == text, (width, m.opt('TbSync', 'Text'))
             right = (int(m.opt('TbWeekBg', 'X')) + int(m.opt('TbWeekBg', 'W'))) if week else \
@@ -4167,7 +4194,7 @@ def test_narrow_toolbar_keeps_the_sync_text_clear():
         finally:
             sk.close()
     # Even narrower with a problem: the notice stays, the time goes
-    sk = Skin(Width=800)
+    sk = Skin(Width=800, ShowMinimizeButton=0)
     try:
         sk.start(2027, 3, 3, 12)
         sk.g.Reload(1)
@@ -4211,6 +4238,292 @@ def test_sizes_from_the_context_menu():
         g.ResetSize()
         assert open(private, 'rb').read() == b'[Variables]\r\nIcalUrl1=https://x\r\nView=week\r\nTasksToken=abc\r\n'
         assert m.bangs[-1] == ['!Refresh']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_a_skin_dragged_under_the_taskbar_comes_back_above_it():
+    # KeepOnScreen stops at the screen (864 high), the work area ends at the taskbar (816)
+    sk = Skin(WORKAREAX='0', WORKAREAY='0', WORKAREAWIDTH='1536', WORKAREAHEIGHT='816',
+              SCREENAREAX='0', SCREENAREAY='0', SCREENAREAWIDTH='1536', SCREENAREAHEIGHT='864',
+              CURRENTCONFIGX='100', CURRENTCONFIGY='0')
+    try:
+        sk.start(2027, 3, 3, 12)
+        m, g = sk.mock, sk.g
+        W, H = int(m.vars['Width']), int(m.vars['Height'])
+        g.KeepInWorkArea()
+        assert not [b for b in m.bangs if b[0] == '!Move']
+        # Dropped with its bottom under the taskbar: back when the drag ends (the ZOrder
+        # helper calls KeepInWorkArea), or by Update
+        m.vars['CURRENTCONFIGY'] = str(864 - H)
+        g.KeepInWorkArea()
+        assert ['!Move', 100, 816 - H] in m.bangs
+        m.bangs.clear()
+        m.vars['CURRENTCONFIGX'] = str(1536 - W + 30)
+        g.Update()
+        assert ['!Move', 1536 - W, 816 - H] in m.bangs
+        # On another monitor (its centre off this screen) it stays where it was put
+        m.bangs.clear()
+        m.vars['CURRENTCONFIGX'], m.vars['CURRENTCONFIGY'] = '1700', '900'
+        g.KeepInWorkArea()
+        g.Update()
+        assert not [b for b in m.bangs if b[0] == '!Move']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def tile_rows(m):
+    """What the tile of the minimized skin lists: [(time, title)] and the notes."""
+    out = []
+    for name in ('MiniNote', 'MiniHdr'):
+        if m.shown(name):
+            out.append((name, int(m.opt(name, 'Y')), m.opt(name, 'Text')))
+    for k in range(1, 6):
+        if m.shown('MiniTl%d' % k):
+            out.append((m.opt('MiniTm%d' % k, 'Text'), int(m.opt('MiniTl%d' % k, 'Y')), m.opt('MiniTl%d' % k, 'Text')))
+    return [(a, c) for a, _, c in sorted(out, key=lambda r: r[1])]
+
+
+def test_minimize_to_a_tile_and_back():
+    sk = Skin(WORKAREAX='0', WORKAREAY='0', WORKAREAWIDTH='1536', WORKAREAHEIGHT='816',
+              CURRENTCONFIGX='100', CURRENTCONFIGY='0', MiniEvents='3', ShowMinimizeButton='1')
+    try:
+        sk.start(2027, 3, 3, 12)  # Wednesday: "Ending soon" 11:30-12:30, "Late dinner" 22:00
+        m, g = sk.mock, sk.g
+        private = os.path.join(sk.dir, '@Resources') + os.sep + 'Private.inc'
+        W, H = int(m.vars['Width']), int(m.vars['Height'])
+        assert m.shown('BtnMini') and sk.tip('BtnMini').startswith('Minimize')
+        assert 'Minimize()' in open(INI_FILE, encoding='utf-8').read().split('[BtnMini]')[1].split('\n\n')[0]
+        assert m.opt('Rainmeter', 'ContextTitle14') == 'Minimize'
+        shown_before = {k for k, v in m.visible.items() if v}
+        g.TipOver('BtnMini')
+        m.bangs.clear()
+        g.Minimize()
+        # The calendar's meters hidden, the tile shown; it takes the top right corner of the
+        # calendar (the calendar is nearer the right edge of the work area)
+        assert not [k for k in shown_before if m.shown(k)]
+        assert m.shown('MiniBg') and m.opt('MiniDay', 'Text') == '3' and m.opt('MiniName', 'Text') == 'Wednesday'
+        assert m.opt('MiniMonth', 'Text') == 'March 2027'
+        assert tile_rows(m) == [('11:30', 'Ending soon'), ('22:00', 'Late dinner'), ('MiniHdr', 'Tomorrow'),
+                                ('', 'All day 1')], tile_rows(m)
+        assert m.opt('MiniTm1', 'FontWeight') == '700' and m.opt('MiniTm2', 'FontWeight') == '400'  # (now on)
+        tw = 300
+        th = int(re.match(r'Rectangle 0,0,300,(\d+),', m.opt('MiniBg', 'Shape')).group(1))
+        assert ['!Move', 100 + W - tw, 0] in m.bangs, m.bangs
+        # (hidden meters still count in the window's size by their place: all at 0, 0)
+        assert ['!SetOptionGroup', 'Cal', 'X', 0] in m.bangs and ['!SetOptionGroup', 'Cal', 'Y', 0] in m.bangs
+        title_x = m.opt('TbTitle', 'X')
+        assert ['!WriteKeyValue', 'Variables', 'Minimized', 1, private] in m.bangs
+        assert m.opt('Rainmeter', 'ContextTitle14') == 'Open the calendar'
+        assert not m.shown('Tip')
+        # Nothing of the calendar comes back meanwhile: updates, downloads, the wheel, hovering
+        m.vars['CURRENTCONFIGX'] = str(100 + W - tw)
+        m.bangs.clear()
+        sk.at(2027, 3, 3, 12, 40)
+        g.Update(); g.Reload(1); g.ScrollHours(1); g.SizeHover(1); g.GoToday()
+        assert not [b for b in m.bangs if b[0] == '!ShowMeter' and not b[1].startswith('Mini')], m.bangs
+        assert not [b for b in m.bangs if b[0] == '!SetOption' and b[2] in ('X', 'Y') and not b[1].startswith('Mini')]
+        assert not [b for b in m.bangs if b[0] == '!Move']
+        # "Ending soon" is over: the tile follows the time
+        assert tile_rows(m)[0] == ('22:00', 'Late dinner'), tile_rows(m)
+        redraws = len([b for b in m.bangs if b[0] == '!Redraw'])
+        m.bangs.clear()
+        g.Update()
+        assert not [b for b in m.bangs if b[0] == '!Redraw'], 'an unchanged tile is not redrawn'
+        assert redraws >= 1
+        # A click on the tile: the calendar again, in its place
+        m.bangs.clear()
+        g.MiniRestore()
+        assert not m.shown('MiniBg') and not m.shown('MiniTl1')
+        assert m.shown('BG') and m.shown('EvBg1') and m.shown('TbTitle') and m.shown('BtnMini')
+        assert ['!Move', 100, 0] in m.bangs, [b for b in m.bangs if b[0] == '!Move']
+        assert ['!SetOption', 'TbTitle', 'X', title_x] in m.bangs  # (back in place)
+        assert ['!WriteKeyValue', 'Variables', 'Minimized', 0, private] in m.bangs
+        assert m.opt('Rainmeter', 'ContextTitle14') == 'Minimize'
+        assert sk.tip('BtnMini').startswith('Minimize')
+        assert m.shown('SzGrip')  # (the cursor is over it: SizeHover(1) came while minimized)
+        # From the context menu, with the calendar in the bottom left: the tile there too
+        m.vars['CURRENTCONFIGX'], m.vars['CURRENTCONFIGY'] = '0', '16'
+        m.bangs.clear()
+        g.MiniToggle()
+        th = int(re.match(r'Rectangle 0,0,300,(\d+),', m.opt('MiniBg', 'Shape')).group(1))
+        assert ['!Move', 0, 16 + H - th] in m.bangs, [b for b in m.bangs if b[0] == '!Move']
+        # dragged to the top right corner, it opens from there, inside the work area
+        m.vars['CURRENTCONFIGX'], m.vars['CURRENTCONFIGY'] = str(1536 - tw), '0'
+        m.bangs.clear()
+        g.MiniToggle()
+        assert ['!Move', 1536 - W, 0] in m.bangs, [b for b in m.bangs if b[0] == '!Move']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_minimized_tile_contents_and_refresh():
+    # Minimized=1 (Private.inc): the skin starts as the tile
+    sk = Skin(Minimized='1', MiniEvents='2', WORKAREAX='0', WORKAREAY='0', WORKAREAWIDTH='1536',
+              WORKAREAHEIGHT='1040', CURRENTCONFIGX='1200', CURRENTCONFIGY='800')
+    try:
+        sk.start(2027, 3, 3, 23)  # Wednesday 23:00: nothing else today
+        m, g = sk.mock, sk.g
+        assert m.shown('MiniBg') and not m.shown('BG') and not m.shown('EvBg1') and not m.shown('DayNum0')
+        assert m.opt('Rainmeter', 'ContextTitle14') == 'Open the calendar'
+        assert tile_rows(m) == [('MiniNote', 'Nothing else today'), ('MiniHdr', 'Tomorrow'),
+                                ('', 'All day 1'), ('', 'All day 2')], tile_rows(m)
+        # A tile in the bottom half grows upwards
+        th = int(re.match(r'Rectangle 0,0,300,(\d+),', m.opt('MiniBg', 'Shape')).group(1))
+        sk.at(2027, 3, 4, 0, 30)  # (a new day: "All day 1".. are today's, no header)
+        m.bangs.clear()
+        g.Update()
+        th2 = int(re.match(r'Rectangle 0,0,300,(\d+),', m.opt('MiniBg', 'Shape')).group(1))
+        assert m.opt('MiniDay', 'Text') == '4' and m.opt('MiniName', 'Text') == 'Thursday'
+        assert tile_rows(m) == [('', 'All day 1'), ('', 'All day 2')], tile_rows(m)
+        assert th2 < th and ['!Move', 1200, 800 + th - th2] in m.bangs, (th, th2, m.bangs)
+        # Opens the calendar from the bottom right corner of the tile
+        m.vars['CURRENTCONFIGY'] = str(800 + th - th2)
+        m.bangs.clear()
+        g.MiniRestore()
+        for k in g._WC.edit.miniMeters.iniShown.values():
+            assert ['!ShowMeter', k] in m.bangs, k
+        W, H = int(m.vars['Width']), int(m.vars['Height'])
+        assert ['!Move', 1200 + 300 - W, 800 + th - H] in m.bangs, [b for b in m.bangs if b[0] == '!Move']
+        sk.check_clean()
+    finally:
+        sk.close()
+    # MiniEvents=0: only the date; Italian
+    sk = Skin(Minimized='1', MiniEvents='0', Language='it')
+    try:
+        sk.start(2027, 3, 3, 12)
+        m = sk.mock
+        assert m.opt('MiniName', 'Text') == 'Mercoledì' and m.opt('MiniMonth', 'Text') == 'Marzo 2027'
+        assert tile_rows(sk.mock) == []
+        assert m.opt('Rainmeter', 'ContextTitle14') == 'Apri il calendario'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_ini_lists_of_the_minimized_skin():
+    meters = ini_meters()
+    assert all(g in ('Cal', 'Mini') for g, _ in meters.values()), [k for k, (g, _) in meters.items() if not g]
+    sk = Skin()
+    try:
+        mm = sk.g._WC.edit.miniMeters
+        shown = sorted(mm.iniShown.values())
+        assert shown == sorted(k for k, (g, hid) in meters.items() if g == 'Cal' and not hid), shown
+        assert sorted(mm.meters.values()) == sorted(k for k, (g, _) in meters.items() if g == 'Mini')
+        assert all(hid for k, (g, hid) in meters.items() if g == 'Mini')
+    finally:
+        sk.close()
+
+
+def test_background_opacity():
+    for pct, alpha in (('90', 230), ('0', 1), ('100', 255)):
+        sk = Skin(BgOpacity=pct)
+        try:
+            sk.start(2027, 3, 3, 12)
+            assert 'Fill Color 255,255,255,%d |' % alpha in sk.mock.opt('BG', 'Shape'), sk.mock.opt('BG', 'Shape')
+            sk.g.SetView('month')
+            assert 'Fill Color 255,255,255,%d |' % alpha in sk.mock.opt('BG', 'Shape')
+            sk.check_clean()
+        finally:
+            sk.close()
+
+
+def test_idle_fade():
+    sk = Skin(IdleOpacity='60', IdleSeconds='3')
+    try:
+        m, g = sk.mock, sk.g
+        sk.start(2027, 3, 3, 12)
+        fades = [b for b in m.bangs if 'IdleFade' in b[0]]
+        assert fades == [['[!Delay 3000][!CommandMeasure MeasureScript "IdleFade(1)"]']], fades
+        m.bangs.clear()
+        g.IdleFade(1)
+        alphas = []
+        for step in range(1, 10):
+            alphas += [b[1] for b in m.bangs if b[0] == '!SetTransparency']
+            nxt = [b[0] for b in m.bangs if 'IdleFade' in b[0]]
+            m.bangs.clear()
+            if not nxt:
+                break
+            assert nxt == ['[!Delay 40][!CommandMeasure MeasureScript "IdleFade(1, %d)"]' % step], nxt
+            g.IdleFade(1, step)
+        assert alphas[-1] == 153 and len(alphas) == 6 and alphas == sorted(alphas, reverse=True), alphas
+        # Back over the skin: opaque at once; a late step of the old fade does nothing
+        g.IdleHover(1)
+        assert ['!SetTransparency', 255] in m.bangs
+        m.bangs.clear()
+        g.IdleFade(1, 3)
+        assert not m.bangs
+        # Leaving with a card open: it waits for the card
+        g.CreateNew()
+        g.IdleHover(0)
+        m.bangs.clear()
+        g.IdleFade(3)
+        assert not [b for b in m.bangs if b[0] == '!SetTransparency']
+        assert m.bangs == [['[!Delay 1000][!CommandMeasure MeasureScript "IdleFade(3)"]']], m.bangs
+        g.CardClose()
+        m.bangs.clear()
+        g.IdleFade(3)
+        assert [b for b in m.bangs if b[0] == '!SetTransparency']
+        sk.check_clean()
+    finally:
+        sk.close()
+    # IdleOpacity=100: never fades
+    sk = Skin(IdleOpacity='100')
+    try:
+        sk.start(2027, 3, 3, 12)
+        sk.g.IdleHover(0)
+        sk.g.IdleHover(1)
+        assert not [b for b in sk.mock.bangs if 'IdleFade' in b[0] or b[0] == '!SetTransparency']
+    finally:
+        sk.close()
+
+
+def test_hide_empty_hours():
+    sk = Skin(HideEmptyHours='1', View='day', WORKAREAX='0', WORKAREAY='0', WORKAREAWIDTH='1536',
+              WORKAREAHEIGHT='1040', CURRENTCONFIGX='0', CURRENTCONFIGY='0')
+    try:
+        m, g = sk.mock, sk.g
+        os.makedirs(os.path.join(sk.dir, '@Resources', 'ZOrder'))
+        sk.start(2027, 3, 5, 9)  # Friday 9:00: events 10:00-11:00 and 14:00-15:00
+        H = int(m.vars['Height'])  # 800: hours 8-20, 54 px each under the toolbar and the days
+        hours = sorted(hour_y(sk))
+        # 9 (now) to 15, the 6 hours of the smallest skin (440): 124 + 6 * 54 + 28
+        assert hours[0] == '09:00' and hours[-1] == '15:00', hours
+        assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,1400,476,'), m.opt('BG', 'Shape')
+        assert (m.opt('SzGrip', 'X'), m.opt('SzGrip', 'Y')) == ('1384', '460')
+        assert int(m.opt('CrZone0', 'Y')) + int(m.opt('CrZone0', 'H')) == 448
+        # (the window's size counts hidden meters by their place: none is left below)
+        sk.g.ShiftView(1); sk.g.ShiftView(-1)
+        low = [(k, v) for (k, o), v in m.options.items() if o == 'Y' and int(v) > 476 and not m.shown(k)]
+        assert low == [], low
+        # Kept inside the work area by its shown height
+        m.vars['CURRENTCONFIGY'] = str(1040 - 476 + 10)
+        m.bangs.clear()
+        g.KeepInWorkArea()
+        assert ['!Move', 0, 1040 - 476] in m.bangs
+        m.vars['CURRENTCONFIGY'] = '0'
+        # Scrolling shows all the hours, from the shown first one; Today goes back
+        g.ScrollHours(1)
+        assert sorted(hour_y(sk))[0] == '10:00' and m.opt('BG', 'Shape').startswith('Rectangle 0,0,1400,%d,' % H)
+        g.GoToday()
+        assert sorted(hour_y(sk))[-1] == '15:00'
+        # Resizing: the outline starts at the shown height, the new size gives the hours that height
+        g.ResizeStart(16, 16)
+        assert 'Rectangle 1,1,1398,474,' in m.opt('SzPrev', 'Shape'), m.opt('SzPrev', 'Shape')
+        g.ResizeEnd(1400, 476 + 54)
+        assert ['!WriteKeyValue', 'Variables', 'Height', 908,
+                os.path.join(sk.dir, '@Resources') + os.sep + 'Private.inc'] in m.bangs
+        assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,1400,530,'), m.opt('BG', 'Shape')
+        # A day without events: all the hours, as without the setting
+        sk.at(2027, 3, 7, 9)
+        g.ShiftView(2)
+        assert len(hour_y(sk)) == 13 and m.opt('BG', 'Shape').startswith('Rectangle 0,0,1400,908,')
+        # The week: 6:00 to 23:00 needs more hours than 12: all of them
+        g.SetView('week')
+        assert len(hour_y(sk)) == 13
         sk.check_clean()
     finally:
         sk.close()

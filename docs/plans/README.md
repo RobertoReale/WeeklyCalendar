@@ -103,6 +103,20 @@ These are the traps of this codebase. Each one has already caused a bug once.
   written with `#Width#` / `#Height#` in the `.ini` keeps the size the skin started with. The
   helper of `@Resources\ZOrder` sends `ResizeMove` while `ZOrder\Resize.txt` exists, as a bang
   through `WM_COPYDATA` to Rainmeter's `DummyRainWClass` window (what `Rainmeter.exe !Bang` does).
+- **The window's size counts hidden meters by their place** (Rainmeter 4.5: a hidden meter's W and
+  H count as 0, its X and Y do not). `finishLayout` moves the hidden meters left past the edges to
+  0 (`placed`: the meters `set()` gave a position). Minimized (`edit.mini`), every meter of the
+  group `Cal` is hidden and put at 0, 0 (`!SetOptionGroup`), and `show()` / `set()` of X and Y only
+  note what the layouts want (`visCache`, `optCache`); `MiniRestore` sends it again. Every meter
+  but the tile's must be in the group `Cal` (`StyCal`); `test_ini_lists_of_the_minimized_skin`
+  checks it, and the list of meters the `.ini` shows.
+- **A meter with only a `LeftMouseUpAction`** gets the click and still drags the skin (the release
+  after a drag does not run it): the minimized tile (`MiniBg`) uses that.
+- **`!SetTransparency`** (IdleOpacity) changes the window's alpha only: Rainmeter.ini is not written.
+- **Moving the skin** is Rainmeter's own drag: no action runs when it ends (not even the
+  `MouseOverAction`). The helper watches `EVENT_SYSTEM_MOVESIZEEND` of the skin's window and calls
+  `KeepInWorkArea()` (KeepOnScreen alone lets the skin end under the taskbar); `Update` checks too.
+  In LiveTest, two presses on the same spot within the double-click time do not drag.
 - **Cards' pools:** `CrTx1..20` and 32 shapes of `CrCard` (`CR_TX`, `CARD_SHAPES`). A card that
   needs more logs an error (the tests fail on it): add meters to the `.ini` and raise the constants.
   The fields and pickers of the cards are functions of the `cf` table (`edit.cf` outside the block).

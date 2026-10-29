@@ -28,6 +28,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Looks like Google Calendar**: past events and completed tasks pale with dark text, completed tasks struck through, a 45-minute event with its title above the time and place, times as "08:30 – 10:30".
 - **Declined Invitations**: Invitations you declined are drawn outlined, like Google Calendar, or can be hidden (`ShowDeclined=0`).
 - **Past Event Fading**: Events fade as soon as they end, just like in Google Calendar.
+- **See Your Wallpaper**: a see-through background (`BgOpacity`), a skin that fades while the mouse is away and comes back when it is over it (`IdleOpacity`), a **minimize** button that turns the calendar into a small tile with today's date and the next events (click it to open the calendar again), and the hours without events left out, so the calendar is shorter (`HideEmptyHours`).
 - **Detailed Tooltips**: Hover over any event or task to see its full title, start/end time, location and description (rich text and Google Meet details are cleaned up).
 - **Dialogs Always on Top**: Windows and dialogs you open (e.g. "Empty Recycle Bin") always appear above the calendar, even in Windows' "Show desktop" mode.
 - **Resizable**: Drag the grip in the bottom right corner to any size (an outline shows the new size while you drag), or pick *Size: small / medium / large* in the right-click menu. The calendar redraws at once and remembers the size.
@@ -180,7 +181,7 @@ How it works:
   the skin); a task has *Add details* and its list (all your Google Tasks lists). Click a text
   to type it and press **Enter** to keep it (**Ctrl+Enter** starts a new line in details and
   descriptions), or just click elsewhere in the card: what you typed stays (this needs the helper
-  of `@Resources\ZOrder`, see [Dimensions & Appearance](#8-dimensions--appearance)). Click a choice
+  of `@Resources\ZOrder`, see [Dimensions & Appearance](#9-dimensions--appearance)). Click a choice
   (▾) to list the others, or scroll over it to go to the next one. *More options*
   opens Google Calendar's own editor, filled in. Esc closes the title box; a click outside closes
   the card. In the boxes the usual keys work: Ctrl+A, Ctrl+X / Ctrl+C / Ctrl+V, Ctrl+Z, Home / End,
@@ -315,7 +316,39 @@ AllDayRows=3
 View=week
 ```
 
-### 8. Dimensions & Appearance
+### 8. Seeing the wallpaper
+```ini
+; Opacity of the background in % (100 = opaque): events, cards and texts stay opaque
+BgOpacity=90
+
+; How visible the skin stays while the mouse is away, in % (100 = always fully visible);
+; it fades IdleSeconds after the mouse leaves it, and comes back as soon as it is over it
+IdleOpacity=60
+IdleSeconds=3
+
+; The minimize button at the right end of the toolbar, and how many of the next events
+; (today's, then tomorrow's) the tile lists (0-5)
+ShowMinimizeButton=1
+MiniEvents=3
+
+; 1 = the day, 3-day and week views show only the hours from the first event to the last
+; (and the current hour), so the calendar is shorter
+HideEmptyHours=1
+```
+
+**Minimize** (the button at the right end of the toolbar, or right-click > *Minimize*) turns the
+calendar into a small tile with today's date and the next events, at the corner of the
+calendar nearest to the corner of the screen. Drag the tile to move it; click it (or right-click >
+*Open the calendar*) to open the calendar again, which grows from the same corner of the tile.
+It stays minimized after a refresh. On a very narrow skin the button gives its place to the title
+(the menu item is always there).
+
+With `HideEmptyHours=1` the calendar is never shorter than its smallest size (440 pixels), so
+the cards always fit. Scrolling the hours shows all of them again, until *Today*, *Reset scroll*
+or another week; a week whose events need more hours than `StartHour`-`EndHour` shows all of
+those hours, as without the setting.
+
+### 9. Dimensions & Appearance
 The easiest way to change the size is the mouse: move the cursor over the calendar, then drag
 the grip that appears in its bottom right corner. While you drag, an outline shows the new size
 (in pixels); the calendar redraws when you release the button. Dragging past the bottom or
@@ -382,6 +415,8 @@ a small square instead), and it looks for the places suggested while you type th
 event (`PlaceSuggestions`).
 While you drag the resize grip it also tells the skin where the cursor is, so the outline of
 the new size follows it: Rainmeter tells a skin only where the mouse was pressed and released.
+When you drop the calendar after moving it, it tells the skin too, so a calendar dropped over
+the taskbar goes back just above it at once (without the helper, within 10 seconds).
 It always runs; `KeepDialogsOnTop=0` only turns off its handling of dialogs.
 
 Declined invitations are recognized from the address in your Google iCal URL. For other
@@ -412,7 +447,8 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Details, Edit, Duplicate, Delete** | Click or right-click an event or task; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`; `RightClickCard=0` shows the skin menu instead) |
 | **Move an Event** | Drag it to another time or day (15-minute steps); right-click or leave the skin to cancel (`DragToMove=0` turns dragging off) |
 | **Resize the Skin** | Drag the grip in the bottom right corner (it appears while the cursor is over the skin); right-click while dragging to cancel. Or right-click > *Size: small / medium / large*; *Original size (from the settings)* goes back to `Width` / `Height` of `Settings.inc` |
-| **Move the Skin** | Drag it by an empty area of the toolbar or the day headers: pressing an event, a task, a button or the grid does not move it |
+| **Move the Skin** | Drag it by an empty area of the toolbar (the month title, for example), the day names or the hours column: pressing an event, a task, a button or the grid does not move it. Dropped over the taskbar, it goes back just above it |
+| **Minimize** | The **—** button at the right end of the toolbar, or right-click > *Minimize*: a small tile with the date and the next events. Click the tile to open the calendar again, drag it to move it |
 | **Sync Calendar Now** | Click the sync time in the top-right corner, or right-click > *Refresh now* |
 | **Context Menu** | Right-click an empty area of the skin: refresh, today, hour scrolling, *Calendar settings*, *Calendar addresses*, sizes |
 

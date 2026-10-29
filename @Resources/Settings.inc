@@ -107,6 +107,28 @@ TitleFontSize=16
 EventRadius=5
 BgRadius=16
 
+;  Seeing the wallpaper
+;  BgOpacity: opacity of the calendar's background in % (0-100; 100 = opaque, as before 1.19):
+;  lower it to see the wallpaper through it. Events, cards and texts stay opaque.
+BgOpacity=90
+;  IdleOpacity: how visible the whole skin stays while the mouse is away from it, in % (10-100;
+;  100 = always fully visible). It fades IdleSeconds after the mouse leaves the skin, and is fully
+;  visible again as soon as the mouse is over it (not while a card is open).
+IdleOpacity=60
+IdleSeconds=3
+;  ShowMinimizeButton=1: the button at the right end of the toolbar minimizes the calendar to a
+;  small tile (the right-click menu has "Minimize" too). The tile shows today's date and the next
+;  events; click it to open the calendar again where it was, drag it to move it.
+;  0 = no button (the menu item stays).
+ShowMinimizeButton=1
+;  MiniEvents: how many of the next events (today's, then tomorrow's) the tile lists (0-5).
+MiniEvents=3
+;  HideEmptyHours=1: the day, 3-day and week views show only the hours from the first event to the
+;  last one (and the current hour), so the calendar is shorter (never below its smallest size,
+;  440 pixels high). Scrolling the hours shows all of them again, until "Today" or "Reset scroll".
+;  0 = always StartHour-EndHour.
+HideEmptyHours=1
+
 ;  Colors: R,G,B,A (0-255) format or hex RRGGBB / RRGGBBAA.
 ;  Event colors for calendars 1 to 6 (defaults from Google Calendar: Peacock, Basil, Grape,
 ;  Tangerine, Lavender, Graphite)
