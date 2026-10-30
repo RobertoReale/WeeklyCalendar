@@ -205,11 +205,13 @@ How it works:
 - **Details**: right-click an event or task. Holiday calendars, birthdays, public addresses, other
   providers and invitations organised by someone else are read-only; the card says why.
 - **Edit**: *Edit* in the card; type the new title and press Enter (an emptied title keeps the old one), or change the date (and the
-  times of an event: click the date or a time to type it, or use the wheel), the place, the description,
-  *All day* (an event that does not repeat), a task's details or list, and click *Save*. Only what
-  you changed is sent. A recurring event then asks *This event* or *All events*: all events take
-  the new title, place, description and time of day (the date of a single occurrence changes
-  only that one). A task moves to another list with its id there; Google refuses to move a
+  times of an event: click the date or a time to type it, or use the wheel), the repeat, the place,
+  the description, the calendar, *All day* (an event that does not repeat), a task's details or
+  list, and click *Save*. Only what you changed is sent. A recurring event then asks *This event*
+  or *All events*: all events take the new title, place, description and time of day (the date of
+  a single occurrence changes only that one). A new repeat or calendar is for all events, as in
+  Google Calendar; a series set to *Does not repeat* keeps only the occurrence you edited. While
+  the form moves one occurrence to another day, its repeat and calendar stay as they are. A task moves to another list with its id there; Google refuses to move a
   repeating task to another list. A description with formatting (written in Google Calendar,
   or with a video call) is changed in Google Calendar.
 - **Duplicate**: *Duplicate* in the card opens the create form filled in with the item: title, day
@@ -280,8 +282,8 @@ Birthdays appear in the all-day row; a click opens one in Google Calendar. If th
 ### 6. Updating the Tasks script
 New versions of the skin may need the new `tools\GoogleTasksFeed.gs`: the toolbar then says
 **"update the Tasks script"**, a new feature (creating events, birthdays) does not work, or the card
-says to update it (task lists and details, places, descriptions, repeats: version 1.14.0). The web
-app URL stays the same:
+says to update it (task lists and details, places, descriptions, repeats: version 1.14.0; the
+repeat and the calendar of an event you edit: version 1.20.0). The web app URL stays the same:
 
 1. Open your project on [script.google.com](https://script.google.com/), replace the code with the
    new `tools\GoogleTasksFeed.gs` and save.
@@ -535,7 +537,8 @@ table (`edit` holds those of the cards, `edit.cf` the fields and pickers of thei
 
 The Tasks script's feed says what the deployed script can do (`X-WC-VERSION`): an older script
 ignores parameters it does not know and still answers OK, so the cards offer lists, details,
-places, descriptions, repeats and *All events* only from version 2 of the feed.
+places, descriptions, repeats and *All events* only from version 2 of the feed, and a new repeat
+or calendar of an event being edited only from version 3.
 
 Tooltips: no meter has a `ToolTipText` of its own. Rainmeter creates a window for each meter
 that has one (about 50 ms each), which made the first layout take seconds. Calendar.lua keeps

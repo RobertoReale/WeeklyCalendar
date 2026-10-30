@@ -1153,7 +1153,7 @@ def test_drag_chip_actions():
         for meter in ('ADBg%d' % i, 'ADTx%d' % i):
             assert m.opt(meter, 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragStart(%d)"]' % i
             assert m.opt(meter, 'LeftMouseUpAction') == '' and m.opt(meter, 'MouseActionCursorName') == 'SizeAll'
-        assert sk.tip('ADBg%d' % i).endswith('#CRLF##CRLF#Right-click: details, edit, delete#CRLF#Drag to another day to move it')
+        assert sk.tip('ADBg%d' % i).endswith('#CRLF##CRLF#Right-click: details, edit, delete#CRLF#Drag: move it to another day')
         # Not draggable: tasks of an older script (no ids) and events
         for title in ('○ Ripasso', 'All day 1'):
             j = sk.all_day()[title]
@@ -1585,7 +1585,7 @@ def test_month_view_drag_a_task():
         assert cell == 3
         assert m.opt(ln, 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragStart(%d)"]' % k
         assert m.opt(ln, 'LeftMouseUpAction') == '' and m.opt(ln, 'MouseActionCursorName') == 'SizeAll'
-        assert sk.tip(ln).endswith('#CRLF##CRLF#Right-click: details, edit, delete#CRLF#Drag to another day to move it'), sk.tip(ln)
+        assert sk.tip(ln).endswith('#CRLF##CRLF#Right-click: details, edit, delete#CRLF#Drag: move it to another day'), sk.tip(ln)
         # Not draggable: a task of an older script (no ids), an event, "+N more"
         other = [l for l in month_lines(sk) if l[1].startswith('○ Ripasso')][0][2]
         assert m.opt(other, 'LeftMouseDownAction') == NO_DRAG and m.opt(other, 'LeftMouseUpAction') != ''
@@ -1819,8 +1819,8 @@ def test_create_event_card_and_draft():
         # The wheel: the start moves the event, the end stays 15 min after the start
         start = card_el(sk, '10:00')
         assert m.opt(start, 'MouseScrollUpAction') == '[!CommandMeasure MeasureScript "CreateAdjust(\'start\', 1)"]'
-        assert sk.tip(start) == 'Click to type, scroll to change'
-        assert sk.tip(card_el(sk, 'Wed 3 Mar')) == 'Click to type, scroll to change'
+        assert sk.tip(start) == 'Click: type - Wheel: change'
+        assert sk.tip(card_el(sk, 'Wed 3 Mar')) == 'Click: type - Wheel: change'
         g.CreateAdjust('start', 1)
         assert '10:15' in card_texts(sk) and '11:15' in card_texts(sk)
         for _ in range(8):
@@ -2281,7 +2281,7 @@ def test_type_the_date_in_the_card():
     try:
         sk.g.CreateAt(2, zone_y(sk, 2, '10:20'))
         chip = card_el(sk, 'mer 3 mar')
-        assert sk.tip(chip) == 'Clic per scrivere, rotellina per cambiare'
+        assert sk.tip(chip) == 'Clic: scrivi - Rotellina: cambia'
         sk.g.CardClose()
         sk.check_clean()
     finally:
@@ -2697,7 +2697,7 @@ def test_item_card_details_and_read_only():
         i = event_meter(sk, 'Lezione')
         for meter in ('EvBg%d' % i, 'EvT%d' % i):
             assert m.opt(meter, 'RightMouseUpAction') == '[!CommandMeasure MeasureScript "ItemCard(\'ev\', %d)"]' % i
-        assert sk.tip('EvBg%d' % i).endswith('#CRLF#Right-click: details, edit, delete#CRLF#Drag to move this event')
+        assert sk.tip('EvBg%d' % i).endswith('#CRLF#Right-click: details, edit, delete#CRLF#Drag: move this event')
         texts = open_card(sk, 'EvBg%d' % i)
         when = 'Wed 3 Mar · %s – %s' % (clock_of(utc(2027, 3, 3, 10)), clock_of(utc(2027, 3, 3, 11)))
         assert texts[0] == 'Lezione' and when in texts, texts
@@ -3276,7 +3276,7 @@ def test_drag_all_day_event_and_month_lines():
         line = [l for l in month_lines(sk) if l[1].endswith('Lezione')][0]
         k = int(line[2][3:])
         assert m.opt(line[2], 'LeftMouseDownAction') == '[!CommandMeasure MeasureScript "DragStart(%d)"]' % k
-        assert sk.tip(line[2]).endswith('#CRLF#Drag to another day to move it')
+        assert sk.tip(line[2]).endswith('#CRLF#Drag: move it to another day')
         g.DragStart(k)
         g.DragOver(line[0] - 1 + 7)                   # a week later
         g.DragDrop(line[0] - 1 + 7)
@@ -3373,7 +3373,7 @@ def test_task_lists_details_and_moves():
         assert 'Add details' in texts and 'Le mie attività' + ARROW in texts, texts
         assert not any('update the' in t for t in texts)
         el = card_el(sk, 'Le mie attività' + ARROW)
-        assert sk.tip(el) == 'Click to choose, scroll to change'
+        assert sk.tip(el) == 'Click: choose - Wheel: change'
         press(sk)
         run_action(sk, m.opt(el, 'LeftMouseUpAction'))
         texts = card_texts(sk)
@@ -3544,6 +3544,131 @@ def test_event_place_description_repeat_and_calendar():
         m.vars['CreateTitle'] = 'Gita'
         g.CreateSubmit()
         assert task_params(sk)[-1].endswith('?action=createevent&cal=&title=Gita&date=2027-03-02&days=1'), task_params(sk)[-1]
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_edit_repeat_and_calendar_of_an_event():
+    def changes(sk):
+        return sk.lua.eval('next(_WC.edit.changes)')
+
+    sk = edit_skin(tasks='tasks_v3.ics', IcalUrl2=FAMILY_URL)
+    try:
+        m, g = sk.mock, sk.g
+        set_feed(sk, 2, FAMILY_ICS)
+        # An event that does not repeat: every week from now on
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Lezione'))
+        g.ItemEdit()
+        texts = card_texts(sk)
+        assert 'Does not repeat' + ARROW in texts and 'me@example.com' + ARROW in texts, texts
+        assert texts.index('Does not repeat' + ARROW) < texts.index('me@example.com' + ARROW)
+        press(sk)
+        g.CardMenu('repeat')
+        assert card_texts(sk)[:5] == ['Repeat', 'Does not repeat', 'Every day', 'Every weekday (Monday to Friday)',
+                                      'Weekly on Wednesday'], card_texts(sk)
+        g.CardPick(4)
+        g.ItemSave()
+        assert task_params(sk)[-1] == ('-s -f -L -m 30 ' + SCRIPT_URL + '?action=editevent&cal=me%40example.com'
+                                       '&uid=abc123%40google.com&rrule=FREQ%3DWEEKLY%3BBYDAY%3DWE'), task_params(sk)[-1]
+        # shown at once every week, waiting for the calendar
+        assert sorted(event_meters(sk, 'Lezione')) == [2]
+        assert 'waiting for the calendar' in sk.tip('EvBg%d' % event_meter(sk, 'Lezione'))
+        g.ShiftWeek(1)
+        assert sorted(event_meters(sk, 'Lezione')) == [2]
+        g.ShiftWeek(-1)
+        answer(sk, 'OK')
+        assert changes(sk) is not None
+        # the feed has it: the change is dropped, the feed shows the event
+        weekly = EDIT_ICS.replace('SUMMARY:Lezione\r\n', 'SUMMARY:Lezione\r\nRRULE:FREQ=WEEKLY;BYDAY=WE\r\n')
+        set_feed(sk, 1, weekly)
+        assert changes(sk) is None and sorted(event_meters(sk, 'Lezione')) == [2]
+        # Another calendar: Famiglia, in its colour
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Mia riunione'))
+        g.ItemEdit()
+        press(sk)
+        g.CardMenu('cal')
+        assert card_texts(sk)[:3] == ['Calendar', 'me@example.com', 'Famiglia'], card_texts(sk)
+        g.CardPick(2)
+        assert 'Famiglia' + ARROW in card_texts(sk)
+        g.ItemSave()
+        assert task_params(sk)[-1].endswith('&uid=mine%40google.com&tocal=family123%40group.calendar.google.com'), task_params(sk)[-1]
+        i = event_meter(sk, 'Mia riunione')
+        assert len(event_meters(sk, 'Mia riunione')) == 1 and '11,128,67' in m.opt('EvBg%d' % i, 'Shape')
+        answer(sk, 'OK')
+        assert ['!CommandMeasure', 'MeasureICS2', 'Update'] in m.bangs
+        mine = ('BEGIN:VEVENT\r\nUID:mine@google.com\r\nDTSTART:20270305T130000Z\r\nDTEND:20270305T140000Z\r\n'
+                'SUMMARY:Mia riunione\r\nORGANIZER:mailto:me@example.com\r\nEND:VEVENT\r\n')
+        assert mine in weekly
+        set_feed(sk, 1, weekly.replace(mine, ''))
+        assert changes(sk) is not None                    # not yet in Famiglia
+        set_feed(sk, 2, FAMILY_ICS.replace('END:VCALENDAR', mine + 'END:VCALENDAR'))
+        assert changes(sk) is None and len(event_meters(sk, 'Mia riunione')) == 1
+        sk.check_clean()
+    finally:
+        sk.close()
+    # A series: a new repeat or calendar is for all events
+    sk = edit_skin(tasks='tasks_v3.ics', IcalUrl2=FAMILY_URL)
+    try:
+        m, g = sk.mock, sk.g
+        set_feed(sk, 2, FAMILY_ICS)
+        assert sorted(event_meters(sk, 'Daily')) == [0, 1, 2, 3, 4]
+        open_card(sk, 'EvBg%d' % event_meters(sk, 'Daily')[2])
+        g.ItemEdit()
+        press(sk)
+        g.CardMenu('repeat')
+        # (five times a day: a repeat the choices cannot make, kept as it is)
+        assert card_texts(sk)[:4] == ['Repeat', 'Every day', 'Does not repeat', 'Every day'], card_texts(sk)
+        g.CardPick(5)
+        assert 'Weekly on Wednesday' + ARROW in card_texts(sk)
+        g.ItemSave()
+        texts = card_texts(sk)
+        assert 'The repeat and the calendar change all events:' in texts and 'All events' in texts, texts
+        assert 'This event' not in texts
+        g.ItemSave('all')
+        assert task_params(sk)[-1].endswith('&uid=rec%40google.com&orig=2027-03-03T09%3A00%3A00Z&scope=all'
+                                            '&rrule=FREQ%3DWEEKLY%3BBYDAY%3DWE'), task_params(sk)[-1]
+        # from the start of the series (Monday), then on Wednesdays
+        assert sorted(event_meters(sk, 'Daily')) == [0, 2], event_meters(sk, 'Daily')
+        answer(sk, 'ERROR Not allowed')                   # refused: as it was
+        assert changes(sk) is None and sorted(event_meters(sk, 'Daily')) == [0, 1, 2, 3, 4]
+        # no longer repeating: this occurrence alone
+        open_card(sk, 'EvBg%d' % event_meters(sk, 'Daily')[3])
+        g.ItemEdit()
+        press(sk)
+        g.CardMenu('repeat')
+        g.CardPick(2)
+        g.ItemSave()
+        g.ItemSave('all')
+        assert task_params(sk)[-1].endswith('&scope=all&start=' + enc('2027-03-04T09:00:00Z') + '&end='
+                                            + enc('2027-03-04T09:30:00Z') + '&rrule='), task_params(sk)[-1]
+        assert sorted(event_meters(sk, 'Daily')) == [3], event_meters(sk, 'Daily')
+        answer(sk, 'ERROR Not allowed')
+        # Another day for this occurrence alone: repeat and calendar fixed, as they were
+        open_card(sk, 'EvBg%d' % event_meters(sk, 'Daily')[2])
+        g.ItemEdit()
+        press(sk)
+        g.CardMenu('cal')
+        g.CardPick(2)
+        g.CreateAdjust('date', 1)
+        texts = card_texts(sk)
+        assert 'Every day' in texts and 'me@example.com' in texts and 'Famiglia' not in texts, texts
+        assert 'Only this event will change' in texts
+        assert m.opt(card_el(sk, 'Every day'), 'LeftMouseUpAction') != '[!CommandMeasure MeasureScript "CardMenu(\'repeat\')"]'
+        g.ItemSave()
+        assert 'tocal' not in task_params(sk)[-1] and 'scope' not in task_params(sk)[-1], task_params(sk)[-1]
+        sk.check_clean()
+    finally:
+        sk.close()
+    # An older script: the form says to update it
+    sk = edit_skin(tasks='tasks_v2.ics')
+    try:
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Lezione'))
+        sk.g.ItemEdit()
+        texts = card_texts(sk)
+        assert any('repeat and the calendar here, update the Tasks script' in t.replace('#CRLF#', ' ') for t in texts), texts
+        assert not any(t.startswith('Does not repeat') for t in texts)
+        sk.g.CardClose()
         sk.check_clean()
     finally:
         sk.close()
@@ -3955,10 +4080,12 @@ var Calendar = {
     insert: function (res, cal) { calls.push(['insert', res, cal]); return { id: 'new1', iCalUID: 'new1@google.com' }; },
     list: function (cal, a) {
       if (a.iCalUID === 'rec@google.com') return { items: [SERIES] };
-      if (a.iCalUID === 'one@google.com') return { items: [{ id: 'one', start: { dateTime: '2027-03-03T10:00:00Z' } }] };
+      if (a.iCalUID === 'one@google.com') return { items: [{ id: 'one', start: { dateTime: '2027-03-03T10:00:00Z' },
+                                                             end: { dateTime: '2027-03-03T11:00:00Z' } }] };
       if (a.iCalUID === 'day@google.com') return { items: [{ id: 'day', start: { date: '2027-03-03' } }] };
       return { items: [] }; },
-    patch: function (res, cal, id) { calls.push(['patch', res, cal, id]); } } };
+    patch: function (res, cal, id) { calls.push(['patch', res, cal, id]); },
+    move: function (cal, id, to) { calls.push(['move', cal, id, to]); } } };
 function w(p) { var n = calls.length; var r = doGet({ parameter: p }).text; return [r, calls.slice(n)]; }
 var C = 'me@example.com';
 var long = new Array(4002).join('x');
@@ -3984,7 +4111,18 @@ process.stdout.write(JSON.stringify({
   allTexts: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', scope: 'all', location: 'Sala' }),
   allOtherDay: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', scope: 'all',
                   start: '2027-03-04T09:30:00Z', end: '2027-03-04T10:00:00Z' }),
-  allAllDay: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', scope: 'all', date: '2027-03-03', days: '1' })
+  allAllDay: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', scope: 'all', date: '2027-03-03', days: '1' }),
+  repOne: w({ action: 'editevent', cal: C, uid: 'one@google.com', rrule: 'FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=3' }),
+  repAll: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', scope: 'all',
+              rrule: 'FREQ=MONTHLY;BYMONTHDAY=3' }),
+  noRepeat: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', scope: 'all', rrule: '',
+                start: '2027-03-03T09:00:00Z', end: '2027-03-03T09:30:00Z' }),
+  repOcc: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', rrule: 'FREQ=DAILY' }),
+  calOcc: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', tocal: 'fam' }),
+  repBad: w({ action: 'editevent', cal: C, uid: 'one@google.com', rrule: 'FREQ=WEEKLY;BYSETPOS=1' }),
+  toCal: w({ action: 'editevent', cal: C, uid: 'one@google.com', tocal: 'fam' }),
+  toCalAll: w({ action: 'editevent', cal: C, uid: 'rec@google.com', orig: '2027-03-03T09:00:00Z', scope: 'all', title: 'X', tocal: 'fam' }),
+  toCalSame: w({ action: 'editevent', cal: C, uid: 'one@google.com', tocal: C })
 }));
 """
     res = subprocess.run([node, '-e', harness], capture_output=True, encoding='utf-8')
@@ -3992,14 +4130,14 @@ process.stdout.write(JSON.stringify({
     out = json.loads(res.stdout)
     C = 'me@example.com'
     feed = out['feed']
-    assert ('X-WR-CALNAME:Google Tasks\r\nX-WC-VERSION:2\r\nX-WC-LIST;ID=L1;DEFAULT=1:Le mie attività\r\n'
+    assert ('X-WR-CALNAME:Google Tasks\r\nX-WC-VERSION:3\r\nX-WC-LIST;ID=L1;DEFAULT=1:Le mie attività\r\n'
             'X-WC-LIST;ID=L2:Sport\\, palestra\r\nBEGIN:VEVENT') in feed, feed
     lua = new_runtime(MockSkin({}, ini_sections()))
     wc = lua.globals()._WC
     wc.cfg.lang, wc.cfg.showDeclined, wc.cfg.scriptFeed = wc.LANGS.en, True, 3
     wc.parseICS(feed, 3)
     lists = wc.edit.taskLists
-    assert wc.edit.scriptV == 2 and [(lists[i].id, lists[i].title, lists[i].default) for i in (1, 2)] == \
+    assert wc.edit.scriptV == 3 and [(lists[i].id, lists[i].title, lists[i].default) for i in (1, 2)] == \
         [('L1', 'Le mie attività', True), ('L2', 'Sport, palestra', False)]
     assert out['task'] == ['OK T1', [['tinsert', {'title': 'Esame', 'notes': 'riga 1\nriga 2', 'due': '2027-03-05T00:00:00.000Z'}, 'L2']]]
     assert out['taskLong'] == ['ERROR notes too long', []]
@@ -4026,6 +4164,21 @@ process.stdout.write(JSON.stringify({
                                             'end': {'dateTime': '2027-03-01T10:15:00.000Z', 'timeZone': 'Europe/Rome'}}, C, 'rec']]], out['all']
     assert out['allTexts'] == ['OK', [['patch', {'location': 'Sala'}, C, 'rec']]]
     assert out['allOtherDay'] == ['ERROR bad time', []] and out['allAllDay'][0] == 'ERROR change it in Google Calendar'
+    # a new repeat: the event repeats in the calendar's time zone; a series keeps its own
+    assert out['repOne'] == ['OK', [['calget', C], ['patch', {
+        'recurrence': ['RRULE:FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=3'],
+        'start': {'dateTime': '2027-03-03T10:00:00Z', 'timeZone': 'Europe/Rome'},
+        'end': {'dateTime': '2027-03-03T11:00:00Z', 'timeZone': 'Europe/Rome'}}, C, 'one']]], out['repOne']
+    assert out['repAll'] == ['OK', [['patch', {'recurrence': ['RRULE:FREQ=MONTHLY;BYMONTHDAY=3']}, C, 'rec']]], out['repAll']
+    # no longer repeating: the series keeps the occurrence, at its times
+    assert out['noRepeat'] == ['OK', [['patch', {'start': {'dateTime': '2027-03-03T09:00:00Z'},
+                                                 'end': {'dateTime': '2027-03-03T09:30:00Z'}, 'recurrence': []}, C, 'rec']]], out['noRepeat']
+    assert out['repOcc'] == ['ERROR change it in Google Calendar', []] and out['calOcc'] == ['ERROR change it in Google Calendar', []]
+    assert out['repBad'] == ['ERROR bad repeat', []]
+    # another calendar: moved, after the other changes
+    assert out['toCal'] == ['OK', [['move', C, 'one', 'fam']]], out['toCal']
+    assert out['toCalAll'] == ['OK', [['patch', {'summary': 'X'}, C, 'rec'], ['move', C, 'rec', 'fam']]], out['toCalAll']
+    assert out['toCalSame'] == ['OK', []], out['toCalSame']
 
 
 def test_typed_text_is_cleaned():

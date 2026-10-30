@@ -24,12 +24,17 @@
  *                      (or &date=YYYY-MM-DD&days=N for an all-day event)       -> OK <iCal UID>
  *   ?action=editevent|moveevent&cal=..&uid=<iCal UID>[&orig=..][&scope=all][&title=..]
  *                      [&location=..][&desc=..][&start=..&end=..|&date=..&days=..]
+ *                      [&rrule=..][&tocal=<calendar id>]
  *   ?action=deleteevent&cal=..&uid=..[&orig=..]&scope=one|all
  * "orig" is the original start of one occurrence of a recurring event (UTC, or the date
  * of an all-day event). "rrule" is FREQ=DAILY|WEEKLY|MONTHLY|YEARLY, optionally with
- * ;BYDAY=MO,TU,... An edit with scope=all changes the whole series: its title, place and
- * description, and its time of day (start and end of the occurrence orig, the same day).
- * An empty notes, location or desc clears it. Every answer is "OK ..." or "ERROR <reason>".
+ * ;BYDAY=MO,TU,..., ;BYMONTH=<month> and ;BYMONTHDAY=<day>. An edit with scope=all changes
+ * the whole series: its title, place and description, and its time of day (start and end
+ * of the occurrence orig, the same day). A new rrule (empty: the event no longer repeats)
+ * or tocal (it moves to that calendar) is for the whole event: one that does not repeat,
+ * or a series with scope=all; a series that no longer repeats keeps the occurrence orig
+ * alone, at the start and end sent. An empty notes, location or desc clears it. Every
+ * answer is "OK ..." or "ERROR <reason>".
  *
  * The tasks feed also lists every task list (X-WC-LIST;ID=<id>:<title>, DEFAULT=1 for
  * "My Tasks"), so the skin can offer them.
@@ -119,7 +124,7 @@ function badText(s) {
 }
 
 // A repeat rule the skin offers: FREQ=..., optionally ;BYDAY=MO,TU,...
-var RRULE = /^FREQ=(DAILY|WEEKLY|MONTHLY|YEARLY)(;BYDAY=(MO|TU|WE|TH|FR|SA|SU)(,(MO|TU|WE|TH|FR|SA|SU))*)?$/;
+var RRULE = /^FREQ=(DAILY|WEEKLY|MONTHLY|YEARLY)(;BYDAY=(MO|TU|WE|TH|FR|SA|SU)(,(MO|TU|WE|TH|FR|SA|SU))*)?(;BYMONTH=([1-9]|1[0-2]))?(;BYMONTHDAY=([1-9]|[12]\d|3[01]))?$/;
 
 // Day after date (YYYY-MM-DD) plus n - 1 days: the exclusive end of an all-day event
 function addDays(date, n) {
@@ -275,7 +280,7 @@ function findEvent(p) {
 }
 
 // New title, place, description and / or times of an event, of one occurrence (orig), or
-// of the whole series (scope=all)
+// of the whole series (scope=all); a new repeat (rrule) or calendar (tocal) of the event
 function editEvent(p) {
   var patch = {};
   if (p.title !== undefined) {
@@ -285,34 +290,63 @@ function editEvent(p) {
   if (badText(p.location) || badText(p.desc)) return 'ERROR text too long';
   if (p.location !== undefined) patch.location = p.location;
   if (p.desc !== undefined) patch.description = p.desc;
+  if (p.rrule !== undefined && p.rrule !== '' && !RRULE.test(p.rrule)) return 'ERROR bad repeat';
+  // (Google keeps one occurrence apart only with its own times and texts)
+  if ((p.rrule !== undefined || p.tocal) && p.orig && p.scope !== 'all') return 'ERROR change it in Google Calendar';
   var times = eventTimes(p);
   if (typeof times === 'string') return times;
+  var cal = p.cal || 'primary';
   try {
-    if (p.scope === 'all') return editSeries(p, patch, times);
-    var ev = findEvent(p);
-    if (typeof ev === 'string') return ev;
-    if (times) {
-      patch.start = times.start;
-      patch.end = times.end;
-      // From timed to all day or back: the patch keeps what it does not name, so the
-      // other kind of time is cleared
-      var wasAllDay = !!(ev.target.start && ev.target.start.date);
-      if (times.start.date && !wasAllDay) {
-        patch.start.dateTime = patch.end.dateTime = null;
-        patch.start.timeZone = patch.end.timeZone = null;
-      } else if (times.start.dateTime && wasAllDay) {
-        patch.start.date = patch.end.date = null;
-      }
+    var target;
+    if (p.scope === 'all' && p.rrule !== '') {
+      target = editSeries(p, patch, times);
+      if (typeof target === 'string') return target;
+    } else {
+      // (a series that no longer repeats: the series itself, at the times of occurrence orig)
+      var ev = findEvent(p.scope === 'all' ? { cal: p.cal, uid: p.uid } : p);
+      if (typeof ev === 'string') return ev;
+      target = ev.target;
+      if (times) setTimes(patch, times, target);
+      if (p.rrule !== undefined) setRepeat(patch, target, p.rrule, cal);
     }
-    Calendar.Events.patch(patch, p.cal || 'primary', ev.target.id);
+    if (Object.keys(patch).length) Calendar.Events.patch(patch, cal, target.id);
+    if (p.tocal && p.tocal !== cal) Calendar.Events.move(cal, target.id, p.tocal);
     return 'OK';
   } catch (err) {
     return 'ERROR ' + err.message;
   }
 }
 
-// Every occurrence of a recurring event: title, place, description, and the time of day.
-// The new start and end of occurrence orig (the same day) move the series as much.
+// New start and end of event ev in patch
+function setTimes(patch, times, ev) {
+  patch.start = times.start;
+  patch.end = times.end;
+  // From timed to all day or back: the patch keeps what it does not name, so the
+  // other kind of time is cleared
+  var wasAllDay = !!(ev.start && ev.start.date);
+  if (times.start.date && !wasAllDay) {
+    patch.start.dateTime = patch.end.dateTime = null;
+    patch.start.timeZone = patch.end.timeZone = null;
+  } else if (times.start.dateTime && wasAllDay) {
+    patch.start.date = patch.end.date = null;
+  }
+}
+
+// A new repeat of event ev ('': none) in patch. Google repeats a timed event in a time
+// zone, which it requires: the event's own, or the calendar's.
+function setRepeat(patch, ev, rrule, cal) {
+  patch.recurrence = rrule ? ['RRULE:' + rrule] : [];
+  var st = patch.start || ev.start || {}, en = patch.end || ev.end || {};
+  if (rrule && st.dateTime && !st.timeZone) {
+    var tz = (ev.start && ev.start.timeZone) || Calendar.Calendars.get(cal).timeZone;
+    patch.start = Object.assign({}, st, { timeZone: tz });
+    patch.end = Object.assign({}, en, { timeZone: en.timeZone || tz });
+  }
+}
+
+// Every occurrence of a recurring event: title, place, description, the time of day and
+// the repeat (in patch). The new start and end of occurrence orig (the same day) move the
+// series as much. Returns the series, or a string with the error.
 function editSeries(p, patch, times) {
   var ev = findEvent({ cal: p.cal, uid: p.uid });
   if (typeof ev === 'string') return ev;
@@ -327,8 +361,8 @@ function editSeries(p, patch, times) {
     patch.start = { dateTime: new Date(s).toISOString(), timeZone: st.timeZone };
     patch.end = { dateTime: new Date(s + len).toISOString(), timeZone: en.timeZone || st.timeZone };
   }
-  Calendar.Events.patch(patch, p.cal || 'primary', series.id);
-  return 'OK';
+  if (p.rrule) setRepeat(patch, series, p.rrule, p.cal || 'primary');
+  return series;
 }
 
 // scope=one: the event, or only occurrence orig of a recurring one; scope=all: the series
@@ -375,9 +409,10 @@ function buildFeed() {
   var stamp = Utilities.formatDate(now, 'UTC', "yyyyMMdd'T'HHmmss'Z'");
   var dueMin = new Date(now.getTime() - DAYS_BACK * 86400000).toISOString();
   var dueMax = new Date(now.getTime() + DAYS_AHEAD * 86400000).toISOString();
-  // X-WC-VERSION: what this script can do (2: lists, notes, places, descriptions, repeats)
+  // X-WC-VERSION: what this script can do (2: lists, notes, places, descriptions, repeats;
+  // 3: a new repeat or calendar of an event)
   var out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//WeeklyCalendar//Google Tasks//EN',
-             'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Google Tasks', 'X-WC-VERSION:2'];
+             'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Google Tasks', 'X-WC-VERSION:3'];
 
   var lists = allPages(function (args) {
     args.maxResults = 100;
