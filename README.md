@@ -173,8 +173,11 @@ How it works:
   the all-day row or a day number (a task for that day), or **+** in the toolbar (today, the next
   half hour). Type the title and press **Enter** or click *Save*. Before that you can switch *Event* / *Task*
   (the title you typed stays, however quick the click),
-  tick *All day*, and change the times: click one and type it (`9`, `930`, `9:30`, `9:30 pm`),
-  then Enter; a new start keeps the event's length. The **mouse wheel** over the date or a time
+  tick *All day*, and change the date and the times: click one and type it, then Enter. A date can
+  be `31`, `31/10`, `31/10/2026`, `31 oct`, `Oct 31`, `tomorrow` / `domani`, a weekday (`mon`, `ven`:
+  the next one) or `+2` / `-1` (days from the date shown); a time `9`, `930`, `9:30` or `9:30 pm`.
+  A day alone is in the month shown; a date without its year is the next one (or one up to two
+  months back). A new start keeps the event's length. The **mouse wheel** over the date or a time
   changes it too (a day, 15 minutes).
   An event also has *Does not repeat* (click it to choose every day, every weekday, every week,
   month or year), *Add location*, *Add description* and its calendar (any Google calendar shown in
@@ -202,7 +205,7 @@ How it works:
 - **Details**: right-click an event or task. Holiday calendars, birthdays, public addresses, other
   providers and invitations organised by someone else are read-only; the card says why.
 - **Edit**: *Edit* in the card; type the new title and press Enter (an emptied title keeps the old one), or change the date (and the
-  times of an event: click a time to type it, or use the wheel), the place, the description,
+  times of an event: click the date or a time to type it, or use the wheel), the place, the description,
   *All day* (an event that does not repeat), a task's details or list, and click *Save*. Only what
   you changed is sent. A recurring event then asks *This event* or *All events*: all events take
   the new title, place, description and time of day (the date of a single occurrence changes
@@ -445,7 +448,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Place, Description, Details** | Click *Add location*, *Add description* or *Add details* in the card, type, Enter (Ctrl+Enter: a new line) |
 | **Pick a Suggested Place** | While typing a place: click a suggestion, or ↑ / ↓ then Enter; Esc hides the list (`PlaceSuggestions=0` turns it off) |
 | **Repeat, Calendar, Task List** | Click the choice (▾) in the card and pick another; or scroll over it |
-| **Change Date / Time in the Card** | Click the start or end and type it (`9`, `930`, `9:30`, `9:30 pm`), Enter; or mouse wheel over the date, start or end |
+| **Change Date / Time in the Card** | Click the date, start or end and type it (`31/10`, `31 oct`, `tomorrow`, `fri`, `+2`; `9`, `930`, `9:30`, `9:30 pm`), Enter; or mouse wheel over it |
 | **Details, Edit, Duplicate, Delete** | Click or right-click an event or task; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`; `RightClickCard=0` shows the skin menu instead) |
 | **Move an Event** | Drag it to another time or day (15-minute steps); right-click or leave the skin to cancel (`DragToMove=0` turns dragging off) |
 | **Resize the Skin** | Drag the grip in the bottom right corner (it appears while the cursor is over the skin); right-click while dragging to cancel. Or right-click > *Size: small / medium / large*; *Original size (from the settings)* goes back to `Width` / `Height` of `Settings.inc` |

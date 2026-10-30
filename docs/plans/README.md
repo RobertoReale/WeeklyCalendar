@@ -70,7 +70,8 @@ These are the traps of this codebase. Each one has already caused a bug once.
   enough. X/Y are skin coordinates. Enter runs `Command1` (titles with `"`, `#`, `[ ]`, accents
   arrive intact); Esc or any focus loss runs `OnDismissAction`, before the click that caused it.
   The box cannot be closed from the skin: close the card only after the user's click.
-  The start and end times have their own box (`MeasureTimeInput`, `CardTime()` / `TimeSubmit()`).
+  The date and the start and end times have their own box (`MeasureTimeInput`, `CardTime()` /
+  `TimeSubmit()`, `edit.parseDate` / `parseClock`).
   The same `MeasureCreateInput` types the notes, place and description too (`c.inputField`,
   `CardField()`); `layoutCard` sets its size, font size and `InputLimit` for each. The 4.5 plugin
   trims what was typed, inserts a new line with Ctrl+Enter, selects the text it shows and drops

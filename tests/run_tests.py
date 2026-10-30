@@ -1820,7 +1820,7 @@ def test_create_event_card_and_draft():
         start = card_el(sk, '10:00')
         assert m.opt(start, 'MouseScrollUpAction') == '[!CommandMeasure MeasureScript "CreateAdjust(\'start\', 1)"]'
         assert sk.tip(start) == 'Click to type, scroll to change'
-        assert sk.tip(card_el(sk, 'Wed 3 Mar')) == 'Scroll to change'
+        assert sk.tip(card_el(sk, 'Wed 3 Mar')) == 'Click to type, scroll to change'
         g.CreateAdjust('start', 1)
         assert '10:15' in card_texts(sk) and '11:15' in card_texts(sk)
         for _ in range(8):
@@ -2207,6 +2207,82 @@ def test_type_the_times_in_the_card():
         g.ItemSave()
         assert 'start=' + enc(utc_of_local(2027, 3, 3, h0 + 2, 15)) in task_params(sk)[-1], task_params(sk)[-1]
         assert 'end=' + enc(utc_of_local(2027, 3, 3, h0 + 3, 15)) in task_params(sk)[-1]
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_type_the_date_in_the_card():
+    sk = create_skin()
+    try:
+        m, g = sk.mock, sk.g
+        parse = sk.lua.eval('function(t, b, n) return _WC.edit.parseDate(t, b, n) end')
+        day = sk.lua.eval('function(y, m, d) return math.floor(os.time({year=y,month=m,day=d,hour=12}) / 86400) end')
+        today = day(2027, 3, 3)                                    # Wednesday
+        base = day(2027, 3, 10)                                    # the date shown
+        for text, want in [('oggi', (2027, 3, 3)), ('Today', (2027, 3, 3)), ('domani', (2027, 3, 4)),
+                           ('tomorrow', (2027, 3, 4)), ('dopodomani', (2027, 3, 5)), ('ieri', (2027, 3, 2)),
+                           ('+2', (2027, 3, 12)), ('-1', (2027, 3, 9)), ('+ 7', (2027, 3, 17)),
+                           ('ven', (2027, 3, 5)), ('mer', (2027, 3, 10)), ('Lunedì', (2027, 3, 8)),
+                           ('monday', (2027, 3, 8)), ('mar', (2027, 3, 9)),
+                           ('31', (2027, 3, 31)), ('2', (2027, 3, 2)), ('28', (2027, 3, 28)), ('28/2', (2027, 2, 28)),
+                           ('31/10', (2027, 10, 31)), ('31.10.26', (2026, 10, 31)), ('31-10-2026', (2026, 10, 31)),
+                           ('2026-10-31', (2026, 10, 31)), ('31 ott', (2027, 10, 31)), ('31ottobre', (2027, 10, 31)),
+                           ('Oct 31', (2027, 10, 31)), ('October 31st, 2028', (2028, 10, 31)),
+                           ('ven 30 ott', (2027, 10, 30)), ('Fri 30 Oct', (2027, 10, 30)), ('mar 31 mar', (2027, 3, 31)),
+                           ('1 sett', (2027, 9, 1)), ('5/1', (2028, 1, 5)), ('29 feb 2028', (2028, 2, 29)),
+                           ('29/2', (2028, 2, 29)), ('10/3/2025', (2025, 3, 10))]:
+            assert parse(text, base, today) == day(*want), (text, parse(text, base, today), want)
+        for text in ('', 'abc', '31/02', '29 feb 2027', '32', '0', '13/13', 'ott', '1 2 3 4', '31 ott xyz', '310',
+                     '1/1/123', 'gi', '31/4'):
+            assert parse(text, base, today) is None, (text, parse(text, base, today))
+        # a click on the date chip opens the box with the date shown; Enter moves the event
+        g.CreateAt(2, zone_y(sk, 2, '10:20'))                      # Wed 3 Mar, 10:00 - 11:00
+        chip = card_el(sk, 'Wed 3 Mar')
+        assert m.opt(chip, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "CardTime(\'date\')"]'
+        assert m.opt(chip, 'MouseActionCursorName') == 'Text'
+        m.bangs.clear()
+        press(sk)
+        run_action(sk, m.opt(chip, 'LeftMouseUpAction'))
+        assert ['!CommandMeasure', 'MeasureTimeInput', 'ExecuteBatch 1'] in m.bangs
+        assert m.opt('MeasureTimeInput', 'DefaultValue') == 'Wed 3 Mar'
+        assert int(m.opt('MeasureTimeInput', 'W')) >= 84
+        m.vars['CreateTime'] = 'domani'
+        g.TimeSubmit()
+        texts = card_texts(sk)
+        assert 'Thu 4 Mar' in texts and '10:00' in texts and '11:00' in texts, texts
+        assert int(m.opt('CrZone3', 'X')) <= int(m.opt('CrDraft', 'X')) < int(m.opt('CrZone4', 'X'))
+        # Enter without a change, or a date that cannot be read: nothing changes
+        for typed in ('Thu 4 Mar', '31/02'):
+            press(sk)
+            run_action(sk, m.opt(card_el(sk, 'Thu 4 Mar'), 'LeftMouseUpAction'))
+            m.vars['CreateTime'] = typed
+            g.TimeSubmit()
+            assert 'Thu 4 Mar' in card_texts(sk), (typed, card_texts(sk))
+        # Esc: nothing changes; the wheel still works
+        press(sk)
+        run_action(sk, m.opt(card_el(sk, 'Thu 4 Mar'), 'LeftMouseUpAction'))
+        g.TimeInputClosed()
+        g.CreateAdjust('date', 1)
+        assert 'Fri 5 Mar' in card_texts(sk)
+        # a task: the date only, typed as well
+        g.CreateType('task')
+        press(sk)
+        run_action(sk, m.opt(card_el(sk, 'Fri 5 Mar'), 'LeftMouseUpAction'))
+        m.vars['CreateTime'] = '9/3'
+        g.TimeSubmit()
+        assert 'Tue 9 Mar' in card_texts(sk), card_texts(sk)
+        g.CardClose()
+        sk.check_clean()
+    finally:
+        sk.close()
+    # Italian: "mer 3 mar", the month in the case of the day
+    sk = create_skin(Language='it')
+    try:
+        sk.g.CreateAt(2, zone_y(sk, 2, '10:20'))
+        chip = card_el(sk, 'mer 3 mar')
+        assert sk.tip(chip) == 'Clic per scrivere, rotellina per cambiare'
+        sk.g.CardClose()
         sk.check_clean()
     finally:
         sk.close()
