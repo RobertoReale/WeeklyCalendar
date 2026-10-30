@@ -4422,6 +4422,35 @@ def test_narrow_toolbar_keeps_the_sync_text_clear():
             sk.check_clean()
         finally:
             sk.close()
+
+
+def test_narrow_toolbar_keeps_the_minimize_button():
+    # The smallest skin: the range takes short month names, then the app title goes
+    for view, ymd, title, app in (('day', (2026, 10, 30), 'Oct 30, 2026', True),
+                                  ('3day', (2026, 12, 31), 'Dec 2026 – Jan 2027', False),
+                                  ('week', (2027, 3, 3), 'March 2027', True)):
+        sk = Skin(Width=800, ShowMinimizeButton=1)
+        try:
+            sk.start(*ymd, 12)
+            sk.g.SetView(view)
+            m = sk.mock
+            assert m.shown('BtnMini'), view
+            assert m.opt('TbTitle', 'Text') == title, (view, m.opt('TbTitle', 'Text'))
+            assert m.shown('CalAppTitle') == app, view
+            right = int(m.opt('TbTitle', 'X')) + len(title) * 16 * 4 / 3 * 0.52
+            assert right + 16 <= int(m.opt('ViewSegBg', 'X')), (view, right)
+            assert int(m.opt('ViewSegBg', 'X')) + 8 <= int(m.opt('BtnMini', 'X')), view
+            sk.check_clean()
+        finally:
+            sk.close()
+    # A wide skin keeps the long names and the app title
+    sk = Skin(Width=1400, ShowMinimizeButton=1)
+    try:
+        sk.start(2026, 10, 30, 12)
+        sk.g.SetView('day')
+        assert sk.mock.opt('TbTitle', 'Text') == 'October 30, 2026' and sk.mock.shown('CalAppTitle')
+    finally:
+        sk.close()
     # Even narrower with a problem: the notice stays, the time goes
     sk = Skin(Width=800, ShowMinimizeButton=0)
     try:
