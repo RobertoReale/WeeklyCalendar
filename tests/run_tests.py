@@ -264,7 +264,7 @@ class Skin:
             'Language': 'en', 'StartHour': '8', 'EndHour': '20', 'AutoScroll': '1',
             'AutoScrollHour': '14', 'FirstDay': '1',
             # the wallpaper settings as before 1.19 (their own tests turn them on)
-            'BgOpacity': '100', 'IdleOpacity': '100', 'HideEmptyHours': '0',
+            'BgOpacity': '100', 'IdleBgOpacity': '', 'IdleOpacity': '100', 'HideEmptyHours': '0',
         })
         variables.update({k: str(v) for k, v in overrides.items()})
         self.mock = MockSkin(variables, ini_sections())
@@ -4429,6 +4429,35 @@ def test_background_opacity():
             sk.check_clean()
         finally:
             sk.close()
+
+
+def test_background_in_use_and_idle():
+    sk = Skin(BgOpacity='100', IdleBgOpacity='80', IdleOpacity='100', IdleSeconds='2')
+    try:
+        m, g = sk.mock, sk.g
+        sk.start(2027, 3, 3, 12)
+        assert 'Fill Color 255,255,255,255 |' in m.opt('BG', 'Shape')
+        # the cursor leaves: after IdleSeconds the background (only) goes to IdleBgOpacity
+        assert ['[!Delay 2000][!CommandMeasure MeasureScript "IdleFade(1)"]'] in m.bangs
+        m.bangs.clear()
+        g.IdleFade(1)
+        assert 'Fill Color 255,255,255,204 |' in m.opt('BG', 'Shape'), m.opt('BG', 'Shape')
+        assert ['!UpdateMeter', 'BG'] in m.bangs and ['!Redraw'] in m.bangs
+        assert not [b for b in m.bangs if b[0] == '!SetTransparency' or 'IdleFade' in b[0]]
+        g.SetView('month')  # (a layout keeps it)
+        assert 'Fill Color 255,255,255,204 |' in m.opt('BG', 'Shape')
+        g.IdleHover(1)
+        assert 'Fill Color 255,255,255,255 |' in m.opt('BG', 'Shape')
+        # minimized: the tile too
+        g.IdleHover(0)
+        g.Minimize()
+        g.IdleFade(3)
+        assert 'Fill Color 255,255,255,204 |' in m.opt('MiniBg', 'Shape'), m.opt('MiniBg', 'Shape')
+        g.IdleHover(1)
+        assert 'Fill Color 255,255,255,255 |' in m.opt('MiniBg', 'Shape')
+        sk.check_clean()
+    finally:
+        sk.close()
 
 
 def test_idle_fade():

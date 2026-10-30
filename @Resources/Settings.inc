@@ -108,9 +108,12 @@ EventRadius=5
 BgRadius=16
 
 ;  Seeing the wallpaper
-;  BgOpacity: opacity of the calendar's background in % (0-100; 100 = opaque, as before 1.19):
-;  lower it to see the wallpaper through it. Events, cards and texts stay opaque.
-BgOpacity=90
+;  BgOpacity: opacity of the calendar's background in % while you use it (the mouse over it),
+;  0-100; 100 = opaque. Events, cards and texts always stay opaque.
+BgOpacity=100
+;  IdleBgOpacity: the same while the mouse is away (after IdleSeconds): lower it to see the
+;  wallpaper through the background. Empty = as BgOpacity.
+IdleBgOpacity=90
 ;  IdleOpacity: how visible the whole skin stays while the mouse is away from it, in % (10-100;
 ;  100 = always fully visible). It fades IdleSeconds after the mouse leaves the skin, and is fully
 ;  visible again as soon as the mouse is over it (not while a card is open).

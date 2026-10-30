@@ -28,7 +28,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Looks like Google Calendar**: past events and completed tasks pale with dark text, completed tasks struck through, a 45-minute event with its title above the time and place, times as "08:30 – 10:30".
 - **Declined Invitations**: Invitations you declined are drawn outlined, like Google Calendar, or can be hidden (`ShowDeclined=0`).
 - **Past Event Fading**: Events fade as soon as they end, just like in Google Calendar.
-- **See Your Wallpaper**: a see-through background (`BgOpacity`), a skin that fades while the mouse is away and comes back when it is over it (`IdleOpacity`), a **minimize** button that turns the calendar into a small tile with today's date and the next events (click it to open the calendar again), and the hours without events left out, so the calendar is shorter (`HideEmptyHours`).
+- **See Your Wallpaper**: a see-through background while you are not using it (`IdleBgOpacity`, and `BgOpacity` while you are), a skin that fades while the mouse is away and comes back when it is over it (`IdleOpacity`), a **minimize** button that turns the calendar into a small tile with today's date and the next events (click it to open the calendar again), and the hours without events left out, so the calendar is shorter (`HideEmptyHours`).
 - **Detailed Tooltips**: Hover over any event or task to see its full title, start/end time, location and description (rich text and Google Meet details are cleaned up).
 - **Dialogs Always on Top**: Windows and dialogs you open (e.g. "Empty Recycle Bin") always appear above the calendar, even in Windows' "Show desktop" mode.
 - **Resizable**: Drag the grip in the bottom right corner to any size (an outline shows the new size while you drag), or pick *Size: small / medium / large* in the right-click menu. The calendar redraws at once and remembers the size.
@@ -318,8 +318,10 @@ View=week
 
 ### 8. Seeing the wallpaper
 ```ini
-; Opacity of the background in % (100 = opaque): events, cards and texts stay opaque
-BgOpacity=90
+; Opacity of the background in % (100 = opaque) while you use the calendar (the mouse over
+; it), and while the mouse is away; events, cards and texts stay opaque
+BgOpacity=100
+IdleBgOpacity=90
 
 ; How visible the skin stays while the mouse is away, in % (100 = always fully visible);
 ; it fades IdleSeconds after the mouse leaves it, and comes back as soon as it is over it
