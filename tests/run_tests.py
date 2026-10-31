@@ -2265,6 +2265,21 @@ def test_type_the_date_in_the_card():
         g.TimeInputClosed()
         g.CreateAdjust('date', 1)
         assert 'Fri 5 Mar' in card_texts(sk)
+        # The arrows beside the chip: the day before / after, the wheel as on the chip
+        prev, nxt = card_el(sk, '‹'), card_el(sk, '›')
+        assert sk.tip(prev) == 'Previous day' and sk.tip(nxt) == 'Next day'
+        assert m.opt(nxt, 'MouseScrollUpAction') == '[!CommandMeasure MeasureScript "CreateAdjust(\'date\', 1)"]'
+        assert int(m.opt(prev, 'X')) < int(m.opt(card_el(sk, 'Fri 5 Mar'), 'X')) < int(m.opt(nxt, 'X')) \
+            < int(m.opt(card_el(sk, '10:00'), 'X'))
+        press(sk)
+        run_action(sk, m.opt(nxt, 'LeftMouseUpAction'))
+        assert 'Sat 6 Mar' in card_texts(sk) and '10:00' in card_texts(sk)
+        press(sk)
+        run_action(sk, m.opt(card_el(sk, '‹'), 'LeftMouseUpAction'))
+        run_action(sk, m.opt(card_el(sk, '‹'), 'LeftMouseUpAction'))
+        assert 'Thu 4 Mar' in card_texts(sk)
+        g.CreateStep(1)
+        assert 'Fri 5 Mar' in card_texts(sk), card_texts(sk)
         # a task: the date only, typed as well
         g.CreateType('task')
         press(sk)
