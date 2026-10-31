@@ -4831,6 +4831,262 @@ def test_hide_empty_hours():
         sk.close()
 
 
+def test_merge_task_times_with_two_same_title_tasks_on_same_day():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        add_event(sk, 3, 'BEGIN:VEVENT\nUID:st1@tasks.google.com\nDTSTART;VALUE=DATE:20270304\n'
+                         'SUMMARY:Studio\nX-WC-TASK:NEEDS-ACTION\nX-WC-TASKLIST:L1\nX-WC-TASKID:st1\nEND:VEVENT\n'
+                         'BEGIN:VEVENT\nUID:st2@tasks.google.com\nDTSTART;VALUE=DATE:20270304\n'
+                         'SUMMARY:Studio\nX-WC-TASK:NEEDS-ACTION\nX-WC-TASKLIST:L1\nX-WC-TASKID:st2\nEND:VEVENT\n')
+        add_event(sk, 1, 'BEGIN:VEVENT\nUID:g_st1@google.com\nDTSTART:20270304T090000Z\nDTEND:20270304T100000Z\n'
+                         'SUMMARY:Studio\nTRANSP:TRANSPARENT\nEND:VEVENT\n'
+                         'BEGIN:VEVENT\nUID:g_st2@google.com\nDTSTART:20270304T140000Z\nDTEND:20270304T150000Z\n'
+                         'SUMMARY:Studio\nTRANSP:TRANSPARENT\nEND:VEVENT\n')
+        g.Reload(3)
+        g.Reload(1)
+        assert not any('Studio' in k for k in sk.all_day()), sk.all_day()
+        assert not event_meters(sk, 'Studio')
+        meters = [i for i in range(1, 81) if m.shown('EvT%d' % i) and m.opt('EvT%d' % i, 'Text').startswith('○ Studio')]
+        assert len(meters) == 2, meters
+        h1, h2 = int(clock_of(utc(2027, 3, 4, 9))[:2]), int(clock_of(utc(2027, 3, 4, 14))[:2])
+        tips = [sk.tip('EvBg%d' % i) for i in meters]
+        assert any('%02d:00 – %02d:00' % (h1, h1 + 1) in t for t in tips), tips
+        assert any('%02d:00 – %02d:00' % (h2, h2 + 1) in t for t in tips), tips
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_merge_task_times_ignores_extra_spaces_in_title():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        add_event(sk, 3, 'BEGIN:VEVENT\nUID:ea1@tasks.google.com\nDTSTART;VALUE=DATE:20270304\n'
+                         'SUMMARY:Esame  Analisi \nX-WC-TASK:NEEDS-ACTION\nX-WC-TASKLIST:L1\nX-WC-TASKID:ea1\nEND:VEVENT\n')
+        add_event(sk, 1, 'BEGIN:VEVENT\nUID:g_ea1@google.com\nDTSTART:20270304T150000Z\nDTEND:20270304T160000Z\n'
+                         'SUMMARY:Esame Analisi\nTRANSP:TRANSPARENT\nEND:VEVENT\n')
+        g.Reload(3)
+        g.Reload(1)
+        assert not any('Analisi' in k for k in sk.all_day()), sk.all_day()
+        assert not event_meters(sk, 'Esame')
+        assert list(event_meters(sk, '○ Esame')) == [3]
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_timed_task_keeps_its_time_across_two_consecutive_renames():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(GHOST_ICS)
+        g.Reload(1)
+        h0 = int(clock_of(utc(2027, 3, 3, 14))[:2])
+        open_card(sk, 'EvBg%d' % event_meters(sk, '○ Simulazione')[2])
+        g.ItemEdit()
+        m.vars['CreateTitle'] = 'Prova 1'
+        g.CreateSubmit()
+        i = event_meters(sk, '○ Prova 1')[2]
+        assert '%02d:00 – %02d:00' % (h0, h0 + 1) in m.opt('EvT%d' % i, 'Text') + m.opt('EvD%d' % i, 'Text')
+        open_card(sk, 'EvBg%d' % i)
+        g.ItemEdit()
+        m.vars['CreateTitle'] = 'Prova 2'
+        g.CreateSubmit()
+        assert not any('Prova' in k for k in sk.all_day()) and not event_meters(sk, 'Simulazione')
+        i = event_meters(sk, '○ Prova 2')[2]
+        assert '%02d:00 – %02d:00' % (h0, h0 + 1) in m.opt('EvT%d' % i, 'Text') + m.opt('EvD%d' % i, 'Text')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_drag_bottom_edge_resizes_event_duration():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        i = event_meter(sk, 'Lezione')
+        h = int(m.opt('EvBg%d' % i, 'H'))
+        y0 = int(m.opt('EvBg%d' % i, 'Y'))
+        s0 = clock_of(utc(2027, 3, 3, 10))
+        h0 = int(s0[:2])
+        g.DragEvent(i, h - 2, 20)
+        assert sk.lua.eval('_WC.edit.drag.mode') == 'resize'
+        press_slot = int(sk.lua.eval('_WC.edit.drag.pressSlot'))
+        g.DragSlot(press_slot + 2)
+        assert m.shown('DragPrev') and int(m.opt('DragPrev', 'Y')) == y0
+        assert int(m.opt('DragPrev', 'H')) > h
+        assert m.opt('DragPrevTx', 'Text').startswith('%02d:00 - %02d:30' % (h0, h0 + 1)), m.opt('DragPrevTx', 'Text')
+        assert m.opt('TbSync', 'Text') == '%02d:00 - %02d:30' % (h0, h0 + 1)
+        g.DragSlotDrop(press_slot + 2)
+        assert task_params(sk)[-1] == ('-s -f -L -m 30 ' + SCRIPT_URL + '?action=moveevent&cal=me%40example.com'
+                                       '&uid=abc123%40google.com&start=' + enc(utc_of_local(2027, 3, 3, h0, 0))
+                                       + '&end=' + enc(utc_of_local(2027, 3, 3, h0 + 1, 30))), task_params(sk)[-1]
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_resize_event_clamps_to_minimum_15_minutes():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        i = event_meter(sk, 'Lezione')
+        h = int(m.opt('EvBg%d' % i, 'H'))
+        h0 = int(clock_of(utc(2027, 3, 3, 10))[:2])
+        g.DragEvent(i, h - 2, 20)
+        g.DragSlot(1)
+        assert m.opt('DragPrevTx', 'Text').startswith('%02d:00 - %02d:15' % (h0, h0)), m.opt('DragPrevTx', 'Text')
+        g.DragSlotDrop(1)
+        assert task_params(sk)[-1].endswith('&start=' + enc(utc_of_local(2027, 3, 3, h0, 0))
+                                            + '&end=' + enc(utc_of_local(2027, 3, 3, h0, 15))), task_params(sk)[-1]
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_resize_event_ignores_horizontal_column_change():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        i = event_meter(sk, 'Lezione')
+        h = int(m.opt('EvBg%d' % i, 'H'))
+        h0 = int(clock_of(utc(2027, 3, 3, 10))[:2])
+        g.DragEvent(i, h - 2, 20)
+        press_slot = int(sk.lua.eval('_WC.edit.drag.pressSlot'))
+        g.DragOver(4)
+        assert int(sk.lua.eval('_WC.edit.drag.slotCol')) == 2
+        g.DragSlot(press_slot + 1, 20, 10)
+        g.DragSlotDrop(press_slot + 1, 20, 10)
+        assert list(event_meters(sk, 'Lezione')) == [2]
+        assert task_params(sk)[-1].endswith('&start=' + enc(utc_of_local(2027, 3, 3, h0, 0))
+                                            + '&end=' + enc(utc_of_local(2027, 3, 3, h0 + 1, 15))), task_params(sk)[-1]
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_click_on_bottom_edge_without_moving_still_opens_card():
+    sk = edit_skin(ClickAction='card')
+    try:
+        m, g = sk.mock, sk.g
+        i = event_meter(sk, 'Lezione')
+        h = int(m.opt('EvBg%d' % i, 'H'))
+        g.DragEvent(i, h - 2, 20)
+        press_slot = int(sk.lua.eval('_WC.edit.drag.pressSlot'))
+        g.DragSlotDrop(press_slot, 20, 2)
+        assert m.shown('CrCard') and card_texts(sk)[0] == 'Lezione'
+        assert not task_params(sk)
+        g.CardClose()
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_edit_timed_task_preserves_merged_time_when_switched_to_event():
+    sk = edit_skin(tasks='tasks_v2.ics')
+    try:
+        m, g = sk.mock, sk.g
+        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(GHOST_ICS)
+        g.Reload(1)
+        h0 = int(clock_of(utc(2027, 3, 3, 14))[:2])
+        open_card(sk, 'EvBg%d' % event_meters(sk, '○ Simulazione')[2])
+        g.ItemEdit()
+        texts = card_texts(sk)
+        assert 'Its time can only be changed in Google Tasks' in texts, texts
+        assert 'Event' in texts and 'Task' in texts
+        g.EditType('event')
+        texts = card_texts(sk)
+        assert 'Its time can only be changed in Google Tasks' not in texts, texts
+        assert '%02d:00' % h0 in texts and '%02d:00' % (h0 + 1) in texts, texts
+        assert 'capitolo 4 esercizi' in texts, texts
+        assert sk.lua.eval('_WC.edit.card.desc') == 'capitolo 4\nesercizi'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_convert_task_to_event_creates_event_then_deletes_task():
+    sk = edit_skin(tasks='tasks_v2.ics')
+    try:
+        m, g = sk.mock, sk.g
+        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(GHOST_ICS)
+        g.Reload(1)
+        h0 = int(clock_of(utc(2027, 3, 3, 14))[:2])
+        open_card(sk, 'EvBg%d' % event_meters(sk, '○ Simulazione')[2])
+        g.ItemEdit()
+        g.EditType('event')
+        g.ItemSave()
+        assert task_params(sk)[-1] == ('-s -f -L -m 30 ' + SCRIPT_URL + '?action=createevent&cal='
+                                       '&title=Simulazione%20Tema%20di%20Esame'
+                                       '&start=' + enc(utc_of_local(2027, 3, 3, h0, 0))
+                                       + '&end=' + enc(utc_of_local(2027, 3, 3, h0 + 1, 0))
+                                       + '&desc=capitolo%204%0Aesercizi'), task_params(sk)[-1]
+        assert not event_meters(sk, '○ Simulazione') and list(event_meters(sk, 'Simulazione')) == [2]
+        answer(sk, 'OK new-uid@google.com')
+        assert task_params(sk)[-1] == '-s -f -L -m 30 ' + SCRIPT_URL + '?action=deletetask&list=L1&task=t-open'
+        answer(sk, 'OK')
+        assert not event_meters(sk, '○ Simulazione') and list(event_meters(sk, 'Simulazione')) == [2]
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_convert_task_to_event_rolls_back_on_error():
+    sk = edit_skin(tasks='tasks_v2.ics')
+    try:
+        m, g = sk.mock, sk.g
+        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(GHOST_ICS)
+        g.Reload(1)
+        open_card(sk, 'EvBg%d' % event_meters(sk, '○ Simulazione')[2])
+        g.ItemEdit()
+        g.EditType('event')
+        n = len(task_params(sk))
+        g.ItemSave()
+        assert len(task_params(sk)) == n + 1 and 'action=createevent' in task_params(sk)[-1]
+        answer(sk, 'ERROR calendar not found')
+        assert len(task_params(sk)) == n + 1
+        assert list(event_meters(sk, '○ Simulazione')) == [2] and not event_meters(sk, 'Simulazione')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_convert_event_to_task_creates_task_then_deletes_event():
+    sk = edit_skin(tasks='tasks_v2.ics')
+    try:
+        m, g = sk.mock, sk.g
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Mia riunione'))
+        g.ItemEdit()
+        assert 'Event' in card_texts(sk) and 'Task' in card_texts(sk)
+        g.EditType('task')
+        g.ItemSave()
+        assert task_params(sk)[-1] == ('-s -f -L -m 30 ' + SCRIPT_URL
+                                       + '?action=createtask&list=%40default&title=Mia%20riunione&due=2027-03-05')
+        assert not event_meters(sk, 'Mia riunione') and chip_col(sk, sk.all_day()['○ Mia riunione']) == 4
+        answer(sk, 'OK t-conv')
+        assert task_params(sk)[-1] == ('-s -f -L -m 30 ' + SCRIPT_URL
+                                       + '?action=deleteevent&cal=me%40example.com&uid=mine%40google.com&scope=one')
+        answer(sk, 'OK')
+        assert not event_meters(sk, 'Mia riunione') and chip_col(sk, sk.all_day()['○ Mia riunione']) == 4
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_recurring_event_does_not_offer_task_conversion():
+    sk = edit_skin(tasks='tasks_v2.ics')
+    try:
+        m, g = sk.mock, sk.g
+        open_card(sk, 'EvBg%d' % event_meters(sk, 'Daily')[2])
+        g.ItemEdit()
+        assert 'Task' not in card_texts(sk)
+        g.CardClose()
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_lua_main_chunk_has_room_for_locals():
     # Lua 5.1 allows 200 local variables per function, the main chunk included: past it
     # Rainmeter refuses the whole script (and a press on the empty skin then moves it).
