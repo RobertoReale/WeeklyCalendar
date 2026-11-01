@@ -50,6 +50,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 3. Open Rainmeter **Manage**, expand `WeeklyCalendar`, select `WeeklyCalendar.ini`, and click **Load**.
    On first load the skin creates `@Resources\Private.inc`, where your calendar addresses go.
 4. Link your calendar (see below).
+5. **Start with Windows (recommended)**: Rainmeter remembers which skins are open and their position on screen, so starting Rainmeter at sign-in brings the calendar back automatically. If the Rainmeter installer did not add a startup shortcut, press `Win + R`, run `shell:startup`, and place a shortcut to `C:\Program Files\Rainmeter\Rainmeter.exe` in that folder (and make sure **Rainmeter** is enabled in *Task Manager* > **Startup apps**).
 
 ---
 
