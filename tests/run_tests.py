@@ -3400,12 +3400,12 @@ def test_task_lists_details_and_moves():
         assert m.bangs.count(['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1']) >= 2  # title again
         run_action(sk, m.opt(card_el(sk, 'Sport, palestra' + ARROW), 'MouseScrollUpAction'))  # the wheel
         assert 'Analisi Matematica 1 - 1° Parziale' + ARROW in card_texts(sk)
-        # Details: a smaller box, two lines tall; Ctrl+Enter lines arrive as CR LF
+        # Details: a smaller box, two lines tall; Shift+Enter lines arrive as CR LF
         press(sk)
         run_action(sk, m.opt(card_el(sk, 'Add details'), 'LeftMouseUpAction'))
         assert m.opt('MeasureCreateInput', 'FontSize') == '9' and m.opt('MeasureCreateInput', 'DefaultValue') == ''
         assert m.opt('MeasureCreateInput', 'H') == '44' and m.opt('MeasureCreateInput', 'InputLimit') == '1500'
-        assert 'Enter: done - Ctrl+Enter: new line' in card_texts(sk)
+        assert 'Enter: done - Shift+Enter: new line' in card_texts(sk)
         m.vars['CreateTitle'] = ' riga 1\r\nriga \\"2\\" '      # Rainmeter gives a typed " as \"
         g.CreateSubmit()
         assert "riga 1 riga '2'" in card_texts(sk) and 'Add details' not in card_texts(sk)
@@ -3520,6 +3520,8 @@ def test_event_place_description_repeat_and_calendar():
         m.vars['CreateTitle'] = 'Aula 3'
         g.CreateSubmit()
         g.CardField('desc')
+        assert m.opt('MeasureCreateInput', 'H') == '44'
+        assert 'Enter: done - Shift+Enter: new line' in card_texts(sk)
         m.vars['CreateTitle'] = 'Portare il libro'
         g.CreateSubmit()
         g.CardMenu('cal')

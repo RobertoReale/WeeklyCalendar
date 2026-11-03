@@ -21,6 +21,8 @@
 // box that becomes empty is copied only when it stays so: a closing box reads as empty for
 // a moment. Ctrl+Backspace, which types a DEL character in the plugin's box (a WinForms text
 // box), deletes the word before the cursor instead, as in other text boxes.
+// Shift+Enter in a multiline box (description, details) inserts a new line instead of
+// closing the box (WinForms treats Shift+Enter as the form's AcceptButton by default).
 //
 // And it lets the skin follow the cursor while its resize grip is held: Rainmeter tells a
 // skin only where the mouse was pressed and released. While Resize.txt exists (the skin
@@ -107,7 +109,7 @@ static class ZOrderHelper
     const int WS_EX_TOPMOST = 0x8;
     const int GWL_STYLE = -16;
     const int ES_PASSWORD = 0x20;
-    const uint WM_SETTEXT = 0x000C, WM_GETTEXT = 0x000D, WM_GETTEXTLENGTH = 0x000E, EM_GETSEL = 0x00B0, EM_SETSEL = 0x00B1, EM_SCROLLCARET = 0x00B7;
+    const uint WM_SETTEXT = 0x000C, WM_GETTEXT = 0x000D, WM_GETTEXTLENGTH = 0x000E, EM_GETSEL = 0x00B0, EM_SETSEL = 0x00B1, EM_SCROLLCARET = 0x00B7, EM_REPLACESEL = 0x00C2;
     const uint SMTO_ABORTIFHUNG = 0x2;
     const uint WM_COPYDATA = 0x004A, GA_ROOT = 2;
     static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
@@ -191,6 +193,7 @@ static class ZOrderHelper
             watcher.Created += wake;
             watcher.Changed += wake;
             watcher.Renamed += delegate { WakeTyping(); };
+            watcher.Deleted += wake;
             watcher.EnableRaisingEvents = true;
             WakeTyping();
             Application.Run();
@@ -271,6 +274,7 @@ static class ZOrderHelper
     // Starts the typing timer when one of its files exists (it stops itself when neither does)
     static void WakeTyping()
     {
+        UpdateHook();
         if (typing != null && !typing.Enabled && (File.Exists(typedPath) || File.Exists(resizePath))) typing.Start();
     }
 
@@ -281,8 +285,10 @@ static class ZOrderHelper
         {
             typedBox = IntPtr.Zero;
             PlacesEnd();
+            UpdateHook();
             return false;
         }
+        UpdateHook();
         IntPtr fg = GetForegroundWindow();
         uint pid;
         uint thread = GetWindowThreadProcessId(fg, out pid);
@@ -510,7 +516,7 @@ static class ZOrderHelper
         plSel = 0;
         plDue = 0;
         plHidden = false;
-        Hook(false);
+        UpdateHook();
     }
 
     static string Query(string text)
@@ -781,7 +787,7 @@ static class ZOrderHelper
         plSel = 0;
         plRows = none ? null : keep.ToArray();
         Bang(string.Format("!CommandMeasure MeasureScript \"PlaceList({0})\" \"{1}\"", pl.n, pl.config));
-        Hook(!none);
+        UpdateHook();
     }
 
     // ---- Keys while places show: on a thread of its own, so that a busy moment of this one
@@ -791,6 +797,11 @@ static class ZOrderHelper
     static uint hookThread;
     static bool hookOn;
     const uint WM_APP = 0x8000;
+
+    static void UpdateHook()
+    {
+        Hook(plRows != null || File.Exists(typedPath));
+    }
 
     static void Hook(bool on)
     {
@@ -830,6 +841,7 @@ static class ZOrderHelper
         {
             int vk = Marshal.ReadInt32(lp);
             if ((vk == 0x26 || vk == 0x28 || vk == 0x0D || vk == 0x1B) && PlaceKey(vk)) return new IntPtr(1);
+            if (vk == 0x0D && ShiftEnterKey()) return new IntPtr(1);
         }
         return CallNextHookEx(IntPtr.Zero, code, wp, lp);
     }
@@ -883,6 +895,44 @@ static class ZOrderHelper
         {
             if (pl != null && plRows != null) Bang(string.Format("!CommandMeasure MeasureScript \"PlaceSel({0}, {1})\" \"{2}\"", pl.n, sel, pl.config));
         });
+        return true;
+    }
+
+    // Shift+Enter in a multiline box (desc, notes): inserts a new line instead of closing the box
+    static bool ShiftEnterKey()
+    {
+        if ((GetAsyncKeyState(0x10) & 0x8000) == 0) return false; // Shift
+        if ((GetAsyncKeyState(0x12) & 0x8000) != 0) return false; // Alt
+        if (!File.Exists(typedPath)) return false;
+        IntPtr fg = GetForegroundWindow();
+        uint pid;
+        uint thread = GetWindowThreadProcessId(fg, out pid);
+        if (fg == IntPtr.Zero || pid != rainmeterPid || ClassOf(fg) == "RainmeterMeterWindow") return false;
+        IntPtr box = TextBoxOf(fg);
+        if (box == IntPtr.Zero || FocusOf(thread) != box) return false;
+        RECT rc;
+        if (!GetWindowRect(box, out rc)) return false;
+        if (rc.Bottom - rc.Top < 35) return true; // in a single-line box, ignore Shift+Enter (do not submit)
+        IntPtr r;
+        SendMessageTimeout(box, EM_REPLACESEL, new IntPtr(1), "\r\n", SMTO_ABORTIFHUNG, 200, out r);
+        SendMessageTimeout(box, EM_SCROLLCARET, IntPtr.Zero, IntPtr.Zero, SMTO_ABORTIFHUNG, 200, out r);
+        string text = TextOf(box);
+        if (text != null)
+        {
+            if (text.IndexOf('\x7f') >= 0) text = DeleteWords(box, text);
+            try
+            {
+                byte[] data = Utf8.GetBytes("WC\n" + text);
+                using (var f = new FileStream(typedPath, FileMode.Truncate, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
+                {
+                    f.Write(data, 0, data.Length);
+                }
+                typedBox = box;
+                typedText = text;
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
         return true;
     }
 

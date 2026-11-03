@@ -183,7 +183,7 @@ How it works:
   An event also has *Does not repeat* (click it to choose every day, every weekday, every week,
   month or year), *Add location*, *Add description* and its calendar (any Google calendar shown in
   the skin); a task has *Add details* and its list (all your Google Tasks lists). Click a text
-  to type it and press **Enter** to keep it (**Ctrl+Enter** starts a new line in details and
+  to type it and press **Enter** to keep it (**Shift+Enter** or **Ctrl+Enter** starts a new line in details and
   descriptions), or just click elsewhere in the card: what you typed stays (this needs the helper
   of `@Resources\ZOrder`, see [Dimensions & Appearance](#9-dimensions--appearance)). Click a choice
   (▾) to list the others, or scroll over it to go to the next one. *More options*
@@ -450,7 +450,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it); a task shown at its time: right-click > *Mark complete* |
 | **Move a Task** | Drag it to another day (3-day, week and month views); right-click or leave the skin to cancel |
 | **Create** | Click an empty spot of the hours (event), of the all-day row or a day number (task), or **+** in the toolbar; type the title, Enter or *Save* (`ClickToCreate=0` / `ShowCreateButton=0` turn them off) |
-| **Place, Description, Details** | Click *Add location*, *Add description* or *Add details* in the card, type, Enter (Ctrl+Enter: a new line) |
+| **Place, Description, Details** | Click *Add location*, *Add description* or *Add details* in the card, type, Enter (Shift+Enter: a new line) |
 | **Pick a Suggested Place** | While typing a place: click a suggestion, or ↑ / ↓ then Enter; Esc hides the list (`PlaceSuggestions=0` turns it off) |
 | **Repeat, Calendar, Task List** | Click the choice (▾) in the card and pick another; or scroll over it |
 | **Change Date / Time in the Card** | Click the date, start or end and type it (`31/10`, `31 oct`, `tomorrow`, `fri`, `+2`; `9`, `930`, `9:30`, `9:30 pm`), Enter; or mouse wheel over it |
