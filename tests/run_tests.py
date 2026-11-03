@@ -420,14 +420,15 @@ def test_all_day_row_expands_and_collapses(sk):
 
 
 def test_expanded_all_day_row_is_capped():
-    sk = Skin(Height=400)
+    sk = Skin(Height=400, AllDayRatio=0.4)
     try:
         sk.start(2027, 3, 3, 12)
         sk.g.ExpandAllDay()  # (400 - 152) * 0.4 / 22 = 4 rows
         assert ad_texts(sk) == ['All day 1', 'All day 2', 'All day 3', '+2 more'], ad_texts(sk)
         more = [i for i in range(1, 71) if sk.mock.opt('ADTx%d' % i, 'Text') == '+2 more'][0]
-        # Expanding again would not show more: the click opens the day instead
-        assert sk.mock.opt('ADTx%d' % more, 'LeftMouseUpAction').startswith('["https://calendar.google.com/')
+        # Expanding again would not show more: left click collapses, middle click opens the day
+        assert sk.mock.opt('ADTx%d' % more, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "CollapseAllDay()"]'
+        assert sk.mock.opt('ADTx%d' % more, 'MiddleMouseUpAction').startswith('["https://calendar.google.com/')
         sk.check_clean()
     finally:
         sk.close()

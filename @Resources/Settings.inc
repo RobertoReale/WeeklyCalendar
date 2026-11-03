@@ -77,6 +77,10 @@ View=week
 ;  left of the row to collapse it again.
 AllDayRows=3
 
+;  AllDayRatio: maximum share of the height the all-day section can take when expanded
+;  (0.3-0.8, default 0.55). At 0.55 a medium window can expand up to the full 10 rows.
+AllDayRatio=0.55
+
 ;  ShowToolbar=1: shows the top toolbar (Today button, navigation arrows, month, week badge, sync status,
 ;  view switcher)
 ShowToolbar=1
