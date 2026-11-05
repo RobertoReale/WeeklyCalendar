@@ -128,6 +128,9 @@ IdleSeconds=3
 ;  events; click it to open the calendar again where it was, drag it to move it.
 ;  0 = no button (the menu item stays).
 ShowMinimizeButton=1
+;  ShowOverdueButton=1: when tasks of past days are not completed, a button in the toolbar brings
+;  them all to today ("Move to today (3)"), with Undo. 0 = no button (the right-click menu has it too).
+ShowOverdueButton=1
 ;  MiniEvents: how many of the next events (today's, then tomorrow's) the tile lists (0-5).
 MiniEvents=3
 ;  HideEmptyHours=1: the day, 3-day and week views show only the hours from the first event to the

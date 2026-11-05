@@ -4442,6 +4442,260 @@ def test_narrow_toolbar_keeps_the_sync_text_clear():
             sk.close()
 
 
+def overdue_ics(*tasks):
+    """A tasks feed: (id, YYYYMMDD[, status[, False: an older script, no ids]])."""
+    out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'X-WR-CALNAME:Google Tasks', 'X-WC-VERSION:3']
+    for task in tasks:
+        tid, day = task[0], task[1]
+        status = task[2] if len(task) > 2 else 'NEEDS-ACTION'
+        out += ['BEGIN:VEVENT', 'UID:%s@tasks.google.com' % tid, 'DTSTAMP:20270301T080000Z',
+                'DTSTART;VALUE=DATE:%s' % day, 'SUMMARY:Task %s' % tid, 'X-WC-TASK:%s' % status]
+        if len(task) < 4:
+            out += ['X-WC-TASKLIST:L1', 'X-WC-TASKID:%s' % tid]
+        out += ['END:VEVENT']
+    return '\r\n'.join(out + ['END:VCALENDAR', ''])
+
+
+def overdue_skin(*tasks, **kw):
+    """A skin on Wednesday 3 March 2027 (at 08:00) with that tasks feed."""
+    kw.setdefault('IcalUrl3', SCRIPT_URL)
+    sk = Skin(**kw)
+    with open(os.path.join(sk.dir, 'DownloadFile', 'calendar3.ics'), 'w', encoding='utf-8', newline='') as f:
+        f.write(overdue_ics(*tasks))
+    sk.start(2027, 3, 3, 8)
+    return sk
+
+
+def overdue_days(sk):
+    """Title of each task shown -> its day of March 2027."""
+    wc = sk.g._WC
+    first = wc.daysFromCivil(2027, 3, 1)
+    items = wc.buildInstances(first, first + 40)
+    return {it.title: it.sDay - first + 1 for it in items.values() if it.task}
+
+
+def test_overdue_tasks_go_to_today_with_undo():
+    sk = overdue_skin(('a', '20270301'), ('b', '20270302'),
+                      ('done', '20270302', 'COMPLETED'),   # done: stays
+                      ('old', '20270302', 'NEEDS-ACTION', False),  # no ids: the skin cannot move it
+                      ('now', '20270303'), ('next', '20270305'), Language='it')
+    try:
+        m, g = sk.mock, sk.g
+        assert overdue_days(sk) == {'Task a': 1, 'Task b': 2, 'Task done': 2, 'Task old': 2,
+                                    'Task now': 3, 'Task next': 5}
+        # Only the open tasks of past days count
+        assert m.shown('BtnOverdue') and m.shown('BtnOverdueTxt')
+        assert m.opt('BtnOverdueTxt', 'Text') == 'Porta a oggi (2)'
+        assert sk.tip('BtnOverdue') == 'Clic: sposta a oggi le 2 attività non completate dei giorni passati'
+        assert m.opt('Rainmeter', 'ContextTitle14') == 'Porta a oggi 2 attività'
+        # At once on screen, nothing sent yet: the button leaves and the bar offers Undo
+        ini = open(INI_FILE, encoding='utf-8').read()
+        for meter in ('BtnOverdue', 'BtnOverdueTxt'):
+            assert 'OverdueMove()' in ini.split('[%s]' % meter)[1].split('\n\n')[0]
+        g.OverdueMove()
+        assert overdue_days(sk) == {'Task a': 3, 'Task b': 3, 'Task done': 2, 'Task old': 2,
+                                    'Task now': 3, 'Task next': 5}
+        assert not m.shown('BtnOverdue') and not m.shown('BtnOverdueTxt')
+        assert m.opt('Rainmeter', 'ContextTitle14') == 'Nessuna attività in ritardo'
+        assert m.shown('ToastBg') and m.opt('ToastTx', 'Text') == '2 attività spostate a oggi'
+        assert ['!EnableMeasure', 'MeasureTick'] in m.bangs and not task_params(sk)
+        g.OverdueMove()  # nothing else to move
+        assert not task_params(sk)
+        # Undo: back on their days, nothing sent
+        m.bangs.clear()
+        g.ItemUndo()
+        assert overdue_days(sk)['Task a'] == 1 and overdue_days(sk)['Task b'] == 2
+        assert m.shown('BtnOverdue') and not m.shown('ToastBg') and not task_params(sk)
+        assert m.opt('Rainmeter', 'ContextTitle14') == 'Porta a oggi 2 attività'
+        # Again, from the context menu's action: the requests go out one at a time, 8 s later
+        assert 'OverdueMove()' in open(INI_FILE, encoding='utf-8').read().split('ContextAction14=')[1].split('\n')[0]
+        g.OverdueMove()
+        sk.at(2027, 3, 3, 8, 0, 5)
+        g.Tick()
+        assert not task_params(sk) and m.shown('ToastBg')
+        sk.at(2027, 3, 3, 8, 0, 9)
+        g.Tick()
+        assert not m.shown('ToastBg')
+        base = '-s -f -L -m 30 ' + SCRIPT_URL + '?action=move&list=L1&task=%s&due=2027-03-03'
+        assert task_params(sk) == [base % 'a'], task_params(sk)
+        # One download of the feed, after the last answer
+        m.bangs.clear()
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+        assert task_params(sk) == [base % 'b'] and ['!CommandMeasure', 'MeasureICS3', 'Update'] not in m.bangs
+        m.bangs.clear()
+        g.TaskResult()
+        assert not task_params(sk) and ['!CommandMeasure', 'MeasureICS3', 'Update'] in m.bangs
+        # The feed has the new dates: they stay, and the button stays away
+        with open(os.path.join(sk.dir, 'DownloadFile', 'calendar3.ics'), 'w', encoding='utf-8', newline='') as f:
+            f.write(overdue_ics(('a', '20270303'), ('b', '20270303'), ('done', '20270302', 'COMPLETED'),
+                                ('old', '20270302', 'NEEDS-ACTION', False), ('now', '20270303'), ('next', '20270305')))
+        g.Reload(3)
+        assert overdue_days(sk)['Task a'] == 3 and not m.shown('BtnOverdue')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_overdue_task_google_refuses_or_moved_meanwhile():
+    # Google refuses one: it goes back, the toolbar says so, the other one stays moved
+    sk = overdue_skin(('a', '20270301'), ('b', '20270302'))
+    try:
+        m, g = sk.mock, sk.g
+        assert m.opt('BtnOverdueTxt', 'Text') == 'Move to today (2)'
+        assert sk.tip('BtnOverdueTxt') == 'Click: move the 2 unfinished tasks of past days to today'
+        assert m.opt('Rainmeter', 'ContextTitle14') == 'Move 2 tasks to today'
+        g.OverdueMove()
+        assert m.opt('ToastTx', 'Text') == '2 tasks moved to today'
+        sk.at(2027, 3, 3, 8, 0, 9)
+        g.Tick()
+        m.measure_values['MeasureTaskAction'] = 'ERROR Forbidden'
+        g.TaskResult()
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+        assert overdue_days(sk) == {'Task a': 1, 'Task b': 3}
+        assert m.shown('BtnOverdue') and m.opt('BtnOverdueTxt', 'Text') == 'Move to today (1)'
+        assert sk.tip('BtnOverdue') == 'Click: move the unfinished task of a past day to today'
+        assert m.opt('Rainmeter', 'ContextTitle14') == 'Move 1 task to today'
+        # (the success that followed does not hide it; a new move starts clean)
+        assert g._WC.LANGS.en.taskError in m.opt('TbSync', 'Text') and 'Forbidden' in sk.tip('TbSync')
+        g.OverdueMove()
+        assert m.opt('ToastTx', 'Text') == '1 task moved to today'
+        sk.at(2027, 3, 3, 8, 0, 20)
+        g.Tick()
+        g.TaskResult()
+        assert g._WC.LANGS.en.taskError not in m.opt('TbSync', 'Text') and not m.shown('BtnOverdue')
+        sk.check_clean()
+    finally:
+        sk.close()
+    # Put on another day during the Undo time: that change wins over the move...
+    sk = overdue_skin(('a', '20270301'), ('b', '20270302'))
+    try:
+        m, g = sk.mock, sk.g
+        g.OverdueMove()
+        i = task_chip(sk, '○ Task a')
+        g.DragStart(i)
+        g.DragOver(2)
+        g.DragOver(4)
+        g.DragDrop(4)
+        assert overdue_days(sk) == {'Task a': 5, 'Task b': 3}
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+        sk.at(2027, 3, 3, 8, 0, 9)
+        g.Tick()
+        base = '-s -f -L -m 30 ' + SCRIPT_URL + '?action=move&list=L1&task=%s&due=%s'
+        assert task_params(sk) == [base % ('a', '2027-03-05'), base % ('b', '2027-03-03')], task_params(sk)
+        sk.check_clean()
+    finally:
+        sk.close()
+    # ... and over Undo
+    sk = overdue_skin(('a', '20270301'), ('b', '20270302'))
+    try:
+        m, g = sk.mock, sk.g
+        g.OverdueMove()
+        i = task_chip(sk, '○ Task a')
+        g.DragStart(i)
+        g.DragOver(2)
+        g.DragOver(4)
+        g.DragDrop(4)
+        g.ItemUndo()
+        assert overdue_days(sk) == {'Task a': 5, 'Task b': 2}
+        assert m.opt('BtnOverdueTxt', 'Text') == 'Move to today (1)'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_overdue_button_a_new_deletion_sends_the_move_first():
+    sk = overdue_skin(('a', '20270301'), ('now', '20270303'))
+    try:
+        m, g = sk.mock, sk.g
+        g.OverdueMove()
+        assert not task_params(sk)
+        open_card(sk, 'ADBg%d' % sk.all_day()['○ Task now'])
+        g.ItemDelete('one')
+        assert task_params(sk)[0].endswith('?action=move&list=L1&task=a&due=2027-03-03'), task_params(sk)
+        assert m.opt('ToastTx', 'Text') == 'Task deleted'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_overdue_button_narrow_toolbar_and_setting():
+    tasks = (('a', '20270301'), ('b', '20270302'))
+
+    def bounds(m):
+        x, w = int(m.opt('BtnOverdue', 'X')), int(m.opt('BtnOverdue', 'W'))
+        return x, x + w
+
+    # Wide: the sync text is left of the button, the button left of the switcher
+    sk = overdue_skin(*tasks, Width=1400)
+    try:
+        sk.g.Reload(1)
+        m = sk.mock
+        x0, x1 = bounds(m)
+        assert x1 + 12 == int(m.opt('ViewSegBg', 'X')) and m.shown('TbWeek')
+        assert int(m.opt('TbSync', 'X')) == x0 - 16 and m.opt('TbSync', 'Text') == 'Updated at 08:00'
+        sk.check_clean()
+    finally:
+        sk.close()
+    # Narrower: the week badge leaves, then the time; then the number alone, then the button
+    shown, last = [], None
+    for width in range(1400, 799, -20):
+        sk = overdue_skin(*tasks, Width=width)
+        try:
+            sk.g.Reload(1)
+            m = sk.mock
+            pill = m.shown('BtnOverdue') and m.opt('BtnOverdueTxt', 'Text')
+            state = (m.shown('TbWeek'), m.opt('TbSync', 'Text'), pill)
+            if state != last:
+                shown.append(state)
+                last = state
+            # nothing overlaps
+            if pill:
+                x0, x1 = bounds(m)
+                assert x1 <= int(m.opt('ViewSegBg', 'X')), width
+                right = (int(m.opt('TbWeekBg', 'X')) + int(m.opt('TbWeekBg', 'W'))) if m.shown('TbWeek') else \
+                    int(m.opt('TbTitle', 'X')) + len(m.opt('TbTitle', 'Text')) * 16 * 4 / 3 * 0.52
+                left = x0
+                if m.opt('TbSync', 'Text'):
+                    left = int(m.opt('TbSync', 'X')) - (len(m.opt('TbSync', 'Text')) * 8 * 4 / 3 * 0.52 + 8)
+                assert left >= right, (width, left, right)
+            sk.check_clean()
+        finally:
+            sk.close()
+    assert shown[0] == (True, 'Updated at 08:00', 'Move to today (2)'), shown
+    assert shown[-1][2] in ('\u2192 2', False), shown
+    assert any(s[2] == '\u2192 2' for s in shown), shown
+    # ShowOverdueButton=0: no button, the menu item stays
+    sk = overdue_skin(*tasks, ShowOverdueButton=0)
+    try:
+        m = sk.mock
+        assert not m.shown('BtnOverdue') and m.opt('Rainmeter', 'ContextTitle14') == 'Move 2 tasks to today'
+        sk.g.OverdueMove()
+        assert m.opt('ToastTx', 'Text') == '2 tasks moved to today'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_overdue_button_appears_on_a_new_day():
+    sk = overdue_skin(('a', '20270303'))
+    try:
+        m = sk.mock
+        assert not m.shown('BtnOverdue') and m.opt('Rainmeter', 'ContextTitle14') == 'No overdue tasks'
+        sk.at(2027, 3, 4, 8, 0, 0)
+        sk.g.Update()
+        assert m.shown('BtnOverdue') and m.opt('BtnOverdueTxt', 'Text') == 'Move to today (1)'
+        sk.g.OverdueMove()
+        sk.at(2027, 3, 4, 8, 0, 9)
+        sk.g.Tick()
+        assert task_params(sk)[-1].endswith('task=a&due=2027-03-04'), task_params(sk)
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_narrow_toolbar_keeps_the_minimize_button():
     # The smallest skin: the range takes short month names, then the app title goes
     for view, ymd, title, app in (('day', (2026, 10, 30), 'Oct 30, 2026', True),
@@ -4572,7 +4826,7 @@ def test_minimize_to_a_tile_and_back():
         W, H = int(m.vars['Width']), int(m.vars['Height'])
         assert m.shown('BtnMini') and sk.tip('BtnMini').startswith('Minimize')
         assert 'Minimize()' in open(INI_FILE, encoding='utf-8').read().split('[BtnMini]')[1].split('\n\n')[0]
-        assert m.opt('Rainmeter', 'ContextTitle14') == 'Minimize'
+        assert m.opt('Rainmeter', 'ContextTitle15') == 'Minimize'
         shown_before = {k for k, v in m.visible.items() if v}
         g.TipOver('BtnMini')
         m.bangs.clear()
@@ -4592,7 +4846,7 @@ def test_minimize_to_a_tile_and_back():
         assert ['!SetOptionGroup', 'Cal', 'X', 0] in m.bangs and ['!SetOptionGroup', 'Cal', 'Y', 0] in m.bangs
         title_x = m.opt('TbTitle', 'X')
         assert ['!WriteKeyValue', 'Variables', 'Minimized', 1, private] in m.bangs
-        assert m.opt('Rainmeter', 'ContextTitle14') == 'Open the calendar'
+        assert m.opt('Rainmeter', 'ContextTitle15') == 'Open the calendar'
         assert not m.shown('Tip')
         # Nothing of the calendar comes back meanwhile: updates, downloads, the wheel, hovering
         m.vars['CURRENTCONFIGX'] = str(100 + W - tw)
@@ -4617,7 +4871,7 @@ def test_minimize_to_a_tile_and_back():
         assert ['!Move', 100, 0] in m.bangs, [b for b in m.bangs if b[0] == '!Move']
         assert ['!SetOption', 'TbTitle', 'X', title_x] in m.bangs  # (back in place)
         assert ['!WriteKeyValue', 'Variables', 'Minimized', 0, private] in m.bangs
-        assert m.opt('Rainmeter', 'ContextTitle14') == 'Minimize'
+        assert m.opt('Rainmeter', 'ContextTitle15') == 'Minimize'
         assert sk.tip('BtnMini').startswith('Minimize')
         assert m.shown('SzGrip')  # (the cursor is over it: SizeHover(1) came while minimized)
         # From the context menu, with the calendar in the bottom left: the tile there too
@@ -4644,7 +4898,7 @@ def test_minimized_tile_contents_and_refresh():
         sk.start(2027, 3, 3, 23)  # Wednesday 23:00: nothing else today
         m, g = sk.mock, sk.g
         assert m.shown('MiniBg') and not m.shown('BG') and not m.shown('EvBg1') and not m.shown('DayNum0')
-        assert m.opt('Rainmeter', 'ContextTitle14') == 'Open the calendar'
+        assert m.opt('Rainmeter', 'ContextTitle15') == 'Open the calendar'
         assert tile_rows(m) == [('MiniNote', 'Nothing else today'), ('MiniHdr', 'Tomorrow'),
                                 ('', 'All day 1'), ('', 'All day 2')], tile_rows(m)
         # A tile in the bottom half grows upwards
@@ -4674,7 +4928,7 @@ def test_minimized_tile_contents_and_refresh():
         m = sk.mock
         assert m.opt('MiniName', 'Text') == 'Mercoledì' and m.opt('MiniMonth', 'Text') == 'Marzo 2027'
         assert tile_rows(sk.mock) == []
-        assert m.opt('Rainmeter', 'ContextTitle14') == 'Apri il calendario'
+        assert m.opt('Rainmeter', 'ContextTitle15') == 'Apri il calendario'
         sk.check_clean()
     finally:
         sk.close()

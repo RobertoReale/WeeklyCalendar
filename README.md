@@ -19,6 +19,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **All-Day Events & Timed Events**: Dedicated all-day events row at the top (3 rows by default, `AllDayRows`; click "+N more" to expand the row like Google Calendar, ▲ to collapse it) and column-packed overlapping timed events throughout the week.
 - **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
 - **Google Tasks**: Tasks appear like in Google Calendar (○ open, ✓ completed): in the all-day row, or at their time when they have one. Click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day. Each task shows its list and its details (notes); a new or edited task can go to any of your lists.
+- **Tasks Left Over**: One click brings the unfinished tasks of past days to today, with Undo; the button appears only when there are some.
 - **Holidays & Birthdays**: Public holidays come from Google's holiday calendars; your contacts' birthdays, which Google's iCal address leaves out, come from the Tasks script.
 - **Create Events and Tasks**: Click an empty spot of the hours (an event at that time), of the all-day row or a day number (a task), or the **+** in the toolbar: a card like Google Calendar's opens, you type the title and press Enter. An event can also get a place, a description, a repeat (every day, weekday, week, month, year) and a calendar; a task its details and its list. The item appears at once and Google saves it.
 - **Place Suggestions**: While you type the place of an event, addresses and places show under it as in Google Calendar (from OpenStreetMap, nearest first); pick one with the mouse or with ↑ / ↓ and Enter. `PlaceSuggestions=0` turns them off.
@@ -136,6 +137,13 @@ shows the two as one task.
 skin shows the change at once and Google Tasks saves it through the web app (it needs `curl.exe`,
 included in Windows 10 and 11). If Google does not confirm, the task goes back to how it was and
 the toolbar says why.
+
+**Tasks left over**: when tasks of past days are not completed, the toolbar shows **Move to today (3)**:
+one click brings them all to today, whichever past day they were on (right-click > *Move 3 tasks to
+today* does the same). They move on screen at once and a bar offers **Undo** for 8 seconds
+(`UndoSeconds`); the changes go to Google one at a time after that, so nothing has to be undone there.
+The button appears only when there is something to move (`ShowOverdueButton=0` hides it, the menu
+item stays), it keeps only the number in a narrow skin, and the feed goes back 60 days.
 
 **Moving**: drag a task to another day and release it there: the day under the cursor (a column,
 or a cell in the month view) is highlighted, the task is previewed where it will land and the
@@ -449,6 +457,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **All-Day Row** | Click `+N more` to show every all-day item (middle-click: open that day in Google Calendar); click ▲ at the left of the row to collapse it |
 | **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it); a task shown at its time: right-click > *Mark complete* |
 | **Move a Task** | Drag it to another day (3-day, week and month views); right-click or leave the skin to cancel |
+| **Bring Unfinished Tasks to Today** | Click **Move to today (n)** in the toolbar, or right-click > *Move n tasks to today*; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`) |
 | **Create** | Click an empty spot of the hours (event), of the all-day row or a day number (task), or **+** in the toolbar; type the title, Enter or *Save* (`ClickToCreate=0` / `ShowCreateButton=0` turn them off) |
 | **Place, Description, Details** | Click *Add location*, *Add description* or *Add details* in the card, type, Enter (Shift+Enter: a new line) |
 | **Pick a Suggested Place** | While typing a place: click a suggestion, or ↑ / ↓ then Enter; Esc hides the list (`PlaceSuggestions=0` turns it off) |
