@@ -131,6 +131,9 @@ These are the traps of this codebase. Each one has already caused a bug once.
   that knows them (raise the version in `buildFeed` when adding one). Version 3 changes the repeat
   and the calendar of an event (`rrule`, `tocal`): the edit form shows the event as it will be in
   place of the old one (`lc.rep`, expanded in `applyEdits`) until `feedShows` finds it there.
+- **Task priorities** live in the notes (Google Tasks has no such field): a last line `[P1]` or
+  `[P2]`. `parseICS` splits it off (`edit.prioOf`: `ev.description` never has it, `ev.prio` has the
+  number), so every change of the notes must be sent through `edit.prioNotes`, or the priority is lost.
 - **Live tests:** `type` / `key` in `tools\LiveTest.ps1` refuse to send keys unless a Rainmeter
   window is in the foreground. `-Front` raises the skin, which takes the focus from an open
   InputText box: one LiveTest run per typing sequence. While the skin is raised (`ZPos 2`),

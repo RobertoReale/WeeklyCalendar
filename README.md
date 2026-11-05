@@ -19,6 +19,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **All-Day Events & Timed Events**: Dedicated all-day events row at the top (3 rows by default, `AllDayRows`; click "+N more" to expand the row like Google Calendar, ▲ to collapse it) and column-packed overlapping timed events throughout the week.
 - **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
 - **Google Tasks**: Tasks appear like in Google Calendar (○ open, ✓ completed): in the all-day row, or at their time when they have one. Click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day. Each task shows its list and its details (notes); a new or edited task can go to any of your lists.
+- **Task Priorities**: Medium and high priority, saved in the task's notes so they follow you to other devices: a coloured dot, and the important tasks first in their day.
 - **Tasks Left Over**: One click brings the unfinished tasks of past days to today, with Undo; the button appears only when there are some.
 - **Holidays & Birthdays**: Public holidays come from Google's holiday calendars; your contacts' birthdays, which Google's iCal address leaves out, come from the Tasks script.
 - **Create Events and Tasks**: Click an empty spot of the hours (an event at that time), of the all-day row or a day number (a task), or the **+** in the toolbar: a card like Google Calendar's opens, you type the title and press Enter. An event can also get a place, a description, a repeat (every day, weekday, week, month, year) and a calendar; a task its details and its list. The item appears at once and Google saves it.
@@ -144,6 +145,15 @@ today* does the same). They move on screen at once and a bar offers **Undo** for
 (`UndoSeconds`); the changes go to Google one at a time after that, so nothing has to be undone there.
 The button appears only when there is something to move (`ShowOverdueButton=0` hides it, the menu
 item stays), it keeps only the number in a narrow skin, and the feed goes back 60 days.
+
+**Priority**: right-click a task and click *No priority* in its card: each click goes to *Medium
+priority*, *High priority* and back (the edit and create forms have a picker too). A task with a
+priority has a coloured dot in place of its circle, orange or red (at its time: a strip at the left
+edge; month view: the chip's border), and goes first in its day, so "+N more" does not hide it.
+Google Tasks has no priority of its own, so it is saved as the last line of the task's notes: `[P1]`
+high, `[P2]` medium. You see that line in Google Tasks, and typing it there works too; the skin
+hides it. `PrioHighColor` and `PrioMedColor` change the colours. It needs the Tasks script version
+that has notes (any script from v1.14.0).
 
 **Moving**: drag a task to another day and release it there: the day under the cursor (a column,
 or a cell in the month view) is highlighted, the task is previewed where it will land and the
@@ -457,6 +467,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **All-Day Row** | Click `+N more` to show every all-day item (middle-click: open that day in Google Calendar); click ▲ at the left of the row to collapse it |
 | **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it); a task shown at its time: right-click > *Mark complete* |
 | **Move a Task** | Drag it to another day (3-day, week and month views); right-click or leave the skin to cancel |
+| **Task Priority** | Right-click the task, click its priority in the card (none, medium, high); or the picker in the edit form |
 | **Bring Unfinished Tasks to Today** | Click **Move to today (n)** in the toolbar, or right-click > *Move n tasks to today*; *Undo* in the bar at the bottom within 8 seconds (`UndoSeconds`) |
 | **Create** | Click an empty spot of the hours (event), of the all-day row or a day number (task), or **+** in the toolbar; type the title, Enter or *Save* (`ClickToCreate=0` / `ShowCreateButton=0` turn them off) |
 | **Place, Description, Details** | Click *Add location*, *Add description* or *Add details* in the card, type, Enter (Shift+Enter: a new line) |

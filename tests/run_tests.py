@@ -4696,6 +4696,229 @@ def test_overdue_button_appears_on_a_new_day():
         sk.close()
 
 
+def prio_ics(*tasks):
+    """A tasks feed of Wednesday 3 March 2027: (id, notes or None[, status])."""
+    out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'X-WR-CALNAME:Google Tasks', 'X-WC-VERSION:3',
+           'X-WC-LIST;ID=L1;DEFAULT=1:My Tasks']
+    for task in tasks:
+        tid, notes = task[0], task[1]
+        out += ['BEGIN:VEVENT', 'UID:%s@tasks.google.com' % tid, 'DTSTAMP:20270301T080000Z',
+                'DTSTART;VALUE=DATE:20270303', 'SUMMARY:%s' % tid,
+                'X-WC-TASK:%s' % (task[2] if len(task) > 2 else 'NEEDS-ACTION'),
+                'X-WC-TASKLIST:L1', 'X-WC-TASKID:%s' % tid]
+        if notes:
+            out += ['DESCRIPTION:' + notes.replace('\n', '\\n')]
+        out += ['END:VEVENT']
+    return '\r\n'.join(out + ['END:VCALENDAR', ''])
+
+
+def prio_skin(*tasks, **kw):
+    kw.setdefault('IcalUrl3', SCRIPT_URL)
+    sk = Skin(**kw)
+    with open(os.path.join(sk.dir, 'DownloadFile', 'calendar3.ics'), 'w', encoding='utf-8', newline='') as f:
+        f.write(prio_ics(*tasks))
+    sk.start(2027, 3, 3, 8)
+    return sk
+
+
+def chip_of(sk, title):
+    return [v for k, v in sk.all_day().items() if k.endswith(title)][0]
+
+
+HIGH_DOT = 'Ellipse 11,10,5.5 | Fill Color 217,48,37,255'
+MED_DOT = 'Ellipse 11,10,5.5 | Fill Color 242,153,0,255'
+
+
+def test_priority_is_read_from_the_notes_and_orders_the_tasks():
+    sk = prio_skin(('aaa', None), ('bbb', 'capitoli 1-3\n[P2]'), ('ccc', '[P1]'), ('ddd', 'testo [P1] nel mezzo'),
+                   ('eee', 'fatto\n[P1]', 'COMPLETED'), ('fff', 'x\n[p1]  '), AllDayRows=8)
+    try:
+        m, g = sk.mock, sk.g
+        # High first, then medium, then the others; a completed one is not important any more
+        rows = sorted(((k, v) for k, v in sk.all_day().items() if not k.startswith('All day')),
+                      key=lambda kv: int(m.opt('ADBg%d' % kv[1], 'Y')))
+        assert [k.split(' ', 1)[1] for k, _ in rows] == ['ccc', 'fff', 'bbb', 'aaa', 'ddd', 'eee'], rows
+        # A coloured dot over the circle; the others keep the invisible button
+        assert m.opt('ADChk%d' % chip_of(sk, 'ccc'), 'Shape').startswith(HIGH_DOT)
+        assert m.opt('ADChk%d' % chip_of(sk, 'bbb'), 'Shape').startswith(MED_DOT)
+        for title in ('aaa', 'ddd', 'eee'):
+            assert m.opt('ADChk%d' % chip_of(sk, title), 'Shape').endswith('Fill Color 0,0,0,1 | StrokeWidth 0'), title
+        # The hover keeps the colour
+        assert '217,48,37,255' in m.opt('ADChk%d' % chip_of(sk, 'ccc'), 'MouseOverAction')
+        # The marker never shows: tooltip, details, and the text inside a sentence stays
+        tip = sk.tip('ADBg%d' % chip_of(sk, 'bbb'))
+        assert 'capitoli 1-3' in tip and '[P2]' not in tip and 'Medium priority' in tip
+        assert 'High priority' in sk.tip('ADBg%d' % chip_of(sk, 'ccc'))
+        assert 'High priority' not in sk.tip('ADBg%d' % chip_of(sk, 'eee'))
+        assert 'nel mezzo' in sk.tip('ADBg%d' % chip_of(sk, 'ddd'))
+        assert 'priority' not in sk.tip('ADBg%d' % chip_of(sk, 'ddd')).lower()
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_priority_click_in_the_details_card_and_refusal():
+    sk = prio_skin(('aaa', 'note mie'), ('bbb', None), AllDayRows=8)
+    try:
+        m, g = sk.mock, sk.g
+        base = '-s -f -L -m 30 ' + SCRIPT_URL + '?action=edittask&list=L1&task=%s&notes=%s'
+        texts = open_card(sk, 'ADBg%d' % chip_of(sk, 'aaa'))
+        assert 'No priority' in texts
+        # None -> medium: at once on screen, the notes keep their text, the card stays open
+        run_action(sk, m.opt(card_el(sk, 'No priority'), 'LeftMouseUpAction'))
+        assert 'Medium priority' in card_texts(sk) and m.shown('CrCard')
+        assert m.opt('ADChk%d' % chip_of(sk, 'aaa'), 'Shape').startswith(MED_DOT)
+        assert task_params(sk) == [base % ('aaa', 'note%20mie%0A%5BP2%5D')], task_params(sk)
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+        # Medium -> high -> none: the notes go back to what they were
+        g.ItemPrio()
+        g.TaskResult()
+        assert task_params(sk)[-1] == base % ('aaa', 'note%20mie%0A%5BP1%5D')
+        assert 'High priority' in card_texts(sk)
+        g.ItemPrio()
+        g.TaskResult()
+        assert task_params(sk)[-1] == base % ('aaa', 'note%20mie')
+        assert m.opt('ADChk%d' % chip_of(sk, 'aaa'), 'Shape').endswith('Fill Color 0,0,0,1 | StrokeWidth 0')
+        g.CardClose()
+        # Google refuses: the task goes back as it was
+        open_card(sk, 'ADBg%d' % chip_of(sk, 'bbb'))
+        g.ItemPrio()
+        assert task_params(sk)[-1] == base % ('bbb', '%5BP2%5D')
+        assert m.opt('ADChk%d' % chip_of(sk, 'bbb'), 'Shape').startswith(MED_DOT)
+        m.measure_values['MeasureTaskAction'] = 'ERROR Forbidden'
+        g.TaskResult()
+        assert m.opt('ADChk%d' % chip_of(sk, 'bbb'), 'Shape').endswith('Fill Color 0,0,0,1 | StrokeWidth 0')
+        assert g._WC.LANGS.en.taskError in m.opt('TbSync', 'Text')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_priority_stays_until_the_feed_shows_it():
+    sk = prio_skin(('aaa', None), AllDayRows=8)
+    try:
+        m, g = sk.mock, sk.g
+        feed = os.path.join(sk.dir, 'DownloadFile', 'calendar3.ics')
+        open_card(sk, 'ADBg%d' % chip_of(sk, 'aaa'))
+        g.ItemPrio()
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+        g.CardClose()
+        # A download from before the change does not undo it
+        with open(feed, 'a', encoding='utf-8', newline='') as f:
+            f.write('\r\n')
+        g.Reload(3)
+        assert m.opt('ADChk%d' % chip_of(sk, 'aaa'), 'Shape').startswith(MED_DOT)
+        with open(feed, 'w', encoding='utf-8', newline='') as f:
+            f.write(prio_ics(('aaa', '[P2]')))
+        g.Reload(3)
+        assert m.opt('ADChk%d' % chip_of(sk, 'aaa'), 'Shape').startswith(MED_DOT)
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_priority_in_the_edit_and_create_forms():
+    sk = prio_skin(('aaa', 'note\n[P1]'), AllDayRows=8)
+    try:
+        m, g = sk.mock, sk.g
+        base = '-s -f -L -m 30 ' + SCRIPT_URL + '?action=edittask&list=L1&task=aaa'
+        # Edit form: the picker shows it, the notes field shows them without the marker
+        open_card(sk, 'ADBg%d' % chip_of(sk, 'aaa'))
+        g.ItemEdit()
+        texts = card_texts(sk)
+        assert any(s.startswith('High priority') for s in texts) and 'note' in texts, texts
+        assert not any('[P1]' in s for s in texts), texts
+        # Only the title changes: the notes are not sent
+        g.CardCycle('prio', 0)
+        assert g._WC.edit.card.prio == 1 and g._WC.edit.card.orig.prio == 1
+        # The picker's list: none, medium, high, with the title of the picker
+        g.CardMenu('prio')
+        texts = card_texts(sk)
+        assert 'Priority' in texts and 'No priority' in texts and 'Medium priority' in texts, texts
+        g.CardPick(2)
+        assert g._WC.edit.card.prio == 2
+        # New notes keep the priority
+        g._WC.edit.card.notes = 'altre'
+        g.ItemSave('one')
+        assert task_params(sk) == [base + '&notes=altre%0A%5BP2%5D'], task_params(sk)
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+        assert m.opt('ADChk%d' % chip_of(sk, 'aaa'), 'Shape').startswith(MED_DOT)
+        # Notes unchanged and priority unchanged: nothing about them is sent
+        n = len(task_params(sk))
+        open_card(sk, 'ADBg%d' % chip_of(sk, 'aaa'))
+        g.ItemEdit()
+        g.ItemSave('one')
+        assert len(task_params(sk)) == n, task_params(sk)
+        # Create: a task with only a priority
+        g.CreateAllDay(2)
+        c = g._WC.edit.card
+        assert c.prio == 0 and c.type == 'task'
+        assert any(s.startswith('No priority') for s in card_texts(sk))
+        c.title = 'nuovo'
+        g.CardCycle('prio', 2)
+        assert c.prio == 1
+        g.CreateSave()
+        assert task_params(sk)[-1].endswith('&title=nuovo&due=2027-03-03&notes=%5BP1%5D'), task_params(sk)
+        # (shown at once, first of the day)
+        rows = sorted(sk.all_day().items(), key=lambda kv: int(m.opt('ADBg%d' % kv[1], 'Y')))
+        assert rows[0][0].endswith('nuovo'), rows
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_priority_duplicate_and_older_script():
+    sk = prio_skin(('aaa', '[P1]'), AllDayRows=8)
+    try:
+        g = sk.g
+        open_card(sk, 'ADBg%d' % chip_of(sk, 'aaa'))
+        g.ItemDuplicate()
+        assert g._WC.edit.card.prio == 1 and g._WC.edit.card.notes == ''
+        sk.check_clean()
+    finally:
+        sk.close()
+    # A script older than notes: no choice of priority anywhere
+    sk = Skin(feeds={3: 'tasks.ics'})
+    try:
+        sk.start(2027, 3, 3, 12)
+        i = task_chip(sk)
+        texts = open_card(sk, 'ADBg%d' % i)
+        assert not any('priority' in s.lower() for s in texts), texts
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_priority_marks_of_timed_tasks_and_the_month_view():
+    ghost = EDIT_ICS.replace('END:VCALENDAR\r\n', (
+        "BEGIN:VEVENT\r\nUID:ghost1@google.com\r\nDTSTART:20270303T140000Z\r\nDTEND:20270303T150000Z\r\n"
+        "SUMMARY:aaa\r\nCLASS:PRIVATE\r\nTRANSP:TRANSPARENT\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"))
+    sk = Skin(IcalUrl3=SCRIPT_URL)
+    try:
+        with open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='') as f:
+            f.write(ghost)
+        with open(os.path.join(sk.dir, 'DownloadFile', 'calendar3.ics'), 'w', encoding='utf-8', newline='') as f:
+            f.write(prio_ics(('aaa', '[P1]'), ('bbb', '[P2]')))
+        sk.start(2027, 3, 3, 8)
+        m, g = sk.mock, sk.g
+        # A task at its time: a strip at the left edge; another event none
+        i = event_meter(sk, '○ aaa')
+        assert m.opt('EvBg%d' % i, 'Shape2').endswith('Fill Color 217,48,37,255 | StrokeWidth 0')
+        j = event_meter(sk, 'Lezione')
+        assert m.opt('EvBg%d' % j, 'Shape2') == 'Rectangle 0,0,1,1 | Fill Color 0,0,0,0 | StrokeWidth 0'
+        # Month view: the border of a chip, the dot of a line
+        g.SetView('month')
+        shapes = [v for (meter, opt), v in m.options.items() if meter.startswith('MShp') and opt.startswith('Shape')]
+        assert any('Stroke Color 242,153,0,255' in s for s in shapes), shapes
+        assert any(s.startswith('Ellipse 10,') and 'Fill Color 217,48,37,255' in s for s in shapes), shapes
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_narrow_toolbar_keeps_the_minimize_button():
     # The smallest skin: the range takes short month names, then the app title goes
     for view, ymd, title, app in (('day', (2026, 10, 30), 'Oct 30, 2026', True),
