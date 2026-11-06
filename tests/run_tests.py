@@ -265,6 +265,8 @@ class Skin:
             'AutoScrollHour': '14', 'FirstDay': '1',
             # the wallpaper settings as before 1.19 (their own tests turn them on)
             'BgOpacity': '100', 'IdleBgOpacity': '', 'IdleOpacity': '100', 'HideEmptyHours': '0',
+            # completed tasks as before 1.26 (their own tests turn the others on)
+            'CompletedTasks': 'titles',
         })
         variables.update({k: str(v) for k, v in overrides.items()})
         self.mock = MockSkin(variables, ini_sections())
@@ -4991,6 +4993,262 @@ def test_sizes_from_the_context_menu():
         g.ResetSize()
         assert open(private, 'rb').read() == b'[Variables]\r\nIcalUrl1=https://x\r\nView=week\r\nTasksToken=abc\r\n'
         assert m.bangs[-1] == ['!Refresh']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def done_rows(sk, col=2):
+    """The all-day rows of a day column, top to bottom, as [(text, meter index)]."""
+    m = sk.mock
+    rows = [(int(m.opt('ADBg%d' % i, 'Y')), m.opt('ADTx%d' % i, 'Text'), i) for i in range(1, 71)
+            if m.shown('ADTx%d' % i) and int((int(m.opt('ADBg%d' % i, 'X')) - 64) // DAY_W) == col]
+    return [(t, i) for _, t, i in sorted(rows) if not t.startswith('All day')]
+
+
+def done_texts(sk, col=2):
+    return [t for t, _ in done_rows(sk, col)]
+
+
+def done_i(sk, text, col=2):
+    return dict(done_rows(sk, col))[text]
+
+
+def test_completed_tasks_count_line():
+    sk = prio_skin(('aaa', None), ('ccc', None, 'COMPLETED'), ('bbb', 'x\n[P1]', 'COMPLETED'),
+                   ('ddd', None, 'COMPLETED'), CompletedTasks='count')
+    try:
+        m, g = sk.mock, sk.g
+        assert done_texts(sk) == ['○ aaa', '✓ 3 completed'], done_texts(sk)
+        i = done_i(sk, '✓ 3 completed')
+        # The titles in the tooltip, sorted; pale like a completed task, not struck
+        assert sk.tip('ADBg%d' % i) == ('✓ bbb#CRLF#✓ ccc#CRLF#✓ ddd#CRLF##CRLF#Click: show them'), sk.tip('ADBg%d' % i)
+        assert m.opt('ADTx%d' % i, 'InlineSetting') == ''
+        assert m.opt('ADBg%d' % i, 'Shape') != m.opt('ADBg%d' % done_i(sk, '○ aaa'), 'Shape')
+        # It is no item: no check button, no card, no dragging, no card for its meter
+        assert not m.shown('ADChk%d' % i)
+        assert m.opt('ADBg%d' % i, 'RightMouseUpAction') == ''
+        assert m.opt('ADBg%d' % i, 'LeftMouseDownAction') == NO_DRAG
+        g.ItemCard('ad', i)
+        assert not m.shown('CrCard')
+        # A click shows the tasks in the day, as they are, and they can be reopened
+        run_action(sk, m.opt('ADBg%d' % i, 'LeftMouseUpAction'))
+        assert done_texts(sk) == ['○ aaa', '✓ 3 completed', '✓ bbb', '✓ ccc', '✓ ddd'], done_texts(sk)
+        i = done_i(sk, '✓ 3 completed')
+        assert sk.tip('ADBg%d' % i).endswith('#CRLF##CRLF#Click: hide them')
+        b = done_i(sk, '✓ bbb')
+        assert m.opt('ADTx%d' % b, 'InlineSetting') == 'Strikethrough' and m.shown('ADChk%d' % b)
+        g.ToggleTask(b)
+        assert 'action=reopen' in task_params(sk)[-1]
+        # (open again, its high priority counts again: first of the day)
+        assert done_texts(sk)[:3] == ['○ bbb', '○ aaa', '✓ 2 completed'], done_texts(sk)
+        run_action(sk, m.opt('ADBg%d' % done_i(sk, '✓ 2 completed'), 'LeftMouseUpAction'))
+        assert done_texts(sk) == ['○ bbb', '○ aaa', '✓ 2 completed'], done_texts(sk)
+        # Completing a task folds it at once
+        g.ToggleTask(done_i(sk, '○ aaa'))
+        assert done_texts(sk) == ['○ bbb', '✓ 3 completed'], done_texts(sk)
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_completed_tasks_count_line_goes_with_the_last_one():
+    sk = prio_skin(('aaa', None, 'COMPLETED'), CompletedTasks='count')
+    try:
+        m, g = sk.mock, sk.g
+        assert done_texts(sk) == ['✓ 1 completed']
+        run_action(sk, m.opt('ADBg%d' % done_i(sk, '✓ 1 completed'), 'LeftMouseUpAction'))
+        g.ToggleTask(done_i(sk, '✓ aaa'))
+        assert done_texts(sk) == ['○ aaa']
+        assert not sk.lua.eval('next(_WC.edit.doneOpen)')
+        # Done again: the line, closed
+        g.ToggleTask(done_i(sk, '○ aaa'))
+        assert done_texts(sk) == ['✓ 1 completed']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_completed_tasks_on_a_busy_day():
+    opened = [('o%02d' % k, None) for k in range(1, 13)]
+    sk = prio_skin(*opened, ('x', None, 'COMPLETED'), ('y', None, 'COMPLETED'), CompletedTasks='count')
+    try:
+        m, g = sk.mock, sk.g
+        # The line would be lost behind "+N more", and costs no row: it says it there
+        assert done_texts(sk) == ['○ o01', '○ o02', '+10 more · ✓ 2'], done_texts(sk)
+        more = done_i(sk, '+10 more · ✓ 2')
+        tip = sk.tip('ADBg%d' % more)
+        assert '○ o03#CRLF#' in tip and '#CRLF#✓ x#CRLF#✓ y#CRLF##CRLF#Click: show all' in tip, tip
+        # Expanded, still not everything fits: the line goes first, to be clicked
+        g.ExpandAllDay()
+        rows = done_texts(sk)
+        assert len(rows) == 10 and rows[0] == '✓ 2 completed' and rows[1] == '○ o01', rows
+        assert rows[-1] == '+4 more', rows
+        # ... and the tasks it shows follow it
+        run_action(sk, m.opt('ADBg%d' % done_i(sk, '✓ 2 completed'), 'LeftMouseUpAction'))
+        rows = done_texts(sk)
+        assert rows[:4] == ['✓ 2 completed', '✓ x', '✓ y', '○ o01'] and rows[-1] == '+6 more', rows
+        # Hidden again, the same place; collapsed, back in "+N more"
+        run_action(sk, m.opt('ADBg%d' % done_i(sk, '✓ 2 completed'), 'LeftMouseUpAction'))
+        assert done_texts(sk)[:2] == ['✓ 2 completed', '○ o01']
+        g.CollapseAllDay()
+        assert done_texts(sk)[-1] == '+10 more · ✓ 2'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_completed_tasks_get_the_rows_they_need_on_that_day_only():
+    sk = prio_skin(('aaa', None), ('bbb', None), ('c', None, 'COMPLETED'), ('d', None, 'COMPLETED'),
+                   ('e', None, 'COMPLETED'), CompletedTasks='count', AllDayRows=3)
+    try:
+        m = sk.mock
+        run_action(sk, m.opt('ADBg%d' % done_i(sk, '✓ 3 completed'), 'LeftMouseUpAction'))
+        assert done_texts(sk) == ['○ aaa', '○ bbb', '✓ 3 completed', '✓ c', '✓ d', '✓ e'], done_texts(sk)
+        # (the band grew by itself: no arrow to collapse it, the line does it)
+        assert not m.shown('AdCollapse')
+        run_action(sk, m.opt('ADBg%d' % done_i(sk, '✓ 3 completed'), 'LeftMouseUpAction'))
+        assert done_texts(sk) == ['○ aaa', '○ bbb', '✓ 3 completed']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_completed_tasks_hide_and_titles():
+    tasks = (('aaa', None), ('b', None, 'COMPLETED'), ('c', None, 'COMPLETED'), ('d', None, 'COMPLETED'))
+    sk = prio_skin(*tasks, CompletedTasks='hide')
+    try:
+        g = sk.g
+        assert done_texts(sk) == ['○ aaa']
+        g.ToggleTask(done_i(sk, '○ aaa'))
+        assert done_texts(sk) == []
+        sk.check_clean()
+    finally:
+        sk.close()
+    # Titles: as always, but after the open ones ...
+    sk = prio_skin(('zzz', None), ('a', None, 'COMPLETED'), ('mmm', None), CompletedTasks='titles')
+    try:
+        assert done_texts(sk) == ['○ mmm', '○ zzz', '✓ a'], done_texts(sk)
+        sk.check_clean()
+    finally:
+        sk.close()
+    # ... and "+N more" tells them apart
+    sk = prio_skin(('a', None), ('b', None), ('c', None), ('d', None, 'COMPLETED'), ('e', None, 'COMPLETED'),
+                   CompletedTasks='titles')
+    try:
+        assert done_texts(sk) == ['○ a', '○ b', '+1 more · ✓ 2'], done_texts(sk)
+        sk.check_clean()
+    finally:
+        sk.close()
+    # Only completed tasks behind it: just that
+    sk = prio_skin(('a', None), ('b', None, 'COMPLETED'), ('c', None, 'COMPLETED'), ('d', None, 'COMPLETED'),
+                   ('e', None, 'COMPLETED'), CompletedTasks='titles')
+    try:
+        assert done_texts(sk) == ['○ a', '✓ b', '✓ 3 completed'], done_texts(sk)
+        sk.check_clean()
+    finally:
+        sk.close()
+    # Anything else in the setting: the default
+    sk = prio_skin(*tasks, CompletedTasks='boh')
+    try:
+        assert done_texts(sk) == ['○ aaa', '✓ 3 completed']
+        sk.check_clean()
+    finally:
+        sk.close()
+    assert read_vars(SETTINGS_FILE)['CompletedTasks'] == 'count'
+
+
+def test_completed_tasks_with_a_time():
+    for mode, chip in (('count', True), ('hide', False)):
+        sk = edit_skin(CompletedTasks=mode)
+        try:
+            m, g = sk.mock, sk.g
+            open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8',
+                 newline='').write(GHOST_ICS)
+            g.Reload(1)
+            # Off the hours, and the free event of Google's address does not come back in its place
+            assert not event_meters(sk, '✓ Eserci') and not event_meters(sk, 'Esercizi')
+            assert ('✓ 1 completed' in done_texts(sk, 1)) == chip, done_texts(sk, 1)
+            if chip:
+                i = done_i(sk, '✓ 1 completed', 1)
+                h = clock_of(utc(2027, 3, 2, 9))
+                assert sk.tip('ADBg%d' % i).startswith(h + ' ✓ Esercizi, parte 2#CRLF#'), sk.tip('ADBg%d' % i)
+                # A click puts it back at its time
+                run_action(sk, m.opt('ADBg%d' % i, 'LeftMouseUpAction'))
+                assert list(event_meters(sk, '✓ Eserci')) == [1]
+                assert done_texts(sk, 1) == ['✓ 1 completed'], done_texts(sk, 1)
+            sk.check_clean()
+        finally:
+            sk.close()
+
+
+def test_completed_tasks_do_not_keep_the_hours_of_an_empty_day():
+    def hours(mode):
+        sk = edit_skin(CompletedTasks=mode, HideEmptyHours=1)
+        try:
+            with open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='') as f:
+                f.write('BEGIN:VCALENDAR\r\nVERSION:2.0\r\n'
+                        'BEGIN:VEVENT\r\nUID:ghost2@google.com\r\nDTSTART:20270302T160000Z\r\n'
+                        'DTEND:20270302T163000Z\r\nSUMMARY:Esercizi\\, parte 2\r\nTRANSP:TRANSPARENT\r\n'
+                        'END:VEVENT\r\nEND:VCALENDAR\r\n')
+            sk.g.Reload(1)
+            sk.check_clean()
+            return sk.lua.eval('_WC.edit.compact.hours')
+        finally:
+            sk.close()
+    # The evening task widens the hours only where it is drawn
+    assert hours('titles') > hours('count') == hours('hide')
+
+
+def test_completed_tasks_in_the_month():
+    sk = prio_skin(('aaa', None), ('b', None, 'COMPLETED'), ('c', None, 'COMPLETED'), CompletedTasks='count',
+                   View='month')
+    try:
+        m, g = sk.mock, sk.g
+        mar3 = epoch_day(2027, 3, 3)
+        lines = [l for l in month_lines(sk) if l[0] == 3]
+        # (last of the cell, after the day's timed events of the fixture)
+        assert lines[0][1] == '○ aaa' and lines[-1][1] == '✓ 2 completed', lines
+        chip = lines[-1][2]
+        assert sk.tip(chip).startswith('✓ b#CRLF#✓ c#CRLF##CRLF#Click: open this day'), sk.tip(chip)
+        assert m.opt(chip, 'RightMouseUpAction') == ''
+        assert m.opt(chip, 'LeftMouseDownAction') == NO_DRAG
+        # A click opens the day, with them
+        run_action(sk, m.opt(chip, 'LeftMouseUpAction'))
+        assert done_texts(sk, 0) == ['○ aaa', '✓ 2 completed', '✓ b', '✓ c'], done_texts(sk, 0)
+        # Back in the month: one line again
+        g.SetView('month')
+        assert [l[1] for l in month_lines(sk) if l[0] == 3][-1] == '✓ 2 completed'
+        assert '✓ b' not in [l[1] for l in month_lines(sk)]
+        sk.check_clean()
+    finally:
+        sk.close()
+    # After the timed events, also in a small cell
+    sk = edit_skin(CompletedTasks='count', View='month', Height=500)
+    try:
+        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(GHOST_ICS)
+        sk.g.Reload(1)
+        lines = [l for l in month_lines(sk) if l[0] == 2]
+        assert lines[-1][1] == '✓ 1 completed' or '· ✓ 1' in lines[-1][1], lines
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_completed_tasks_italian():
+    sk = prio_skin(('a', None, 'COMPLETED'), ('b', None, 'COMPLETED'), ('c', None), Language='it',
+                   CompletedTasks='count')
+    try:
+        assert done_texts(sk) == ['○ c', '✓ 2 completate'], done_texts(sk)
+        assert sk.tip('ADBg%d' % done_i(sk, '✓ 2 completate')).endswith('Clic: mostrale')
+        sk.g.ToggleTask(done_i(sk, '○ c'))
+        assert done_texts(sk) == ['✓ 3 completate']
+        sk.check_clean()
+    finally:
+        sk.close()
+    sk = prio_skin(('a', None, 'COMPLETED'), Language='it', CompletedTasks='count')
+    try:
+        assert done_texts(sk) == ['✓ 1 completata']
         sk.check_clean()
     finally:
         sk.close()

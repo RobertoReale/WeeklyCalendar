@@ -19,6 +19,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **All-Day Events & Timed Events**: Dedicated all-day events row at the top (3 rows by default, `AllDayRows`; click "+N more" to expand the row like Google Calendar, ▲ to collapse it) and column-packed overlapping timed events throughout the week.
 - **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
 - **Google Tasks**: Tasks appear like in Google Calendar (○ open, ✓ completed): in the all-day row, or at their time when they have one. Click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day. Each task shows its list and its details (notes); a new or edited task can go to any of your lists.
+- **Completed Tasks**: Your choice (`CompletedTasks`): one line per day, "✓ 3 completed", with the titles in its tooltip and a click to see the tasks; every title, struck through; or nothing.
 - **Task Priorities**: Medium and high priority, saved in the task's notes so they follow you to other devices: a coloured dot, and the important tasks first in their day.
 - **Tasks Left Over**: One click brings the unfinished tasks of past days to today, with Undo; the button appears only when there are some.
 - **Holidays & Birthdays**: Public holidays come from Google's holiday calendars; your contacts' birthdays, which Google's iCal address leaves out, come from the Tasks script.
@@ -138,6 +139,18 @@ shows the two as one task.
 skin shows the change at once and Google Tasks saves it through the web app (it needs `curl.exe`,
 included in Windows 10 and 11). If Google does not confirm, the task goes back to how it was and
 the toolbar says why.
+
+**Completed tasks**: `CompletedTasks` in `Settings.inc` says what a day shows of them, in every view
+and for the tasks with a time too (a completed one leaves the hours until you ask for it):
+
+| Value | What you see |
+|---|---|
+| `count` (default) | One line, **✓ 3 completed**. Rest the mouse on it to read the titles; click it to see the tasks in that day, where the check mark reopens one; click it again to fold them. In the month, the line opens the day with them. |
+| `titles` | Every task on its own line, struck through, after the open ones. |
+| `hide` | Nothing: only the tasks still to do. |
+
+On a day too busy for one more line, the last row says it: **+5 more · ✓ 3**. Its tooltip has the
+titles; once the row is expanded, the line of the completed tasks comes first.
 
 **Tasks left over**: when tasks of past days are not completed, the toolbar shows **Move to today (3)**:
 one click brings them all to today, whichever past day they were on (right-click > *Move 3 tasks to
@@ -337,6 +350,9 @@ AutoScrollHour=14
 
 ; Rows of all-day events and tasks (1-10); "+N more" expands the row
 AllDayRows=3
+
+; Completed tasks: count ("✓ 3 completed", click it to see them), titles or hide
+CompletedTasks=count
 
 ; Startup view: day, 3day, week or month (the switcher in the toolbar saves its choice in Private.inc)
 View=week

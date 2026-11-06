@@ -131,6 +131,13 @@ ShowMinimizeButton=1
 ;  ShowOverdueButton=1: when tasks of past days are not completed, a button in the toolbar brings
 ;  them all to today ("Move to today (3)"), with Undo. 0 = no button (the right-click menu has it too).
 ShowOverdueButton=1
+;  CompletedTasks: what each day shows of its completed tasks.
+;   count  = one line, "✓ 3 completed": rest the mouse on it to read the titles, click it to see the
+;            tasks in that day (and reopen one), click it again to fold them. On a day too busy for
+;            it, "+5 more · ✓ 3" says the same, and the month's line opens the day.
+;   titles = every task on its own line, struck through, after the open ones.
+;   hide   = nothing: only the tasks still to do.
+CompletedTasks=count
 ;  MiniEvents: how many of the next events (today's, then tomorrow's) the tile lists (0-5).
 MiniEvents=3
 ;  HideEmptyHours=1: the day, 3-day and week views show only the hours from the first event to the
