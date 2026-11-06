@@ -5053,6 +5053,74 @@ def done_i(sk, text, col=2):
     return dict(done_rows(sk, col))[text]
 
 
+def test_scrolled_all_day_rows_are_real_tasks():
+    # A day that does not fit even expanded: the rows scroll, and the tasks reached that way
+    # are checked, opened and folded like the others
+    opened = [('o%02d' % k, None) for k in range(1, 13)]
+    sk = prio_skin(*opened, ('x', None, 'COMPLETED'), ('y', None, 'COMPLETED'), CompletedTasks='count')
+    try:
+        m, g = sk.mock, sk.g
+        g.ExpandAllDay()
+        more = done_i(sk, '+4 more')
+        run_action(sk, m.opt('ADBg%d' % more, 'LeftMouseUpAction'))
+        rows = done_texts(sk)
+        assert rows == ['○ o%02d' % k for k in range(3, 13)], rows
+        # The circle of the last one marks that task, not the one the row had before
+        i = done_i(sk, '○ o12')
+        assert m.shown('ADChk%d' % i) and sk.tip('ADChk%d' % i) == 'Mark complete'
+        assert sk.lua.eval('_WC.edit.items.ad[%d].it.title' % i) == 'o12'
+        m.bangs.clear()
+        run_action(sk, m.opt('ADChk%d' % i, 'LeftMouseUpAction'))
+        sent = [b for b in m.bangs if b[:3] == ['!SetOption', 'MeasureTaskAction', 'Parameter']]
+        assert len(sent) == 1 and 'action=complete' in sent[0][3], sent
+        # Completed, it joins the line: one item less, the place is kept within the end
+        rows = done_texts(sk)
+        assert len(rows) == 10 and '○ o12' not in rows and rows[-1] == '○ o11', rows
+        # The details of a scrolled row are its own task
+        j = done_i(sk, '○ o11')
+        assert sk.lua.eval('_WC.edit.items.ad[%d].it.title' % j) == 'o11'
+        # Up to the top, where the line of the completed ones is, and open it
+        zones = [z for z in range(7) if m.opt('CrAdZone%d' % z, 'MouseScrollUpAction')]
+        assert zones == [2], zones
+        for _ in range(5):
+            run_action(sk, m.opt('CrAdZone2', 'MouseScrollUpAction'))
+        rows = done_texts(sk)
+        assert rows[0] == '✓ 3 completed' and rows[-1] == '+3 more', rows
+        run_action(sk, m.opt('ADBg%d' % done_i(sk, '✓ 3 completed'), 'LeftMouseUpAction'))
+        rows = done_texts(sk)
+        assert rows[:4] == ['✓ 3 completed', '✓ o12', '✓ x', '✓ y'] and rows[-1] == '+6 more', rows
+        # Another view and back, then a week without a busy day: nothing to scroll there
+        g.ShiftWeek(1)
+        assert not any(m.opt('CrAdZone%d' % z, 'MouseScrollUpAction') for z in range(7))
+        assert all(m.opt('CrAdZone%d' % z, 'Shape2') == '' for z in range(7))
+        g.ShiftWeek(-1)
+        g.SetView('month')
+        g.AdScroll(sk.lua.eval('next(_WC.edit.adMax)') or 0, 1)   # nothing to scroll in the month
+        g.SetView('week')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_all_day_rows_scroll_when_the_band_cannot_grow():
+    # A band that cannot grow (AllDayRatio): "+N more" scrolls without expanding
+    opened = [('o%02d' % k, None) for k in range(1, 7)]
+    sk = prio_skin(*opened, AllDayRatio=0.3, Height=440)
+    try:
+        m = sk.mock
+        assert done_texts(sk) == ['○ o01', '○ o02', '+4 more'], done_texts(sk)
+        act = m.opt('ADBg%d' % done_i(sk, '+4 more'), 'LeftMouseUpAction')
+        assert 'AdScroll(' in act, act
+        run_action(sk, act)
+        assert done_texts(sk) == ['○ o04', '○ o05', '○ o06'], done_texts(sk)
+        assert not m.shown('AdCollapse')
+        run_action(sk, m.opt('CrAdZone2', 'MouseScrollUpAction'))
+        assert done_texts(sk) == ['○ o03', '○ o04', '+2 more'], done_texts(sk)
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_completed_tasks_count_line():
     sk = prio_skin(('aaa', None), ('ccc', None, 'COMPLETED'), ('bbb', 'x\n[P1]', 'COMPLETED'),
                    ('ddd', None, 'COMPLETED'), CompletedTasks='count')

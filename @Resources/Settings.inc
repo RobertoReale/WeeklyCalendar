@@ -74,7 +74,7 @@ View=week
 
 ;  AllDayRows: rows of all-day events and tasks shown above the hours (1-10, default 3).
 ;  A busier day ends with "+N more": click it to show every item, then the arrow at the
-;  left of the row to collapse it again.
+;  left of the row to collapse it again. A day that still does not fit scrolls with the mouse wheel.
 AllDayRows=3
 
 ;  AllDayRatio: maximum share of the height the all-day section can take when expanded
