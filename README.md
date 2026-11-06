@@ -16,7 +16,7 @@ Powered directly by Google Calendar (or any standard iCalendar / `.ics` feed), i
 - **Auto-Scroll for Evening Plans**: In the afternoon and evening (after 2:00 PM / 14:00 by default), the visible time window automatically shifts down so upcoming commitments after 19:00 (7 PM) through midnight are always in plain sight without manual scrolling.
 - **Multi-Calendar Support**: Sync up to 6 distinct iCal feeds simultaneously, each with its own color.
 - **Smart Recurrence & Overrides**: Client-side parsing of RFC 5545 recurrence rules (`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`, including `BYSETPOS` such as "last weekday of the month"), extra dates (`RDATE`), exceptions (`EXDATE`), and modified occurrences (`RECURRENCE-ID`).
-- **All-Day Events & Timed Events**: Dedicated all-day events row at the top (3 rows by default, `AllDayRows`; click "+N more" to expand the row like Google Calendar, ▲ to collapse it) and column-packed overlapping timed events throughout the week.
+- **All-Day Events & Timed Events**: Dedicated all-day events row at the top (3 rows by default, `AllDayRows`; click "+N more" to expand the row like Google Calendar, ▲ to collapse it; a day with still more items than rows scrolls them with the mouse wheel, so every task can be opened and checked) and column-packed overlapping timed events throughout the week.
 - **Hidden Events Indicators**: When events fall outside the visible hours, a `▲ n` badge next to the day number (earlier) or a `▼ n` badge under the column (later) shows how many there are; hover for the list, click to scroll to them.
 - **Google Tasks**: Tasks appear like in Google Calendar (○ open, ✓ completed): in the all-day row, or at their time when they have one. Click the circle to mark a task completed (or the check mark to reopen it), or drag it to another day. Each task shows its list and its details (notes); a new or edited task can go to any of your lists.
 - **Completed Tasks**: Your choice (`CompletedTasks`): one line per day, "✓ 3 completed", with the titles in its tooltip and a click to see the tasks; every title, struck through; or nothing.
@@ -480,7 +480,7 @@ providers, add your address to `MyEmail=` in `Private.inc`.
 | **Open a Day** | In the month view, click a day (or its "+N more") to see it in the day view; middle-click opens it in Google Calendar |
 | **Jump to Today** | Click the **Today** button in the toolbar (also resets hour scroll) |
 | **Open an Event** | Click it: its details (`ClickAction=card`). Middle-click: opens it in Google Calendar. With `ClickAction=calendar` the click opens Google Calendar (a task or "+N more": that day) and the middle click its Meet / Zoom / Teams link |
-| **All-Day Row** | Click `+N more` to show every all-day item (middle-click: open that day in Google Calendar); click ▲ at the left of the row to collapse it |
+| **All-Day Row** | Click `+N more` to show every all-day item (middle-click: open that day in Google Calendar); click ▲ at the left of the row to collapse it. Expanded, a day that still does not fit scrolls: mouse wheel over its all-day items (a thin bar at the right shows where you are), or click its `+N more` to go to the last ones |
 | **Complete a Task** | Click the ○ at the start of the task (✓ to reopen it); a task shown at its time: right-click > *Mark complete* |
 | **Move a Task** | Drag it to another day (3-day, week and month views); right-click or leave the skin to cancel |
 | **Task Priority** | Right-click the task, click its priority in the card (none, medium, high); or the picker in the edit form |

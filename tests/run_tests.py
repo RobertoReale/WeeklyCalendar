@@ -427,10 +427,49 @@ def test_expanded_all_day_row_is_capped():
         sk.start(2027, 3, 3, 12)
         sk.g.ExpandAllDay()  # (400 - 152) * 0.4 / 22 = 4 rows
         assert ad_texts(sk) == ['All day 1', 'All day 2', 'All day 3', '+2 more'], ad_texts(sk)
-        more = [i for i in range(1, 71) if sk.mock.opt('ADTx%d' % i, 'Text') == '+2 more'][0]
-        # Expanding again would not show more: left click collapses, middle click opens the day
-        assert sk.mock.opt('ADTx%d' % more, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "CollapseAllDay()"]'
-        assert sk.mock.opt('ADTx%d' % more, 'MiddleMouseUpAction').startswith('["https://calendar.google.com/')
+        m = sk.mock
+        more = [i for i in range(1, 71) if m.opt('ADTx%d' % i, 'Text') == '+2 more'][0]
+        # Expanding again would not show more: the day's rows scroll. A click on "+2 more"
+        # goes to the end, the wheel over the day's band moves one row, the middle click
+        # opens the day
+        act = m.opt('ADTx%d' % more, 'LeftMouseUpAction')
+        assert act.startswith('[!CommandMeasure MeasureScript "AdScroll(') and act.endswith(', 5)"]'), act
+        assert m.opt('ADBg%d' % more, 'LeftMouseUpAction') == act
+        assert sk.tip('ADTx%d' % more) == ('All day 4#CRLF#All day 5#CRLF##CRLF#Click: show them - Wheel: scroll'
+                                           '#CRLF#Middle-click: open in Google Calendar')
+        assert m.opt('ADTx%d' % more, 'MiddleMouseUpAction').startswith('["https://calendar.google.com/')
+        zones = [z for z in range(7) if m.opt('CrAdZone%d' % z, 'MouseScrollDownAction')]
+        assert len(zones) == 1, zones   # only the busy day scrolls: elsewhere the wheel moves the hours
+        za = 'CrAdZone%d' % zones[0]
+        down, up = m.opt(za, 'MouseScrollDownAction'), m.opt(za, 'MouseScrollUpAction')
+        assert down.endswith(', 1)"]') and up.endswith(', -1)"]') and down[:-6] == act[:-6], (down, up)
+        bar0 = m.opt(za, 'Shape2')
+        assert bar0.startswith('Rectangle ') and ',3,4,' in bar0, bar0   # thumb at the top
+        run_action(sk, down)
+        assert ad_texts(sk) == ['All day 2', 'All day 3', 'All day 4', 'All day 5'], ad_texts(sk)
+        assert m.opt(za, 'Shape2') != bar0      # the thumb moved down
+        run_action(sk, down)                    # already at the end: nothing changes
+        assert ad_texts(sk) == ['All day 2', 'All day 3', 'All day 4', 'All day 5']
+        run_action(sk, up)
+        assert ad_texts(sk) == ['All day 1', 'All day 2', 'All day 3', '+2 more'], ad_texts(sk)
+        assert m.opt(za, 'Shape2') == bar0
+        run_action(sk, up)                      # already at the top
+        assert ad_texts(sk) == ['All day 1', 'All day 2', 'All day 3', '+2 more']
+        run_action(sk, act)
+        assert ad_texts(sk) == ['All day 2', 'All day 3', 'All day 4', 'All day 5'], ad_texts(sk)
+        # The rows shown are real items: a click opens them
+        i5 = [i for i in range(1, 71) if m.shown('ADTx%d' % i) and m.opt('ADTx%d' % i, 'Text') == 'All day 5'][0]
+        assert 'AdScroll' not in m.opt('ADBg%d' % i5, 'LeftMouseUpAction')
+        assert m.opt('ADBg%d' % i5, 'LeftMouseUpAction') != ''
+        # Another week and back: the place is kept; ▲ starts again from the top
+        sk.g.ShiftWeek(1)
+        sk.g.ShiftWeek(-1)
+        assert ad_texts(sk)[-1] == 'All day 5'
+        sk.g.CollapseAllDay()
+        assert ad_texts(sk) == ['All day 1', 'All day 2', '+3 more'], ad_texts(sk)
+        assert not m.opt(za, 'MouseScrollDownAction') and m.opt(za, 'Shape2') == ''
+        sk.g.ExpandAllDay()
+        assert ad_texts(sk) == ['All day 1', 'All day 2', 'All day 3', '+2 more'], ad_texts(sk)
         sk.check_clean()
     finally:
         sk.close()
