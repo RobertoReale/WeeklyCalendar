@@ -131,6 +131,14 @@ ShowMinimizeButton=1
 ;  ShowOverdueButton=1: when tasks of past days are not completed, a button in the toolbar brings
 ;  them all to today ("Move to today (3)"), with Undo. 0 = no button (the right-click menu has it too).
 ShowOverdueButton=1
+;  Countdown: shows a pill in the toolbar with the days left until a target date (e.g. an exam).
+;  You can also set or remove it with one click from any event/task's details card ("Countdown")
+;  or from the Search / Go to date card (📌). Click the pill to jump to that date, middle-click
+;  it to remove the countdown.
+;  CountdownDate: YYYY-MM-DD or DD/MM/YYYY (e.g. 2027-06-15). Empty = no countdown.
+CountdownDate=
+;  CountdownTitle: optional label shown in the pill (e.g. Esame Analisi 1).
+CountdownTitle=
 ;  CompletedTasks: what each day shows of its completed tasks.
 ;   count  = one line, "✓ 3 completed": rest the mouse on it to read the titles, click it to see the
 ;            tasks in that day (and reopen one), click it again to fold them. On a day too busy for

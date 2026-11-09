@@ -6185,6 +6185,87 @@ def test_find_card_deduplicates_recurring_events():
         sk.close()
 
 
+def test_countdown_pill_from_detail_card_and_find_card_and_settings():
+    sk = edit_skin(Language='it')
+    try:
+        m, g = sk.mock, sk.g
+        os.makedirs(os.path.join(sk.dir, '@Resources', 'ZOrder'), exist_ok=True)
+        ics = ('BEGIN:VCALENDAR\r\nVERSION:2.0\r\n'
+               'BEGIN:VEVENT\r\nUID:exam-cd@google.com\r\nDTSTART:20270317T090000Z\r\nDTEND:20270317T110000Z\r\n'
+               'SUMMARY:Esame Analisi 1\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n')
+        set_feed(sk, 1, ics)
+        assert not m.shown('TbCountdownBg') and not m.shown('TbCountdown')
+
+        # 1. Open Search card, find "Esame Analisi 1", open its detail card, and click "Conto alla rovescia"
+        g.FindOpen()
+        n = g._WC.edit.box.n
+        typed_path = os.path.join(sk.dir, '@Resources', 'ZOrder', 'Typed.txt')
+        open(typed_path, 'wb').write(b'WC\nEsame Analisi')
+        g.FindLive(n)
+        g.FindPick(1)
+        assert m.shown('CrCard') and g._WC.edit.card.mode == 'detail'
+        tx = card_texts(sk)
+        assert 'Conto alla rovescia' in tx, tx
+
+        # Pin as countdown from detail card
+        g.ItemCountdown()
+        assert not m.shown('CrCard')
+        assert m.shown('TbCountdownBg') and m.shown('TbCountdown')
+        # Today in edit_skin is 2027-03-03; 2027-03-17 is 14 days away
+        assert m.opt('TbCountdown', 'Text') == 'Esame Analisi 1 \u00b7 -14g', m.opt('TbCountdown', 'Text')
+        tip = sk.tip('TbCountdownBg')
+        assert 'Esame Analisi 1' in tip and 'mancano 14 giorni' in tip, tip
+        assert ['!WriteKeyValue', 'Variables', 'CountdownDate', '2027-03-17',
+                os.path.join(sk.dir, '@Resources', 'Private.inc')] in m.bangs
+
+        # 2. Navigate back to today, then click the countdown pill to jump to 2027-03-17
+        g.GoToday()
+        assert m.opt('DayNum2', 'Text') == '3'
+        g.CountdownGo()
+        assert m.opt('DayNum2', 'Text') == '17'
+
+        # 3. Reopen the event's detail card: button now says "Rimuovi conto"
+        ev_idx = [i for i in range(1, 81) if m.shown('EvT%d' % i) and 'Esame Analisi 1' in m.opt('EvT%d' % i, 'Text')][0]
+        g.ItemCard('ev', ev_idx)
+        assert 'Rimuovi conto' in card_texts(sk), card_texts(sk)
+        g.CountdownClear()
+        assert not m.shown('TbCountdownBg') and not m.shown('TbCountdown')
+        g.CardClose()
+
+        # 4. Pin a date directly from the Search / Go to date card ("20/03/2027")
+        g.GoToday()
+        g.CardBoxes(n)
+        g.FindOpen()
+        n = g._WC.edit.box.n
+        open(typed_path, 'wb').write(b'WC\n20/03/2027')
+        g.FindLive(n)
+        tx = card_texts(sk)
+        assert any('tra 17 giorni' in t for t in tx), tx
+        assert 'Conto alla rovescia' in tx, tx
+        g.CountdownFromFind(1)
+        assert not m.shown('CrCard')
+        assert m.shown('TbCountdown') and m.opt('TbCountdown', 'Text') == '-17g (20 mar)', m.opt('TbCountdown', 'Text')
+
+        # 5. Minimized tile also shows the active countdown
+        g.Minimize()
+        assert '-17g (20 mar)' in m.opt('MiniMonth', 'Text'), m.opt('MiniMonth', 'Text')
+        g.MiniRestore()
+        sk.check_clean()
+    finally:
+        sk.close()
+
+    # 6. Countdown configured via CountdownDate / CountdownTitle in Settings.inc (urgent <= 3 days)
+    sk = edit_skin(CountdownDate='2027-03-05', CountdownTitle='Fisica 1')
+    try:
+        m, g = sk.mock, sk.g
+        assert m.shown('TbCountdown') and m.opt('TbCountdown', 'Text') == 'Fisica 1 \u00b7 -2d', m.opt('TbCountdown', 'Text')
+        # Urgent (<= 3 days) uses high-priority color
+        assert '217,48,37,255' in m.opt('TbCountdownBg', 'Shape'), m.opt('TbCountdownBg', 'Shape')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_lua_main_chunk_has_room_for_locals():
     # Lua 5.1 allows 200 local variables per function, the main chunk included: past it
     # Rainmeter refuses the whole script (and a press on the empty skin then moves it).

@@ -15,6 +15,7 @@ and delete events and tasks without opening the browser.
 - Google Calendar's Material 3 look: today's circle, the red "now" line, past events fading, declined invitations outlined. Light and dark themes.
 - Day, 3-day, week and month views, switched from the toolbar.
 - Quick search & Go to date: click the month/year title in the toolbar to search events and tasks or jump to any date (`15/12`, `marzo 2027`, `+14`).
+- Countdown pill: pin any future event, task or date as a countdown in the toolbar (e.g. `Esame Analisi · -14g` / `Exam · -14d`), with one click to jump to that date.
 - Up to 6 calendars, each in its own colour. Public holidays and birthdays too.
 - Tooltips with the full title, time, place and description of every item.
 - English and Italian.
@@ -205,6 +206,7 @@ repeat; tasks without a date are not shown.
 | Change view | **Day**, **3 days**, **Week**, **Month** in the toolbar |
 | Back to today | **Today** in the toolbar |
 | Search / go to a date | Click the month/year title or the week badge in the toolbar, or right-click > *Search / Go to date...* |
+| Countdown to a date | Click **Countdown** in an event/task's card or in the search card (or set `CountdownDate` / `CountdownTitle`); click the toolbar pill to jump to that date, middle-click it to clear |
 | Events before / after the visible hours | Click the `▲ n` / `▼ n` badge of the day |
 | Open an item | Click: its card. Middle-click: Google Calendar |
 | Open a day | Month view: click the day. Middle-click "+N more": the day in Google Calendar |
@@ -240,6 +242,7 @@ to change:
 | `IdleOpacity`, `IdleSeconds` | `60`, `3` | The whole skin fades this much when the mouse has been away this long |
 | `ShowMinimizeButton`, `MiniEvents` | `1`, `3` | Minimize button; events listed on the tile |
 | `ShowOverdueButton` | `1` | The **Move to today** button |
+| `CountdownDate`, `CountdownTitle` | empty | Target date (`YYYY-MM-DD` or `DD/MM/YYYY`) and optional label for the toolbar countdown pill |
 | `ClickToCreate`, `ShowCreateButton` | `1`, `1` | Create by clicking an empty spot, the **+** button |
 | `DragToMove`, `RightClickCard` | `1`, `1` | Drag to move; right-click for the card |
 | `UndoSeconds` | `8` | Time to undo a deletion |
