@@ -123,6 +123,8 @@ class MockSkin:
             assert meters, 'no meter in the group %s' % a[1]
             for k in meters:
                 self.visible[k] = name == '!ShowMeterGroup'
+        elif name == '!SetVariable':
+            self.vars[a[1]] = str(a[2])
         elif name == '!Log':
             self.logs.append(tuple(a[1:]))
 
@@ -1746,7 +1748,7 @@ def test_one_tooltip_carrier():
 SCRIPT_URL = 'https://script.google.com/macros/s/TEST/exec'
 HOLIDAY_URL = ('https://calendar.google.com/calendar/ical/it.italian%23holiday%40group.v.calendar.google.com'
                '/public/basic.ics')
-CARD_METERS = ['CrCard', 'CrDismiss', 'CrDraft', 'CrDraftTx'] + ['CrTx%d' % k for k in range(1, 21)]
+CARD_METERS = ['CrCard', 'CrDismiss', 'CrDraft', 'CrDraftTx'] + ['CrTx%d' % k for k in range(1, 33)]
 
 
 def ini_order():
@@ -1755,12 +1757,12 @@ def ini_order():
 
 
 def card_texts(sk):
-    return [sk.mock.opt('CrTx%d' % k, 'Text') for k in range(1, 21) if sk.mock.shown('CrTx%d' % k)]
+    return [sk.mock.opt('CrTx%d' % k, 'Text') for k in range(1, 33) if sk.mock.shown('CrTx%d' % k)]
 
 
 def card_el(sk, text):
     """The card meter showing text."""
-    return [m for m in ('CrTx%d' % k for k in range(1, 21))
+    return [m for m in ('CrTx%d' % k for k in range(1, 33))
             if sk.mock.shown(m) and sk.mock.opt(m, 'Text') == text][0]
 
 
@@ -4463,17 +4465,19 @@ def test_narrow_toolbar_keeps_the_sync_text_clear():
         text = m.opt('TbSync', 'Text')
         return int(m.opt('TbSync', 'X')) - (len(text) * 8 * 4 / 3 * 0.52 + 8)
 
-    # (the minimize button takes 40 px)
-    for width, week, text, btn in ((1400, True, 'Updated at 12:00', 1), (844, False, 'Updated at 12:00', 0),
-                                   (884, False, 'Updated at 12:00', 1), (844, False, '', 1)):
+    # (the gear and minimize buttons take 40 px each)
+    for width, week, text, btn in ((1400, True, 'Updated at 12:00', 1), (884, False, 'Updated at 12:00', 0),
+                                   (844, False, '', 0), (924, False, 'Updated at 12:00', 1),
+                                   (884, False, '', 1), (844, False, '', 1)):
         sk = Skin(Width=width, ShowMinimizeButton=btn)
         try:
             sk.start(2027, 3, 3, 12)
             sk.g.Reload(1)
             m = sk.mock
-            assert m.shown('BtnMini') == bool(btn), width
+            assert m.shown('BtnMini') == bool(btn) and m.shown('BtnSettings'), width
+            assert int(m.opt('ViewSegBg', 'X')) + 8 <= int(m.opt('BtnSettings', 'X')), width
             if btn:
-                assert int(m.opt('ViewSegBg', 'X')) + 8 <= int(m.opt('BtnMini', 'X')), width
+                assert int(m.opt('BtnSettings', 'X')) + 32 <= int(m.opt('BtnMini', 'X')), width
             assert m.shown('TbWeek') == week, width
             assert m.opt('TbSync', 'Text') == text, (width, m.opt('TbSync', 'Text'))
             right = (int(m.opt('TbWeekBg', 'X')) + int(m.opt('TbWeekBg', 'W'))) if week else \
@@ -4529,7 +4533,7 @@ def test_overdue_tasks_go_to_today_with_undo():
         assert m.shown('BtnOverdue') and m.shown('BtnOverdueTxt')
         assert m.opt('BtnOverdueTxt', 'Text') == 'Porta a oggi (2)'
         assert sk.tip('BtnOverdue') == 'Clic: sposta a oggi le 2 attività non completate dei giorni passati'
-        assert m.opt('Rainmeter', 'ContextTitle15') == 'Porta a oggi 2 attività'
+        assert m.opt('Rainmeter', 'ContextTitle16') == 'Porta a oggi 2 attività'
         # At once on screen, nothing sent yet: the button leaves and the bar offers Undo
         ini = open(INI_FILE, encoding='utf-8').read()
         for meter in ('BtnOverdue', 'BtnOverdueTxt'):
@@ -4538,7 +4542,7 @@ def test_overdue_tasks_go_to_today_with_undo():
         assert overdue_days(sk) == {'Task a': 3, 'Task b': 3, 'Task done': 2, 'Task old': 2,
                                     'Task now': 3, 'Task next': 5}
         assert not m.shown('BtnOverdue') and not m.shown('BtnOverdueTxt')
-        assert m.opt('Rainmeter', 'ContextTitle15') == 'Nessuna attività in ritardo'
+        assert m.opt('Rainmeter', 'ContextTitle16') == 'Nessuna attività in ritardo'
         assert m.shown('ToastBg') and m.opt('ToastTx', 'Text') == '2 attività spostate a oggi'
         assert ['!EnableMeasure', 'MeasureTick'] in m.bangs and not task_params(sk)
         g.OverdueMove()  # nothing else to move
@@ -4548,9 +4552,9 @@ def test_overdue_tasks_go_to_today_with_undo():
         g.ItemUndo()
         assert overdue_days(sk)['Task a'] == 1 and overdue_days(sk)['Task b'] == 2
         assert m.shown('BtnOverdue') and not m.shown('ToastBg') and not task_params(sk)
-        assert m.opt('Rainmeter', 'ContextTitle15') == 'Porta a oggi 2 attività'
+        assert m.opt('Rainmeter', 'ContextTitle16') == 'Porta a oggi 2 attività'
         # Again, from the context menu's action: the requests go out one at a time, 8 s later
-        assert 'OverdueMove()' in open(INI_FILE, encoding='utf-8').read().split('ContextAction15=')[1].split('\n')[0]
+        assert 'OverdueMove()' in open(INI_FILE, encoding='utf-8').read().split('ContextAction16=')[1].split('\n')[0]
         g.OverdueMove()
         sk.at(2027, 3, 3, 8, 0, 5)
         g.Tick()
@@ -4586,7 +4590,7 @@ def test_overdue_task_google_refuses_or_moved_meanwhile():
         m, g = sk.mock, sk.g
         assert m.opt('BtnOverdueTxt', 'Text') == 'Move to today (2)'
         assert sk.tip('BtnOverdueTxt') == 'Click: move the 2 unfinished tasks of past days to today'
-        assert m.opt('Rainmeter', 'ContextTitle15') == 'Move 2 tasks to today'
+        assert m.opt('Rainmeter', 'ContextTitle16') == 'Move 2 tasks to today'
         g.OverdueMove()
         assert m.opt('ToastTx', 'Text') == '2 tasks moved to today'
         sk.at(2027, 3, 3, 8, 0, 9)
@@ -4598,7 +4602,7 @@ def test_overdue_task_google_refuses_or_moved_meanwhile():
         assert overdue_days(sk) == {'Task a': 1, 'Task b': 3}
         assert m.shown('BtnOverdue') and m.opt('BtnOverdueTxt', 'Text') == 'Move to today (1)'
         assert sk.tip('BtnOverdue') == 'Click: move the unfinished task of a past day to today'
-        assert m.opt('Rainmeter', 'ContextTitle15') == 'Move 1 task to today'
+        assert m.opt('Rainmeter', 'ContextTitle16') == 'Move 1 task to today'
         # (the success that followed does not hide it; a new move starts clean)
         assert g._WC.LANGS.en.taskError in m.opt('TbSync', 'Text') and 'Forbidden' in sk.tip('TbSync')
         g.OverdueMove()
@@ -4713,7 +4717,7 @@ def test_overdue_button_narrow_toolbar_and_setting():
     sk = overdue_skin(*tasks, ShowOverdueButton=0)
     try:
         m = sk.mock
-        assert not m.shown('BtnOverdue') and m.opt('Rainmeter', 'ContextTitle15') == 'Move 2 tasks to today'
+        assert not m.shown('BtnOverdue') and m.opt('Rainmeter', 'ContextTitle16') == 'Move 2 tasks to today'
         sk.g.OverdueMove()
         assert m.opt('ToastTx', 'Text') == '2 tasks moved to today'
         sk.check_clean()
@@ -4725,7 +4729,7 @@ def test_overdue_button_appears_on_a_new_day():
     sk = overdue_skin(('a', '20270303'))
     try:
         m = sk.mock
-        assert not m.shown('BtnOverdue') and m.opt('Rainmeter', 'ContextTitle15') == 'No overdue tasks'
+        assert not m.shown('BtnOverdue') and m.opt('Rainmeter', 'ContextTitle16') == 'No overdue tasks'
         sk.at(2027, 3, 4, 8, 0, 0)
         sk.g.Update()
         assert m.shown('BtnOverdue') and m.opt('BtnOverdueTxt', 'Text') == 'Move to today (1)'
@@ -5415,7 +5419,7 @@ def test_minimize_to_a_tile_and_back():
         W, H = int(m.vars['Width']), int(m.vars['Height'])
         assert m.shown('BtnMini') and sk.tip('BtnMini').startswith('Minimize')
         assert 'Minimize()' in open(INI_FILE, encoding='utf-8').read().split('[BtnMini]')[1].split('\n\n')[0]
-        assert m.opt('Rainmeter', 'ContextTitle16') == 'Minimize'
+        assert m.opt('Rainmeter', 'ContextTitle17') == 'Minimize'
         shown_before = {k for k, v in m.visible.items() if v}
         g.TipOver('BtnMini')
         m.bangs.clear()
@@ -5435,7 +5439,7 @@ def test_minimize_to_a_tile_and_back():
         assert ['!SetOptionGroup', 'Cal', 'X', 0] in m.bangs and ['!SetOptionGroup', 'Cal', 'Y', 0] in m.bangs
         title_x = m.opt('TbTitle', 'X')
         assert ['!WriteKeyValue', 'Variables', 'Minimized', 1, private] in m.bangs
-        assert m.opt('Rainmeter', 'ContextTitle16') == 'Open the calendar'
+        assert m.opt('Rainmeter', 'ContextTitle17') == 'Open the calendar'
         assert not m.shown('Tip')
         # Nothing of the calendar comes back meanwhile: updates, downloads, the wheel, hovering
         m.vars['CURRENTCONFIGX'] = str(100 + W - tw)
@@ -5460,7 +5464,7 @@ def test_minimize_to_a_tile_and_back():
         assert ['!Move', 100, 0] in m.bangs, [b for b in m.bangs if b[0] == '!Move']
         assert ['!SetOption', 'TbTitle', 'X', title_x] in m.bangs  # (back in place)
         assert ['!WriteKeyValue', 'Variables', 'Minimized', 0, private] in m.bangs
-        assert m.opt('Rainmeter', 'ContextTitle16') == 'Minimize'
+        assert m.opt('Rainmeter', 'ContextTitle17') == 'Minimize'
         assert sk.tip('BtnMini').startswith('Minimize')
         assert m.shown('SzGrip')  # (the cursor is over it: SizeHover(1) came while minimized)
         # From the context menu, with the calendar in the bottom left: the tile there too
@@ -5487,7 +5491,7 @@ def test_minimized_tile_contents_and_refresh():
         sk.start(2027, 3, 3, 23)  # Wednesday 23:00: nothing else today
         m, g = sk.mock, sk.g
         assert m.shown('MiniBg') and not m.shown('BG') and not m.shown('EvBg1') and not m.shown('DayNum0')
-        assert m.opt('Rainmeter', 'ContextTitle16') == 'Open the calendar'
+        assert m.opt('Rainmeter', 'ContextTitle17') == 'Open the calendar'
         assert tile_rows(m) == [('MiniNote', 'Nothing else today'), ('MiniHdr', 'Tomorrow'),
                                 ('', 'All day 1'), ('', 'All day 2')], tile_rows(m)
         # A tile in the bottom half grows upwards
@@ -5517,7 +5521,7 @@ def test_minimized_tile_contents_and_refresh():
         m = sk.mock
         assert m.opt('MiniName', 'Text') == 'Mercoledì' and m.opt('MiniMonth', 'Text') == 'Marzo 2027'
         assert tile_rows(sk.mock) == []
-        assert m.opt('Rainmeter', 'ContextTitle16') == 'Apri il calendario'
+        assert m.opt('Rainmeter', 'ContextTitle17') == 'Apri il calendario'
         sk.check_clean()
     finally:
         sk.close()
@@ -6537,6 +6541,276 @@ console.log(JSON.stringify({
     assert out['editCol'] == ['OK', [['patch', {'colorId': '7'}, 'primary', 'ev1']]], out['editCol']
     assert out['clearCol'] == ['OK', [['patch', {'colorId': None}, 'primary', 'ev1']]], out['clearCol']
     assert out['editBad'] == ['ERROR bad color', []], out['editBad']
+
+
+def test_settings_opens_closes_and_toolbar_gear():
+    for mini_btn, gear_x in ((1, 1400 - 92), (0, 1400 - 52)):
+        sk = Skin(Width=1400, ShowMinimizeButton=mini_btn)
+        try:
+            sk.start(2027, 3, 3, 12)
+            m, g = sk.mock, sk.g
+            assert m.shown('BtnSettings') and int(m.opt('BtnSettings', 'X')) == gear_x
+            assert sk.tip('BtnSettings') == 'Settings'
+            assert m.opt('Rainmeter', 'ContextTitle7') == 'Settings...'
+            assert m.opt('Rainmeter', 'ContextTitle15') == 'Settings file'
+            run_action(sk, ini_sections() and open(INI_FILE, encoding='utf-8').read().split('[BtnSettings]')[1].split('\n\n')[0])
+            assert m.shown('CrCard') and m.shown('CrDismiss')
+            texts = card_texts(sk)
+            for expected in ('Settings', 'Open file', 'View', 'Look', 'Wallpaper', 'Mouse', 'Other',
+                             'First day of week', 'First hour', 'Last hour', 'Hide empty hours',
+                             'Defaults', 'Cancel', 'Save'):
+                assert expected in texts, (expected, texts)
+            g.CardClose()
+            assert not m.shown('CrCard') and not m.shown('CrDismiss')
+            sk.check_clean()
+        finally:
+            sk.close()
+
+
+def test_settings_every_tab_fits():
+    for lang in ('en', 'it'):
+        for w, h in ((800, 440), (1400, 800)):
+            sk = Skin(Language=lang, Width=w, Height=h,
+                      IcalUrl2='https://example.com/2.ics', IcalUrl3='https://example.com/3.ics')
+            try:
+                sk.start(2027, 3, 3, 12)
+                m, g = sk.mock, sk.g
+                g.Settings()
+                for tab in ('view', 'look', 'wallpaper', 'mouse', 'other'):
+                    g.SettingsTab(tab)
+                    shown_h = int(g._WC.edit.shownH or h)
+                    cx, cy = int(m.opt('CrCard', 'X')) + 12, int(m.opt('CrCard', 'Y')) + 12
+                    cw, ch = int(m.opt('CrCard', 'W')) - 24, int(m.opt('CrCard', 'H')) - 24
+                    assert cx >= 0 and cy >= 0 and cx + cw <= w and cy + ch <= shown_h, (lang, w, h, tab, cx, cy, cw, ch, shown_h)
+                    for (meter, opt), val in m.options.items():
+                        if opt in ('X', 'Y', 'W', 'H'):
+                            assert re.match(r'^-?\d+$', str(val)), (lang, w, h, tab, meter, opt, val)
+                    sk.check_clean()
+            finally:
+                sk.close()
+
+
+def test_settings_toggle_and_save():
+    sk = create_skin()
+    try:
+        m, g = sk.mock, sk.g
+        private = os.path.join(sk.dir, '@Resources') + os.sep + 'Private.inc'
+        assert m.shown('CrNew')
+        g.Settings()
+        g.SettingsTab('mouse')
+        m.bangs.clear()
+        g.SettingsToggle('ShowCreateButton')
+        assert not m.shown('CrNew')
+        assert ['!SetVariable', 'ShowCreateButton', '0'] in m.bangs
+        assert not [b for b in m.bangs if b[0] == '!WriteKeyValue']
+        g.SettingsSave()
+        assert not m.shown('CrCard') and not m.shown('CrNew')
+        assert ['!WriteKeyValue', 'Variables', 'ShowCreateButton', '0', private] in m.bangs
+        assert not [b for b in m.bangs if b[0] == '!Refresh']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_settings_number_step_and_clamping():
+    sk = Skin(BgOpacity='90', StartHour='8', EndHour='10')
+    try:
+        m, g = sk.mock, sk.g
+        sk.start(2027, 3, 3, 12)
+        g.Settings()
+        g.SettingsTab('wallpaper')
+        # Left half steps down by 5 (90 -> 85, alpha 217); right half steps up by 5 (85 -> 90, alpha 230)
+        g.SettingsStep('BgOpacity', 10)
+        assert 'Fill Color 255,255,255,217 |' in m.opt('BG', 'Shape'), m.opt('BG', 'Shape')
+        g.SettingsStep('BgOpacity', 70)
+        assert 'Fill Color 255,255,255,230 |' in m.opt('BG', 'Shape')
+        # Wheel steps (+1 / -1) and clamps at 0 and 100
+        g.SettingsStep('BgOpacity', 1)
+        assert 'Fill Color 255,255,255,242 |' in m.opt('BG', 'Shape')
+        for _ in range(5):
+            g.SettingsStep('BgOpacity', 1)
+        assert g._WC.edit.card['values']['BgOpacity'] == 100
+        assert 'Fill Color 255,255,255,255 |' in m.opt('BG', 'Shape')
+        for _ in range(25):
+            g.SettingsStep('BgOpacity', -1)
+        assert g._WC.edit.card['values']['BgOpacity'] == 0
+        assert 'Fill Color 255,255,255,1 |' in m.opt('BG', 'Shape')
+        # StartHour cannot reach EndHour
+        g.SettingsTab('view')
+        for _ in range(20):
+            g.SettingsStep('StartHour', 1)
+            assert g._WC.edit.card['values']['StartHour'] < g._WC.edit.card['values']['EndHour']
+        assert g._WC.edit.card['values']['StartHour'] == 22 and g._WC.edit.card['values']['EndHour'] == 23
+        g.SettingsStep('EndHour', 1)
+        g.SettingsStep('StartHour', 1)
+        assert g._WC.edit.card['values']['StartHour'] == 23 and g._WC.edit.card['values']['EndHour'] == 24
+        g.SettingsStep('StartHour', 1)
+        assert g._WC.edit.card['values']['StartHour'] == 23 and g._WC.edit.card['values']['EndHour'] == 24
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_settings_choice_and_color():
+    sk = Skin(EventColor1='12,34,56,255')
+    try:
+        m, g = sk.mock, sk.g
+        sk.start(2027, 3, 3, 12)
+        g.Settings()
+        g.SettingsTab('look')
+        # Custom color shows "Custom" until a Google color is picked
+        assert 'Custom ▾' in card_texts(sk), card_texts(sk)
+        g.CardCycle('set:EventColor1', 1)
+        assert [g._WC.cfg.colors[1][k] for k in (1, 2, 3)] == [213, 0, 0]
+        assert 'Tomato ▾' in card_texts(sk)
+        assert 'Custom ▾' not in card_texts(sk)
+        # Theme picker menu lists Light and Dark, and picking 2 switches to dark live
+        g.CardMenu('set:Theme')
+        assert 'Light' in card_texts(sk) and 'Dark' in card_texts(sk)
+        g.CardPick(2)
+        assert 'Fill Color 30,31,32,255' in m.opt('BG', 'Shape'), m.opt('BG', 'Shape')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_settings_cancel_restores():
+    fresh = Skin()
+    try:
+        fresh.start(2027, 3, 3, 12)
+        expected_bg = fresh.mock.opt('BG', 'Shape')
+        expected_day = fresh.mock.opt('DayNum0', 'FontColor')
+    finally:
+        fresh.close()
+
+    sk = Skin()
+    try:
+        m, g = sk.mock, sk.g
+        sk.start(2027, 3, 3, 12)
+        g.Settings()
+        g.SettingsTab('look')
+        g.CardMenu('set:Theme'); g.CardPick(2)
+        g.SettingsTab('wallpaper')
+        g.SettingsStep('BgOpacity', -1)
+        g.SettingsTab('mouse')
+        g.SettingsToggle('ShowCreateButton')
+        assert not m.shown('CrNew') and m.opt('BG', 'Shape') != expected_bg
+        g.CardClose()
+        # Every variable restored, layout matches fresh skin, nothing written
+        last_vars = {}
+        for b in m.bangs:
+            if b[0] == '!SetVariable':
+                last_vars[b[1]] = b[2]
+        assert last_vars['Theme'] == 'light'
+        assert last_vars['BgOpacity'] == '100'
+        assert last_vars['ShowCreateButton'] == '1'
+        assert m.shown('CrNew')
+        assert m.opt('BG', 'Shape') == expected_bg
+        assert m.opt('DayNum0', 'FontColor') == expected_day
+        assert not [b for b in m.bangs if b[0] == '!WriteKeyValue']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_settings_refresh_and_bang_classes():
+    sk = Skin()
+    try:
+        m, g = sk.mock, sk.g
+        os.makedirs(os.path.join(sk.dir, '@Resources', 'ZOrder'), exist_ok=True)
+        private = os.path.join(sk.dir, '@Resources') + os.sep + 'Private.inc'
+        sk.start(2027, 3, 3, 12)
+        g.Settings()
+        g.SettingsTab('other')
+        m.bangs.clear()
+        g.SettingsStep('FontSize', 1)
+        assert not [b for b in m.bangs if b[0] == '!SetVariable']
+        assert 'Applied after Save (the skin reloads)' in card_texts(sk)
+        g.CardMenu('set:ZPos'); g.CardPick(4)  # Topmost (1)
+        assert ['!ZPos', '1'] in m.bangs
+        g.SettingsToggle('KeepDialogsOnTop')
+        assert os.path.exists(os.path.join(sk.dir, '@Resources', 'ZOrder', 'NoZOrder.txt'))
+        g.SettingsSave()
+        assert ['!WriteKeyValue', 'Variables', 'FontSize', '9.5', private] in m.bangs
+        assert ['!WriteKeyValue', 'Variables', 'ZPos', '1', private] in m.bangs
+        assert m.bangs[-1] == ['!Refresh']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_settings_defaults():
+    sk = Skin()
+    try:
+        m, g = sk.mock, sk.g
+        sk.start(2027, 3, 3, 12)
+        private = os.path.join(sk.dir, '@Resources', 'Private.inc')
+        kept = (b'[Variables]\r\nIcalUrl1=https://calendar.google.com/x\r\n'
+                b'TasksToken=secret\r\nWidth=1100\r\nView=month\r\nMinimized=0\r\n')
+        open(private, 'wb').write(kept + b'Theme=dark\r\nBgOpacity=80\r\nFontSize=10.5\r\n')
+        g.Settings()
+        g.SettingsDefaults()
+        assert 'Reset every setting?' in card_texts(sk) and 'Yes' in card_texts(sk) and 'No' in card_texts(sk)
+        g.SettingsDefaults(0)
+        assert 'Reset every setting?' not in card_texts(sk) and 'Defaults' in card_texts(sk)
+        m.bangs.clear()
+        g.SettingsDefaults(1)
+        assert open(private, 'rb').read() == kept
+        assert m.bangs[-1] == ['!Refresh']
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_settings_view_is_not_reset_and_language_live():
+    sk = Skin()
+    try:
+        m, g = sk.mock, sk.g
+        sk.start(2027, 3, 3, 12)
+        g.SetView('month')
+        assert m.shown('MHit1')
+        g.Settings()
+        g.SettingsTab('other')
+        g.SettingsToggle('PlaceSuggestions')
+        # Month view is kept after edit.reloadSettings()
+        assert m.shown('MHit1')
+        # Switch language to Italian live
+        g.SettingsTab('look')
+        g.CardMenu('set:Language'); g.CardPick(2)
+        texts = card_texts(sk)
+        for it_lbl in ('Impostazioni', 'Vista', 'Aspetto', 'Sfondo', 'Altro', 'Predefiniti', 'Salva'):
+            assert it_lbl in texts, (it_lbl, texts)
+        assert m.opt('CalAppTitle', 'Text') == 'Calendario'
+        assert m.opt('Rainmeter', 'ContextTitle7') == 'Impostazioni...'
+        assert m.opt('Rainmeter', 'ContextTitle15') == 'File delle impostazioni'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_settings_minimize_and_pools():
+    sk = Skin(WORKAREAX='0', WORKAREAY='0', WORKAREAWIDTH='1536', WORKAREAHEIGHT='816')
+    try:
+        m, g = sk.mock, sk.g
+        sk.start(2027, 3, 3, 12)
+        secs = ini_sections()
+        for k in range(21, 33):
+            assert ('CrTx%d' % k) in secs
+        assert g._WC.edit.CR_TX == 32
+        # Minimize while panel is open undoes preview
+        g.Settings()
+        g.SettingsTab('mouse')
+        g.SettingsToggle('ShowCreateButton')
+        assert m.vars['ShowCreateButton'] == '0'
+        g.Minimize()
+        assert m.shown('MiniBg') and not m.shown('CrCard')
+        assert m.vars['ShowCreateButton'] == '1'
+        # Settings() while minimized restores first
+        g.Settings()
+        assert not m.shown('MiniBg') and m.shown('CrCard') and m.shown('CrNew')
+        sk.check_clean()
+    finally:
+        sk.close()
 
 
 def test_lua_main_chunk_has_room_for_locals():

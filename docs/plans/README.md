@@ -2,9 +2,9 @@
 
 Plans for features that are designed but not built yet:
 
-- [`settings-panel.md`](settings-panel.md) — Graphical settings card (gear button in the toolbar, live preview, saved in `Private.inc`).
+*(None currently pending.)*
 
-The plans of the features already built (create, edit / delete, drag and resize events, convert task <-> event, timed task matching, quick jump and search, per-event colors) were removed when they shipped; git history keeps them.
+The plans of the features already built (create, edit / delete, drag and resize events, convert task <-> event, timed task matching, quick jump and search, per-event colors, settings panel) were removed when they shipped; git history keeps them.
 
 ## Conventions that apply to every plan
 
@@ -120,7 +120,7 @@ These are the traps of this codebase. Each one has already caused a bug once.
   `MouseOverAction`). The helper watches `EVENT_SYSTEM_MOVESIZEEND` of the skin's window and calls
   `KeepInWorkArea()` (KeepOnScreen alone lets the skin end under the taskbar); `Update` checks too.
   In LiveTest, two presses on the same spot within the double-click time do not drag.
-- **Cards' pools:** `CrTx1..20` and 32 shapes of `CrCard` (`CR_TX`, `CARD_SHAPES`). A card that
+- **Cards' pools:** `CrTx1..32` and 32 shapes of `CrCard` (`CR_TX`, `CARD_SHAPES`). A card that
   needs more logs an error (the tests fail on it): add meters to the `.ini` and raise the constants.
   The fields and pickers of the cards are functions of the `cf` table (`edit.cf` outside the block).
 - **Tasks script versions:** the feed of `tools/GoogleTasksFeed.gs` says what it can do

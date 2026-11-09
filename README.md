@@ -36,6 +36,7 @@ and delete events and tasks without opening the browser.
 - A busy day never hides anything: "+N more" expands the row, and a day that still does not fit scrolls with the mouse wheel.
 
 **On your desktop**
+- Settings panel: click the gear icon in the toolbar (or right-click > *Settings...*) to change views, theme, calendar colours, opacity, mouse actions and more with live preview.
 - Resize it with the grip in the bottom right corner, or pick small, medium or large.
 - Minimize it to a small tile with today's date and the next events.
 - See the wallpaper: a see-through background, fading while the mouse is away, and the empty hours left out.
@@ -64,10 +65,13 @@ did not add it, press `Win + R`, run `shell:startup` and put a shortcut to
 The skin reads two files in `@Resources`. After saving either one, right-click the skin >
 **Refresh skin**.
 
-- **`Settings.inc`**: your preferences. Right-click the skin > **Calendar settings**. Every
-  setting is explained in the file; the most useful ones are [listed below](#settings).
+- **`Settings.inc`**: your preferences. Most of them can also be changed directly in the calendar
+  with a live preview: click the gear icon in the toolbar or right-click > **Settings...** (saved in
+  `Private.inc`). To edit the file directly, right-click the skin > **Settings file**. Every setting
+  is explained in the file; the most useful ones are [listed below](#settings).
 - **`Private.inc`**: your calendar addresses and secrets. Right-click the skin > **Calendar
-  addresses**. Git ignores it. The skin also writes the view, the size and the minimized state there.
+  addresses**. Git ignores it. The skin also writes your settings, the view, the size and the
+  minimized state there.
 
 > **Keep your addresses private.** Anyone with your secret iCal address can read your calendar,
 > and anyone with the Tasks script's address can change your tasks and events (unless you set a
@@ -213,6 +217,7 @@ repeat; tasks without a date are not shown.
 | Scroll a busy day's all-day row | Mouse wheel over it (once expanded) |
 | Resize the skin | Drag the grip in the bottom right corner, or right-click > *Size* |
 | Move the skin | Drag an empty part of the toolbar, the day names or the hours column |
+| Change the settings | Gear icon in the toolbar, or right-click > *Settings...* |
 | Minimize | **—** at the right of the toolbar; click the tile to open the calendar again |
 | Sync now | Click the sync time in the toolbar, or right-click > *Refresh now* |
 
@@ -220,8 +225,9 @@ repeat; tasks without a date are not shown.
 
 ## Settings
 
-All of them are in `Settings.inc`, with an explanation next to each. The ones you are most likely
-to change:
+Click the gear icon in the toolbar (or right-click > **Settings...**) to change the main settings
+with a live preview (**Defaults** resets them). All settings are also documented in `Settings.inc`
+(right-click > **Settings file**). The ones you are most likely to change:
 
 | Setting | Default | What it does |
 | :--- | :--- | :--- |

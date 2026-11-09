@@ -1,6 +1,8 @@
 ; ======================================================================
 ;  WeeklyCalendar - CONFIGURATION SETTINGS
-;  After saving changes: right-click the skin and select "Refresh skin"
+;  Most of these can also be changed from the calendar: right-click >
+;  Settings... (they are saved in Private.inc, which wins over this file).
+;  After saving changes here: right-click the skin and select "Refresh skin"
 ;  (or right-click the Rainmeter tray icon and choose "Refresh all").
 ; ======================================================================
 
