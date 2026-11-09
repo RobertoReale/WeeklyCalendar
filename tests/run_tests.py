@@ -6265,6 +6265,29 @@ def test_countdown_pill_from_detail_card_and_find_card_and_settings():
     finally:
         sk.close()
 
+    # 7. Countdown stays visible across all months and views at narrower widths (e.g. 1121 px, 900 px)
+    sk = edit_skin(Width=1121, Height=764, View='month',
+                   CountdownDate='2027-06-15', CountdownTitle='Esame di Analisi Matematica 1')
+    try:
+        m, g = sk.mock, sk.g
+        # Trailing space before ellipsis is stripped cleanly
+        assert m.shown('TbCountdown') and m.opt('TbCountdown', 'Text') == 'Esame di Analisi\u2026 \u00b7 -104d', m.opt('TbCountdown', 'Text')
+        # Step through all 12 months (including long names like September/November/December)
+        for _ in range(12):
+            g.ShiftView(1)
+            assert m.shown('TbCountdown') and m.shown('TbCountdownBg'), m.opt('TbTitle', 'Text')
+        # Switch through all views (week, 3day, day, month) — countdown pill always stays visible
+        for v in ('week', '3day', 'day', 'month'):
+            g.SetView(v)
+            assert m.shown('TbCountdown') and m.shown('TbCountdownBg'), v
+        # Even at narrow width (900 px) in week view, countdown stays visible by shortening gracefully
+        g.SetView('week')
+        g._WC.edit.applySize(900, 764)
+        assert m.shown('TbCountdown') and '-104d' in m.opt('TbCountdown', 'Text'), m.opt('TbCountdown', 'Text')
+        sk.check_clean()
+    finally:
+        sk.close()
+
 
 def test_lua_main_chunk_has_room_for_locals():
     # Lua 5.1 allows 200 local variables per function, the main chunk included: past it
