@@ -6028,20 +6028,34 @@ def test_tb_title_opens_find_card_and_keeps_skin_draggable():
         sec = ini.split('[%s]' % meter)[1].split('\n\n')[0]
         assert 'FindOpen()' in sec, (meter, sec)
         assert 'LeftMouseDownAction=' not in sec and 'StyItem' not in sec, (meter, sec)
+    assert 'FindOpen()' in ini.split('[BtnSearch]')[1].split('\n\n')[0]
     assert 'FindOpen()' in ini.split('ContextAction3=')[1].split('\n')[0]
     sk = edit_skin()
     try:
         m, g = sk.mock, sk.g
         os.makedirs(os.path.join(sk.dir, '@Resources', 'ZOrder'), exist_ok=True)
+        assert m.shown('BtnSearch') and int(m.opt('BtnSearch', 'X')) == 1400 - 132
+        assert sk.tip('BtnSearch') == 'Search'
         assert sk.tip('TbTitle') == 'Click: search events/tasks or go to a date'
         assert sk.tip('TbWeekBg') == 'Click: search events/tasks or go to a date'
-        g.FindOpen()
+        run_action(sk, ini.split('[BtnSearch]')[1].split('\n\n')[0])
         assert m.shown('CrCard') and m.shown('CrDismiss')
         assert ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] in m.bangs
         find_path = os.path.join(sk.dir, '@Resources', 'ZOrder', 'Find.txt')
         assert os.path.isfile(find_path)
-        g.CardClose()
+        # Clicking search button again toggles it closed
+        run_action(sk, ini.split('[BtnSearch]')[1].split('\n\n')[0])
         assert not m.shown('CrCard') and not os.path.isfile(find_path)
+        sk.check_clean()
+    finally:
+        sk.close()
+
+    # Test Italian tip and btn=0 position
+    sk = edit_skin(Language='it', ShowMinimizeButton='0')
+    try:
+        m, g = sk.mock, sk.g
+        assert m.shown('BtnSearch') and int(m.opt('BtnSearch', 'X')) == 1400 - 92
+        assert sk.tip('BtnSearch') == 'Cerca'
         sk.check_clean()
     finally:
         sk.close()
