@@ -138,6 +138,13 @@ ShowOverdueButton=1
 ;   titles = every task on its own line, struck through, after the open ones.
 ;   hide   = nothing: only the tasks still to do.
 CompletedTasks=count
+;  ShowTaskList: how each task on the calendar shows which Google Tasks list it belongs to
+;  (tasks in your default list, "My Tasks" / "Le mie attività", are left as they are).
+;   short = a short code before the title ("○ GAL · Studiare Lezione 15", "○ AM1-2P · Studiare
+;           Lezione 15"; a short list name like "Sport" or "Salute" stays as it is).
+;   full  = the full name of the list ("○ Geometria ed Algebra Lineare · Studiare Lezione 15").
+;   hide  = only the task's title (the tooltip and the details card still show the list).
+ShowTaskList=short
 ;  MiniEvents: how many of the next events (today's, then tomorrow's) the tile lists (0-5).
 MiniEvents=3
 ;  HideEmptyHours=1: the day, 3-day and week views show only the hours from the first event to the

@@ -26,7 +26,7 @@ and delete events and tasks without opening the browser.
 - Recurring events are expanded in the skin (`RRULE`, `RDATE`, `EXDATE`, modified occurrences) with time zone conversion.
 
 **Tasks** (Google Tasks)
-- Tasks appear like in Google Calendar: ○ open, ✓ completed. Click the circle to complete one.
+- Tasks appear like in Google Calendar: ○ open, ✓ completed, with a short tag for their list (`ShowTaskList`). Click the circle to complete one.
 - Drag a task to another day, move it to another list, add details.
 - Priorities: a coloured dot, and the important tasks first in their day.
 - Completed tasks fold into one line per day ("✓ 3 completed"), or show their titles, or are hidden.
@@ -231,6 +231,7 @@ to change:
 | `HideEmptyHours` | `1` | Leave out the hours without events |
 | `AllDayRows` | `3` | All-day rows before "+N more" (1-10) |
 | `CompletedTasks` | `count` | `count`, `titles` or `hide` |
+| `ShowTaskList` | `short` | Task list on the chip: `short`, `full` or `hide` |
 | `EventColor1` ... `6` | Google's colours | Colour of each calendar |
 | `ClickAction` | `card` | Left click: `card`, `calendar` (Google Calendar) or `link` (the event's link) |
 | `BgOpacity`, `IdleBgOpacity` | `100`, `90` | Background opacity (%) with the mouse over the skin, and away |

@@ -266,7 +266,7 @@ class Skin:
             # the wallpaper settings as before 1.19 (their own tests turn them on)
             'BgOpacity': '100', 'IdleBgOpacity': '', 'IdleOpacity': '100', 'HideEmptyHours': '0',
             # completed tasks as before 1.26 (their own tests turn the others on)
-            'CompletedTasks': 'titles',
+            'CompletedTasks': 'titles', 'ShowTaskList': 'hide',
         })
         variables.update({k: str(v) for k, v in overrides.items()})
         self.mock = MockSkin(variables, ini_sections())
@@ -5927,6 +5927,91 @@ def test_recurring_event_does_not_offer_task_conversion():
         g.ItemEdit()
         assert 'Task' not in card_texts(sk)
         g.CardClose()
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_task_list_labels_short_full_hide_and_disambiguation():
+    # ShowTaskList=short (default in Settings.inc), full and hide
+    assert read_vars(SETTINGS_FILE)['ShowTaskList'] == 'short'
+    ics = ('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-WR-CALNAME:Google Tasks\r\nX-WC-VERSION:3\r\n'
+           'X-WC-LIST;ID=L1;DEFAULT=1:Le mie attività\r\n'
+           'X-WC-LIST;ID=L2:Analisi Matematica 1 - 1° Parziale\r\n'
+           'X-WC-LIST;ID=L3:Analisi Matematica 1 - 2° Parziale\r\n'
+           'X-WC-LIST;ID=L4:Geometria ed Algebra Lineare\r\n'
+           'X-WC-LIST;ID=L5:Sport\r\n'
+           'X-WC-LIST;ID=L6:Strategie (attuali) di vita\r\n'
+           'X-WC-LIST;ID=L7:Storia Contemporanea\r\n'
+           'X-WC-LIST;ID=L8:Scienza Costruzioni\r\n'
+           'BEGIN:VEVENT\r\nUID:t1@tasks.google.com\r\nDTSTART;VALUE=DATE:20270303\r\n'
+           'SUMMARY:Studiare Lezione 15\r\nCATEGORIES:Analisi Matematica 1 - 2° Parziale\r\n'
+           'X-WC-TASK:NEEDS-ACTION\r\nX-WC-TASKLIST:L3\r\nX-WC-TASKID:t1\r\nEND:VEVENT\r\n'
+           'BEGIN:VEVENT\r\nUID:t2@tasks.google.com\r\nDTSTART;VALUE=DATE:20270303\r\n'
+           'SUMMARY:Studiare Lezione 15\r\nCATEGORIES:Geometria ed Algebra Lineare\r\n'
+           'X-WC-TASK:NEEDS-ACTION\r\nX-WC-TASKLIST:L4\r\nX-WC-TASKID:t2\r\nEND:VEVENT\r\n'
+           'BEGIN:VEVENT\r\nUID:t3@tasks.google.com\r\nDTSTART;VALUE=DATE:20270303\r\n'
+           'SUMMARY:Trovare penna\r\nCATEGORIES:Le mie attività\r\n'
+           'X-WC-TASK:NEEDS-ACTION\r\nX-WC-TASKLIST:L1\r\nX-WC-TASKID:t3\r\nEND:VEVENT\r\n'
+           'BEGIN:VEVENT\r\nUID:t4@tasks.google.com\r\nDTSTART;VALUE=DATE:20270303\r\n'
+           'SUMMARY:Corsa\r\nCATEGORIES:Sport\r\n'
+           'X-WC-TASK:NEEDS-ACTION\r\nX-WC-TASKLIST:L5\r\nX-WC-TASKID:t4\r\nEND:VEVENT\r\n'
+           'BEGIN:VEVENT\r\nUID:t5@tasks.google.com\r\nDTSTART;VALUE=DATE:20270303\r\n'
+           'SUMMARY:Piano\r\nCATEGORIES:Strategie (attuali) di vita\r\n'
+           'X-WC-TASK:NEEDS-ACTION\r\nX-WC-TASKLIST:L6\r\nX-WC-TASKID:t5\r\nEND:VEVENT\r\n'
+           'BEGIN:VEVENT\r\nUID:t6@tasks.google.com\r\nDTSTART;VALUE=DATE:20270304\r\n'
+           'SUMMARY:Cap 1\r\nCATEGORIES:Storia Contemporanea\r\n'
+           'X-WC-TASK:NEEDS-ACTION\r\nX-WC-TASKLIST:L7\r\nX-WC-TASKID:t6\r\nEND:VEVENT\r\n'
+           'BEGIN:VEVENT\r\nUID:t7@tasks.google.com\r\nDTSTART;VALUE=DATE:20270304\r\n'
+           'SUMMARY:Cap 1\r\nCATEGORIES:Scienza Costruzioni\r\n'
+           'X-WC-TASK:NEEDS-ACTION\r\nX-WC-TASKLIST:L8\r\nX-WC-TASKID:t7\r\nEND:VEVENT\r\n'
+           'END:VCALENDAR\r\n')
+    sk = edit_skin(ShowTaskList='short', AllDayRows=8)
+    try:
+        m, g = sk.mock, sk.g
+        set_feed(sk, 3, ics)
+        ad = sk.all_day()
+        # The two "Studiare Lezione 15" tasks are clearly distinguished by their list code
+        assert '○ AM1-2P · Studiare Lezione 15' in ad, ad
+        assert '○ GAL · Studiare Lezione 15' in ad, ad
+        # Default list ("Le mie attività") has no prefix; short list ("Sport") stays as-is
+        assert '○ Trovare penna' in ad, ad
+        assert '○ Sport · Corsa' in ad, ad
+        assert '○ SV · Piano' in ad, ad
+        # Two lists whose initials would collide ("SC") are deterministically disambiguated
+        assert '○ StCo · Cap 1' in ad and '○ ScCo · Cap 1' in ad, ad
+        # Tooltip keeps the clean title on the first line and the full list on the Task line
+        tip = sk.tip('ADBg%d' % ad['○ GAL · Studiare Lezione 15'])
+        assert tip.startswith('○ Studiare Lezione 15#CRLF#Task · Geometria ed Algebra Lineare'), tip
+        # Moving a task to another list updates its chip tag immediately
+        open_card(sk, 'ADBg%d' % ad['○ GAL · Studiare Lezione 15'])
+        g.ItemEdit()
+        g.CardCycle('list', -2)  # Analisi Matematica 1 - 1° Parziale (L2)
+        press(sk)
+        g.ItemSave()
+        assert '○ AM1-1P · Studiare Lezione 15' in sk.all_day(), sk.all_day()
+        answer(sk, 'OK t2-moved')
+        # Month view and minimized tile also show the tag
+        g.SetView('month')
+        ml = [text for _, text, _ in month_lines(sk)]
+        assert any(t.startswith('○ AM1-2P · Studiare') for t in ml), ml
+        assert any(t.startswith('○ AM1-1P · Studiare') for t in ml), ml
+        g.SetView('week')
+        g.Minimize()
+        mini_texts = [m.opt('MiniTl%d' % k, 'Text') for k in range(1, 6) if m.shown('MiniTl%d' % k)]
+        assert any('AM1-2P · Studiare Lezione 15' in t for t in mini_texts), mini_texts
+        g.MiniRestore()
+        sk.check_clean()
+    finally:
+        sk.close()
+    # ShowTaskList=full shows the full list name
+    sk = edit_skin(ShowTaskList='full', View='day', AllDayRows=8)
+    try:
+        set_feed(sk, 3, ics)
+        ad = sk.all_day()
+        assert any(k.startswith('○ Analisi Matematica 1 - 2° Parziale · Studiare Lezione 15') for k in ad), ad
+        assert any(k.startswith('○ Geometria ed Algebra Lineare · Studiare Lezione 15') for k in ad), ad
+        assert '○ Trovare penna' in ad, ad
         sk.check_clean()
     finally:
         sk.close()
