@@ -285,6 +285,7 @@ static class ZOrderHelper
         {
             typedBox = IntPtr.Zero;
             PlacesEnd();
+            FindEnd();
             UpdateHook();
             return false;
         }
@@ -315,11 +316,16 @@ static class ZOrderHelper
             {
                 CaretToEnd(box, text); // the plugin selected it again
             }
-            if (box == typedBox && text == typedText && copied) return true;
+            if (box == typedBox && text == typedText && copied)
+            {
+                FindTick(box, text);
+                return true;
+            }
             if (text != "") emptyBox = IntPtr.Zero;
             else if (copied && had.Length > 3 && box != emptyBox)
             {
                 emptyBox = box;
+                FindTick(box, text);
                 return true;
             }
             byte[] data = new UTF8Encoding(false).GetBytes("WC\n" + text);
@@ -333,6 +339,7 @@ static class ZOrderHelper
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
+        FindTick(box, text);
         return true;
     }
 
@@ -798,9 +805,101 @@ static class ZOrderHelper
     static bool hookOn;
     const uint WM_APP = 0x8000;
 
+    // ---- Live search & date jump (Find.txt) ----------------------------------------------
+    // Find.txt: <config>\n<boxN>\n<rowCount>. While it exists, typing triggers FindLive(n)
+    // after a 60 ms micro-debounce, and Up / Down arrows send FindStep(n, +-1).
+    class FindBox { public string config; public int n, rows; }
+
+    static readonly string findPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Find.txt");
+    static string fnFile;
+    static volatile FindBox fn;
+    static volatile IntPtr fnBox;
+    static string fnText;
+    static int fnDue;
+
+    static FindBox ReadFind()
+    {
+        string t;
+        try
+        {
+            if (!File.Exists(findPath)) return null;
+            t = File.ReadAllText(findPath, Utf8);
+        }
+        catch (IOException) { return fn; }
+        catch (UnauthorizedAccessException) { return fn; }
+        if (t == fnFile && fn != null) return fn;
+        string[] lines = t.Replace("\r", "").Split('\n');
+        int n, rows = 0;
+        if (lines.Length < 2 || !int.TryParse(lines[1].Trim(), out n)) return null;
+        if (lines.Length > 2) int.TryParse(lines[2].Trim(), out rows);
+        var b = new FindBox { config = lines[0].Trim(), n = n, rows = rows };
+        if (b.config == "" || b.config.Contains("\"")) return null;
+        fnFile = t;
+        return b;
+    }
+
+    static void FindTick(IntPtr box, string text)
+    {
+        FindBox b = ReadFind();
+        if (b == null)
+        {
+            FindEnd();
+            return;
+        }
+        if (fn == null || b.n != fn.n || box != fnBox)
+        {
+            FindEnd();
+            fn = b;
+            fnBox = box;
+            fnText = text;
+            UpdateHook();
+            return;
+        }
+        fn = b;
+        fnBox = box;
+        if (text != fnText)
+        {
+            fnText = text;
+            fnDue = (Environment.TickCount + 60) | 1;
+        }
+        if (fnDue != 0 && Due(fnDue))
+        {
+            fnDue = 0;
+            Bang(string.Format("!CommandMeasure MeasureScript \"FindLive({0})\" \"{1}\"", fn.n, fn.config));
+        }
+        UpdateHook();
+    }
+
+    static void FindEnd()
+    {
+        fn = null;
+        fnFile = fnText = null;
+        fnBox = IntPtr.Zero;
+        fnDue = 0;
+        UpdateHook();
+    }
+
+    static bool FindKey(int vk)
+    {
+        FindBox b = fn;
+        IntPtr box = fnBox;
+        if (b == null || b.rows <= 0 || box == IntPtr.Zero) return false;
+        if (vk != 0x26 && vk != 0x28) return false;
+        if ((GetAsyncKeyState(0x11) & 0x8000) != 0 || (GetAsyncKeyState(0x12) & 0x8000) != 0) return false;
+        uint pid;
+        if (FocusOf(GetWindowThreadProcessId(GetForegroundWindow(), out pid)) != box) return false;
+        int d = vk == 0x28 ? 1 : -1;
+        Post(delegate
+        {
+            if (fn != null) Bang(string.Format("!CommandMeasure MeasureScript \"FindStep({0}, {1})\" \"{2}\"", b.n, d, b.config));
+        });
+        return true;
+    }
+
     static void UpdateHook()
     {
-        Hook(plRows != null || File.Exists(typedPath));
+        FindBox b = fn;
+        Hook(plRows != null || (b != null && b.rows > 0) || File.Exists(typedPath));
     }
 
     static void Hook(bool on)
@@ -840,6 +939,7 @@ static class ZOrderHelper
         if (code >= 0 && wp.ToInt64() == 0x100) // WM_KEYDOWN
         {
             int vk = Marshal.ReadInt32(lp);
+            if ((vk == 0x26 || vk == 0x28) && FindKey(vk)) return new IntPtr(1);
             if ((vk == 0x26 || vk == 0x28 || vk == 0x0D || vk == 0x1B) && PlaceKey(vk)) return new IntPtr(1);
             if (vk == 0x0D && ShiftEnterKey()) return new IntPtr(1);
         }

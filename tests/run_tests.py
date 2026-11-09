@@ -619,7 +619,8 @@ def test_italian_translation_and_context_menu():
         sk.start(2027, 3, 3, 12)
         m = sk.mock
         assert m.opt('Rainmeter', 'ContextTitle') == 'Aggiorna ora'
-        assert m.opt('Rainmeter', 'ContextTitle7') == 'Indirizzi calendario'
+        assert m.opt('Rainmeter', 'ContextTitle3') == 'Cerca / Vai a data...'
+        assert m.opt('Rainmeter', 'ContextTitle8') == 'Indirizzi calendario'
         assert m.opt('CalAppTitle', 'Text') == 'Calendario'
         assert sk.tip('BtnPrev') == 'Settimana precedente'
         assert int(m.opt('BtnToday', 'X')) > 142  # moved right of the longer title
@@ -886,8 +887,8 @@ def test_pressing_an_item_does_not_move_the_skin():
         if m and re.search(r'(?m)^LeftMouseUpAction=', sec) and not m.group(1).startswith('Drag') \
                 and not re.search(r'(?m)^LeftMouseDownAction=', sec) and 'StyItem' not in sec:
             bad.append(m.group(1))
-    # (the tile of the minimized skin is dragged like the skin: a click opens the calendar)
-    assert bad == ['MiniBg'], bad
+    # (the toolbar title/week badge and the tile of the minimized skin are dragged like the skin)
+    assert bad == ['TbTitle', 'TbWeekBg', 'TbWeek', 'MiniBg'], bad
 
 
 def test_lua_file_is_utf16_with_bom():
@@ -4528,7 +4529,7 @@ def test_overdue_tasks_go_to_today_with_undo():
         assert m.shown('BtnOverdue') and m.shown('BtnOverdueTxt')
         assert m.opt('BtnOverdueTxt', 'Text') == 'Porta a oggi (2)'
         assert sk.tip('BtnOverdue') == 'Clic: sposta a oggi le 2 attività non completate dei giorni passati'
-        assert m.opt('Rainmeter', 'ContextTitle14') == 'Porta a oggi 2 attività'
+        assert m.opt('Rainmeter', 'ContextTitle15') == 'Porta a oggi 2 attività'
         # At once on screen, nothing sent yet: the button leaves and the bar offers Undo
         ini = open(INI_FILE, encoding='utf-8').read()
         for meter in ('BtnOverdue', 'BtnOverdueTxt'):
@@ -4537,7 +4538,7 @@ def test_overdue_tasks_go_to_today_with_undo():
         assert overdue_days(sk) == {'Task a': 3, 'Task b': 3, 'Task done': 2, 'Task old': 2,
                                     'Task now': 3, 'Task next': 5}
         assert not m.shown('BtnOverdue') and not m.shown('BtnOverdueTxt')
-        assert m.opt('Rainmeter', 'ContextTitle14') == 'Nessuna attività in ritardo'
+        assert m.opt('Rainmeter', 'ContextTitle15') == 'Nessuna attività in ritardo'
         assert m.shown('ToastBg') and m.opt('ToastTx', 'Text') == '2 attività spostate a oggi'
         assert ['!EnableMeasure', 'MeasureTick'] in m.bangs and not task_params(sk)
         g.OverdueMove()  # nothing else to move
@@ -4547,9 +4548,9 @@ def test_overdue_tasks_go_to_today_with_undo():
         g.ItemUndo()
         assert overdue_days(sk)['Task a'] == 1 and overdue_days(sk)['Task b'] == 2
         assert m.shown('BtnOverdue') and not m.shown('ToastBg') and not task_params(sk)
-        assert m.opt('Rainmeter', 'ContextTitle14') == 'Porta a oggi 2 attività'
+        assert m.opt('Rainmeter', 'ContextTitle15') == 'Porta a oggi 2 attività'
         # Again, from the context menu's action: the requests go out one at a time, 8 s later
-        assert 'OverdueMove()' in open(INI_FILE, encoding='utf-8').read().split('ContextAction14=')[1].split('\n')[0]
+        assert 'OverdueMove()' in open(INI_FILE, encoding='utf-8').read().split('ContextAction15=')[1].split('\n')[0]
         g.OverdueMove()
         sk.at(2027, 3, 3, 8, 0, 5)
         g.Tick()
@@ -4585,7 +4586,7 @@ def test_overdue_task_google_refuses_or_moved_meanwhile():
         m, g = sk.mock, sk.g
         assert m.opt('BtnOverdueTxt', 'Text') == 'Move to today (2)'
         assert sk.tip('BtnOverdueTxt') == 'Click: move the 2 unfinished tasks of past days to today'
-        assert m.opt('Rainmeter', 'ContextTitle14') == 'Move 2 tasks to today'
+        assert m.opt('Rainmeter', 'ContextTitle15') == 'Move 2 tasks to today'
         g.OverdueMove()
         assert m.opt('ToastTx', 'Text') == '2 tasks moved to today'
         sk.at(2027, 3, 3, 8, 0, 9)
@@ -4597,7 +4598,7 @@ def test_overdue_task_google_refuses_or_moved_meanwhile():
         assert overdue_days(sk) == {'Task a': 1, 'Task b': 3}
         assert m.shown('BtnOverdue') and m.opt('BtnOverdueTxt', 'Text') == 'Move to today (1)'
         assert sk.tip('BtnOverdue') == 'Click: move the unfinished task of a past day to today'
-        assert m.opt('Rainmeter', 'ContextTitle14') == 'Move 1 task to today'
+        assert m.opt('Rainmeter', 'ContextTitle15') == 'Move 1 task to today'
         # (the success that followed does not hide it; a new move starts clean)
         assert g._WC.LANGS.en.taskError in m.opt('TbSync', 'Text') and 'Forbidden' in sk.tip('TbSync')
         g.OverdueMove()
@@ -4712,7 +4713,7 @@ def test_overdue_button_narrow_toolbar_and_setting():
     sk = overdue_skin(*tasks, ShowOverdueButton=0)
     try:
         m = sk.mock
-        assert not m.shown('BtnOverdue') and m.opt('Rainmeter', 'ContextTitle14') == 'Move 2 tasks to today'
+        assert not m.shown('BtnOverdue') and m.opt('Rainmeter', 'ContextTitle15') == 'Move 2 tasks to today'
         sk.g.OverdueMove()
         assert m.opt('ToastTx', 'Text') == '2 tasks moved to today'
         sk.check_clean()
@@ -4724,7 +4725,7 @@ def test_overdue_button_appears_on_a_new_day():
     sk = overdue_skin(('a', '20270303'))
     try:
         m = sk.mock
-        assert not m.shown('BtnOverdue') and m.opt('Rainmeter', 'ContextTitle14') == 'No overdue tasks'
+        assert not m.shown('BtnOverdue') and m.opt('Rainmeter', 'ContextTitle15') == 'No overdue tasks'
         sk.at(2027, 3, 4, 8, 0, 0)
         sk.g.Update()
         assert m.shown('BtnOverdue') and m.opt('BtnOverdueTxt', 'Text') == 'Move to today (1)'
@@ -5014,7 +5015,7 @@ def test_sizes_from_the_context_menu():
             assert m.opt('Rainmeter', key) == g._WC.LANGS.en.ctx[k], key
             assert re.search(r'^ContextAction%s=' % ('' if k == 1 else k), ini, re.M), k
         assert len(g._WC.LANGS.en.ctx) == len(g._WC.LANGS.it.ctx)
-        assert m.opt('Rainmeter', 'ContextTitle12') == 'Original size (from the settings)'
+        assert m.opt('Rainmeter', 'ContextTitle13') == 'Original size (from the settings)'
 
         g.SetSize('small')  # 55% of the work area, where the skin is
         assert m.opt('BG', 'Shape').startswith('Rectangle 0,0,844,448,')
@@ -5414,7 +5415,7 @@ def test_minimize_to_a_tile_and_back():
         W, H = int(m.vars['Width']), int(m.vars['Height'])
         assert m.shown('BtnMini') and sk.tip('BtnMini').startswith('Minimize')
         assert 'Minimize()' in open(INI_FILE, encoding='utf-8').read().split('[BtnMini]')[1].split('\n\n')[0]
-        assert m.opt('Rainmeter', 'ContextTitle15') == 'Minimize'
+        assert m.opt('Rainmeter', 'ContextTitle16') == 'Minimize'
         shown_before = {k for k, v in m.visible.items() if v}
         g.TipOver('BtnMini')
         m.bangs.clear()
@@ -5434,7 +5435,7 @@ def test_minimize_to_a_tile_and_back():
         assert ['!SetOptionGroup', 'Cal', 'X', 0] in m.bangs and ['!SetOptionGroup', 'Cal', 'Y', 0] in m.bangs
         title_x = m.opt('TbTitle', 'X')
         assert ['!WriteKeyValue', 'Variables', 'Minimized', 1, private] in m.bangs
-        assert m.opt('Rainmeter', 'ContextTitle15') == 'Open the calendar'
+        assert m.opt('Rainmeter', 'ContextTitle16') == 'Open the calendar'
         assert not m.shown('Tip')
         # Nothing of the calendar comes back meanwhile: updates, downloads, the wheel, hovering
         m.vars['CURRENTCONFIGX'] = str(100 + W - tw)
@@ -5459,7 +5460,7 @@ def test_minimize_to_a_tile_and_back():
         assert ['!Move', 100, 0] in m.bangs, [b for b in m.bangs if b[0] == '!Move']
         assert ['!SetOption', 'TbTitle', 'X', title_x] in m.bangs  # (back in place)
         assert ['!WriteKeyValue', 'Variables', 'Minimized', 0, private] in m.bangs
-        assert m.opt('Rainmeter', 'ContextTitle15') == 'Minimize'
+        assert m.opt('Rainmeter', 'ContextTitle16') == 'Minimize'
         assert sk.tip('BtnMini').startswith('Minimize')
         assert m.shown('SzGrip')  # (the cursor is over it: SizeHover(1) came while minimized)
         # From the context menu, with the calendar in the bottom left: the tile there too
@@ -5486,7 +5487,7 @@ def test_minimized_tile_contents_and_refresh():
         sk.start(2027, 3, 3, 23)  # Wednesday 23:00: nothing else today
         m, g = sk.mock, sk.g
         assert m.shown('MiniBg') and not m.shown('BG') and not m.shown('EvBg1') and not m.shown('DayNum0')
-        assert m.opt('Rainmeter', 'ContextTitle15') == 'Open the calendar'
+        assert m.opt('Rainmeter', 'ContextTitle16') == 'Open the calendar'
         assert tile_rows(m) == [('MiniNote', 'Nothing else today'), ('MiniHdr', 'Tomorrow'),
                                 ('', 'All day 1'), ('', 'All day 2')], tile_rows(m)
         # A tile in the bottom half grows upwards
@@ -5516,7 +5517,7 @@ def test_minimized_tile_contents_and_refresh():
         m = sk.mock
         assert m.opt('MiniName', 'Text') == 'Mercoledì' and m.opt('MiniMonth', 'Text') == 'Marzo 2027'
         assert tile_rows(sk.mock) == []
-        assert m.opt('Rainmeter', 'ContextTitle15') == 'Apri il calendario'
+        assert m.opt('Rainmeter', 'ContextTitle16') == 'Apri il calendario'
         sk.check_clean()
     finally:
         sk.close()
@@ -6012,6 +6013,173 @@ def test_task_list_labels_short_full_hide_and_disambiguation():
         assert any(k.startswith('○ Analisi Matematica 1 - 2° Parziale · Studiare Lezione 15') for k in ad), ad
         assert any(k.startswith('○ Geometria ed Algebra Lineare · Studiare Lezione 15') for k in ad), ad
         assert '○ Trovare penna' in ad, ad
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_tb_title_opens_find_card_and_keeps_skin_draggable():
+    ini = open(INI_FILE, encoding='utf-8-sig').read()
+    for meter in ('TbTitle', 'TbWeekBg', 'TbWeek'):
+        sec = ini.split('[%s]' % meter)[1].split('\n\n')[0]
+        assert 'FindOpen()' in sec, (meter, sec)
+        assert 'LeftMouseDownAction=' not in sec and 'StyItem' not in sec, (meter, sec)
+    assert 'FindOpen()' in ini.split('ContextAction3=')[1].split('\n')[0]
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        os.makedirs(os.path.join(sk.dir, '@Resources', 'ZOrder'), exist_ok=True)
+        assert sk.tip('TbTitle') == 'Click: search events/tasks or go to a date'
+        assert sk.tip('TbWeekBg') == 'Click: search events/tasks or go to a date'
+        g.FindOpen()
+        assert m.shown('CrCard') and m.shown('CrDismiss')
+        assert ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] in m.bangs
+        find_path = os.path.join(sk.dir, '@Resources', 'ZOrder', 'Find.txt')
+        assert os.path.isfile(find_path)
+        g.CardClose()
+        assert not m.shown('CrCard') and not os.path.isfile(find_path)
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_find_card_initial_state_shows_quick_jumps_and_upcoming():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        g.FindOpen()
+        tx = card_texts(sk)
+        assert 'Today' in tx and 'Next week' in tx and 'Next month' in tx, tx
+        assert 'Upcoming' in tx, tx
+        # Upcoming events and open tasks from sample.ics + tasks_v2.ics
+        assert any('Dentist' in t or 'Call Mom' in t or 'Team Standup' in t or 'Meeting' in t or 'Task' in t or 'Daily' in t for t in tx), tx
+        for (meter, opt), val in m.options.items():
+            if opt in ('X', 'Y', 'W', 'H'):
+                assert re.match(r'^-?\d+$', str(val)), (meter, opt, val)
+        # Clicking "Next week" chip jumps 7 days ahead and closes the card
+        g.FindGo(g._WC.daysFromCivil(2027, 3, 10))
+        assert not m.shown('CrCard')
+        assert m.opt('DayNum2', 'Text') == '10'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_find_card_jumps_to_date_on_enter():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        g.FindOpen()
+        n = g._WC.edit.box.n
+        m.vars['CreateTitle'] = '15/12/2026'
+        g.CreateSubmit(n)
+        assert not m.shown('CrCard')
+        assert m.opt('TbTitle', 'Text') == 'December 2026'
+        assert m.opt('DayNum1', 'Text') == '15'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_find_card_parses_month_name_alone():
+    sk = edit_skin(Language='it')
+    try:
+        m, g = sk.mock, sk.g
+        os.makedirs(os.path.join(sk.dir, '@Resources', 'ZOrder'), exist_ok=True)
+        today = g._WC.daysFromCivil(2026, 11, 9)
+        d1, k1 = g._WC.edit.parseDate('marzo 2027', today, today)
+        assert (d1, k1) == (g._WC.daysFromCivil(2027, 3, 1), 'month')
+        d2, k2 = g._WC.edit.parseDate('march 2027', today, today)
+        assert (d2, k2) == (g._WC.daysFromCivil(2027, 3, 1), 'month')
+        d3, k3 = g._WC.edit.parseDate('marzo', today, today)
+        assert (d3, k3) == (g._WC.daysFromCivil(2027, 3, 1), 'month')
+        d4, k4 = g._WC.edit.parseDate('dicembre', today, today)
+        assert (d4, k4) == (g._WC.daysFromCivil(2026, 12, 1), 'month')
+
+        g.FindOpen()
+        n = g._WC.edit.box.n
+        typed_path = os.path.join(sk.dir, '@Resources', 'ZOrder', 'Typed.txt')
+        open(typed_path, 'wb').write(b'WC\nmarzo 2027')
+        g.FindLive(n)
+        tx = card_texts(sk)
+        assert any('Vai a Marzo 2027' in t for t in tx), tx
+        m.vars['CreateTitle'] = 'marzo 2027'
+        g.CreateSubmit(n)
+        assert not m.shown('CrCard')
+        assert m.opt('TbTitle', 'Text') == 'Feb \u2013 Mar 2027' or 'Marzo 2027' in m.opt('TbTitle', 'Text')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_find_card_live_search_matches_events_and_tasks_and_opens_detail():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        os.makedirs(os.path.join(sk.dir, '@Resources', 'ZOrder'), exist_ok=True)
+        ics = ('BEGIN:VCALENDAR\r\nVERSION:2.0\r\n'
+               'BEGIN:VEVENT\r\nUID:exam1@google.com\r\nDTSTART:20270615T090000Z\r\nDTEND:20270615T110000Z\r\n'
+               'SUMMARY:Esame Universit\u00e0 Geometria\r\nLOCATION:Aula Magna\r\nDESCRIPTION:Portare calcolatrice\r\n'
+               'END:VEVENT\r\nEND:VCALENDAR\r\n')
+        set_feed(sk, 1, ics)
+        g.FindOpen()
+        n = g._WC.edit.box.n
+        typed_path = os.path.join(sk.dir, '@Resources', 'ZOrder', 'Typed.txt')
+
+        # Accent-insensitive live search on event title
+        open(typed_path, 'wb').write(b'WC\nuniversita')
+        g.FindLive(n)
+        tx = card_texts(sk)
+        assert any('Esame Universit' in t and 'Aula Magna' in t for t in tx), tx
+        assert '\u00d7' in tx, tx
+
+        # Search by location
+        open(typed_path, 'wb').write(b'WC\nmagna')
+        g.FindLive(n)
+        assert any('Esame Universit' in t for t in card_texts(sk))
+
+        # Search by description snippet
+        open(typed_path, 'wb').write(b'WC\ncalcolatrice')
+        g.FindLive(n)
+        assert any('Portare calcolatrice' in t for t in card_texts(sk))
+
+        # Search for a task title from tasks_v2.ics
+        open(typed_path, 'wb').write(b'WC\nsimulazione')
+        g.FindLive(n)
+        assert any('Simulazione' in t for t in card_texts(sk)), card_texts(sk)
+
+        # Up/Down step selection and pick
+        open(typed_path, 'wb').write(b'WC\nuniversita')
+        g.FindLive(n)
+        g.FindStep(n, 1)
+        g.FindPick(1)
+        assert m.shown('CrCard')
+        assert g._WC.edit.card.mode == 'detail'
+        assert 'Esame Universit' in g._WC.edit.card.it.title
+        assert m.opt('TbTitle', 'Text') == 'June 2027'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_find_card_deduplicates_recurring_events():
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        os.makedirs(os.path.join(sk.dir, '@Resources', 'ZOrder'), exist_ok=True)
+        ics = ('BEGIN:VCALENDAR\r\nVERSION:2.0\r\n'
+               'BEGIN:VEVENT\r\nUID:weekly-lec@google.com\r\nDTSTART:20270301T100000Z\r\nDTEND:20270301T120000Z\r\n'
+               'RRULE:FREQ=WEEKLY\r\nSUMMARY:Weekly Lecture\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n')
+        set_feed(sk, 1, ics)
+        g.FindOpen()
+        n = g._WC.edit.box.n
+        typed_path = os.path.join(sk.dir, '@Resources', 'ZOrder', 'Typed.txt')
+        open(typed_path, 'wb').write(b'WC\nWeekly Lecture')
+        g.FindLive(n)
+        rows = [r for r in g._WC.edit.card.rows.values() if r.kind == 'item' and r.it.title == 'Weekly Lecture']
+        assert len(rows) == 1, len(rows)
+        # First upcoming occurrence on or after 2027-03-03 is Monday 2027-03-08
+        assert rows[0].day == g._WC.daysFromCivil(2027, 3, 8)
         sk.check_clean()
     finally:
         sk.close()

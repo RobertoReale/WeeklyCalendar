@@ -14,6 +14,7 @@ and delete events and tasks without opening the browser.
 **Looks and views**
 - Google Calendar's Material 3 look: today's circle, the red "now" line, past events fading, declined invitations outlined. Light and dark themes.
 - Day, 3-day, week and month views, switched from the toolbar.
+- Quick search & Go to date: click the month/year title in the toolbar to search events and tasks or jump to any date (`15/12`, `marzo 2027`, `+14`).
 - Up to 6 calendars, each in its own colour. Public holidays and birthdays too.
 - Tooltips with the full title, time, place and description of every item.
 - English and Italian.
@@ -203,6 +204,7 @@ repeat; tasks without a date are not shown.
 | Previous / next day, week or month | `<` / `>` in the toolbar, or mouse wheel over the toolbar or the day names |
 | Change view | **Day**, **3 days**, **Week**, **Month** in the toolbar |
 | Back to today | **Today** in the toolbar |
+| Search / go to a date | Click the month/year title or the week badge in the toolbar, or right-click > *Search / Go to date...* |
 | Events before / after the visible hours | Click the `▲ n` / `▼ n` badge of the day |
 | Open an item | Click: its card. Middle-click: Google Calendar |
 | Open a day | Month view: click the day. Middle-click "+N more": the day in Google Calendar |
