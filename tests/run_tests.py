@@ -4190,14 +4190,14 @@ process.stdout.write(JSON.stringify({
     out = json.loads(res.stdout)
     C = 'me@example.com'
     feed = out['feed']
-    assert ('X-WR-CALNAME:Google Tasks\r\nX-WC-VERSION:3\r\nX-WC-LIST;ID=L1;DEFAULT=1:Le mie attività\r\n'
+    assert ('X-WR-CALNAME:Google Tasks\r\nX-WC-VERSION:4\r\nX-WC-LIST;ID=L1;DEFAULT=1:Le mie attività\r\n'
             'X-WC-LIST;ID=L2:Sport\\, palestra\r\nBEGIN:VEVENT') in feed, feed
     lua = new_runtime(MockSkin({}, ini_sections()))
     wc = lua.globals()._WC
     wc.cfg.lang, wc.cfg.showDeclined, wc.cfg.scriptFeed = wc.LANGS.en, True, 3
     wc.parseICS(feed, 3)
     lists = wc.edit.taskLists
-    assert wc.edit.scriptV == 3 and [(lists[i].id, lists[i].title, lists[i].default) for i in (1, 2)] == \
+    assert wc.edit.scriptV == 4 and [(lists[i].id, lists[i].title, lists[i].default) for i in (1, 2)] == \
         [('L1', 'Le mie attività', True), ('L2', 'Sport, palestra', False)]
     assert out['task'] == ['OK T1', [['tinsert', {'title': 'Esame', 'notes': 'riga 1\nriga 2', 'due': '2027-03-05T00:00:00.000Z'}, 'L2']]]
     assert out['taskLong'] == ['ERROR notes too long', []]
@@ -6287,6 +6287,256 @@ def test_countdown_pill_from_detail_card_and_find_card_and_settings():
         sk.check_clean()
     finally:
         sk.close()
+
+
+def test_event_with_custom_color_draws_in_that_color():
+    # Feed 1 has default color Peacock (3,155,229,255), past faded to 180,225,247,255.
+    # Events with COLOR:11 (Tomato: 213,0,0,255), COLOR:crimson (220,20,60,255),
+    # COLOR:#0B8043 (Basil '10': 11,128,67,255), or X-WC-ECOLOR;UID=...:5 (Banana: 246,191,38,255)
+    # draw in their own custom color across week view, month view, minimized tile, detail card,
+    # find card, and drag previews, including past-faded versions.
+    ics_cal = (
+        'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-WR-CALNAME:me@example.com\r\n'
+        'BEGIN:VEVENT\r\nUID:tom-ev@google.com\r\nDTSTART:20270303T140000Z\r\nDTEND:20270303T150000Z\r\n'
+        'SUMMARY:Urgent meeting\r\nCOLOR:11\r\nEND:VEVENT\r\n'
+        'BEGIN:VEVENT\r\nUID:past-ev@google.com\r\nDTSTART:20270302T090000Z\r\nDTEND:20270302T100000Z\r\n'
+        'SUMMARY:Past banana\r\nEND:VEVENT\r\n'
+        'BEGIN:VEVENT\r\nUID:ad-ev@google.com\r\nDTSTART;VALUE=DATE:20270304\r\nDTEND;VALUE=DATE:20270305\r\n'
+        'SUMMARY:Conference\r\nX-GOOGLE-COLOR:#0b8043\r\nEND:VEVENT\r\n'
+        'BEGIN:VEVENT\r\nUID:css-ev@google.com\r\nDTSTART:20270304T110000Z\r\nDTEND:20270304T120000Z\r\n'
+        'SUMMARY:Crimson call\r\nCOLOR:crimson\r\nEND:VEVENT\r\n'
+        'BEGIN:VEVENT\r\nUID:norm-ev@google.com\r\nDTSTART:20270304T150000Z\r\nDTEND:20270304T160000Z\r\n'
+        'SUMMARY:Normal event\r\nEND:VEVENT\r\n'
+        'END:VCALENDAR\r\n'
+    )
+    ics_tasks = (
+        'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-WR-CALNAME:Google Tasks\r\nX-WC-VERSION:4\r\n'
+        'X-WC-ECOLOR;UID=past-ev@google.com:5\r\n'
+        'END:VCALENDAR\r\n'
+    )
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        set_feed(sk, 1, ics_cal)
+        set_feed(sk, 3, ics_tasks)
+
+        def ev_shape_for(title_sub):
+            for idx in range(1, 20):
+                if m.shown('EvT%d' % idx) and title_sub in (m.opt('EvT%d' % idx, 'Text') or ''):
+                    return idx, m.opt('EvBg%d' % idx, 'Shape')
+            raise AssertionError('Timed event not found: ' + title_sub)
+
+        def ad_shape_for(title_sub):
+            for idx in range(1, 20):
+                if m.shown('ADTx%d' % idx) and title_sub in (m.opt('ADTx%d' % idx, 'Text') or ''):
+                    return idx, m.opt('ADBg%d' % idx, 'Shape')
+            raise AssertionError('All-day event not found: ' + title_sub)
+
+        # 1. Timed event with COLOR:11 draws in Tomato (213,0,0,255)
+        tom_idx, tom_sh = ev_shape_for('Urgent meeting')
+        assert 'Fill Color 213,0,0,255' in tom_sh, tom_sh
+
+        # 2. Past timed event with X-WC-ECOLOR:5 (Banana 246,191,38) draws faded with bg (255,255,255, 0.7) -> 252,236,190,255
+        _, past_sh = ev_shape_for('Past banana')
+        assert 'Fill Color 252,236,190,255' in past_sh, past_sh
+
+        # 3. All-day event with X-GOOGLE-COLOR:#0b8043 (Basil '10') draws in 11,128,67,255
+        ad_idx, ad_sh = ad_shape_for('Conference')
+        assert 'Fill Color 11,128,67,255' in ad_sh, ad_sh
+
+        # 4. Timed event with CSS3 COLOR:crimson draws in 220,20,60,255
+        _, css_sh = ev_shape_for('Crimson call')
+        assert 'Fill Color 220,20,60,255' in css_sh, css_sh
+
+        # 5. Normal event without custom color still draws in Feed 1's color (3,155,229,255)
+        _, norm_sh = ev_shape_for('Normal event')
+        assert 'Fill Color 3,155,229,255' in norm_sh, norm_sh
+
+        def cr_shapes():
+            return '\n'.join(m.opt('CrCard', 'Shape' if s == 1 else ('Shape%d' % s)) or '' for s in range(1, 25))
+
+        # 6. Detail card dot uses custom color (213,0,0,255)
+        g.ItemCard('ev', tom_idx)
+        assert 'Fill Color 213,0,0,255' in cr_shapes(), cr_shapes()
+        g.CardClose()
+
+        # 7. Find card dot uses custom color (213,0,0,255 and 11,128,67,255)
+        g.FindOpen()
+        fsh = cr_shapes()
+        assert 'Fill Color 213,0,0,255' in fsh and 'Fill Color 11,128,67,255' in fsh, fsh
+        g.CardClose()
+
+        # 8. Dragging timed event previews in its custom color (213,0,0,150)
+        g.DragEvent(tom_idx, 10, 20)
+        g.DragOver(3)
+        g.DragSlot(25)
+        assert 'Fill Color 213,0,0,150' in (m.opt('DragPrev', 'Shape') or ''), m.opt('DragPrev', 'Shape')
+        g.DragCancel()
+
+        # 9. Dragging all-day event previews in its custom color (11,128,67)
+        g.DragStart(ad_idx)
+        g.DragOver(4)
+        assert 'Fill Color 11,128,67,150' in (m.opt('DragPrev', 'Shape') or ''), m.opt('DragPrev', 'Shape')
+        g.DragCancel()
+
+        # 10. Month view draws all-day chip and timed dots in their custom colors
+        g.SetView('month')
+        mshapes = '\n'.join(
+            (m.opt('MShp%d' % i, 'Shape' if s == 1 else ('Shape%d' % s)) or '')
+            for i in range(1, 43) if m.shown('MShp%d' % i)
+            for s in range(1, 8)
+        )
+        assert 'Fill Color 213,0,0,255' in mshapes, mshapes
+        assert 'Fill Color 11,128,67,255' in mshapes, mshapes
+        assert 'Fill Color 220,20,60,255' in mshapes, mshapes
+        assert 'Fill Color 252,236,190,255' in mshapes, mshapes
+        g.SetView('week')
+
+        # 11. Minimized tile dot uses custom color
+        g.Minimize()
+        minish = '\n'.join(m.opt('MiniBg', 'Shape' if s == 1 else ('Shape%d' % s)) or '' for s in range(1, 15))
+        assert 'Fill Color 213,0,0,255' in minish and 'Fill Color 11,128,67,255' in minish, minish
+        g.MiniRestore()
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_create_and_edit_event_color_sends_color_param():
+    ics_v4 = open(os.path.join(FIXTURES, 'tasks_v3.ics'), encoding='utf-8').read().replace('X-WC-VERSION:3', 'X-WC-VERSION:4')
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        set_feed(sk, 3, ics_v4)
+        assert g._WC.edit.scriptV == 4
+
+        # 1. Create event with custom color picked via CardMenu('color') / CardPick
+        g.CreateAt(3, 60)
+        assert card_el(sk, 'Calendar color' + ARROW) is not None, card_texts(sk)
+        # Compact card height fits inside 440px screen height
+        assert int(m.opt('CrCard', 'H')) <= 420, m.opt('CrCard', 'H')
+        press(sk)
+        g.CardMenu('color')
+        assert card_el(sk, 'Event color') is not None, card_texts(sk)
+        # Pick Tomato (colorId '11', index 12 in menu: 1 is Calendar color, 2..12 are '1'..'11')
+        g.CardMenuScroll(5)
+        el_tom = card_el(sk, 'Tomato')
+        assert el_tom is not None, card_texts(sk)
+        run_action(sk, m.opt(el_tom, 'LeftMouseUpAction'))
+        assert card_el(sk, 'Tomato' + ARROW) is not None, card_texts(sk)
+        # Draft preview on calendar uses Tomato (213,0,0,255)
+        assert 'Fill Color 213,0,0,255' in (m.opt('CrDraft', 'Shape') or ''), m.opt('CrDraft', 'Shape')
+        press(sk)
+        g.CardTitle()
+        m.vars['CreateTitle'] = 'Red deadline'
+        g.CreateSubmit()
+        assert 'action=createevent' in task_params(sk)[-1] and '&color=11' in task_params(sk)[-1], task_params(sk)[-1]
+        answer(sk, 'OK red-uid@google.com')
+        # Optimistically created event draws in Tomato (213,0,0,255)
+        i_red = event_meter(sk, 'Red deadline')
+        assert 'Fill Color 213,0,0,255' in (m.opt('EvBg%d' % i_red, 'Shape') or ''), m.opt('EvBg%d' % i_red, 'Shape')
+
+        # 2. Edit an existing event to set a custom color, then reset back to Calendar color ('')
+        idx = event_meter(sk, 'Lezione')
+        open_card(sk, 'EvBg%d' % idx)
+        g.ItemEdit()
+        assert card_el(sk, 'Calendar color' + ARROW) is not None, card_texts(sk)
+        press(sk)
+        # Cycle color with mouse wheel (CardCycle('color', 2) -> Sage '2', 51,182,121,255)
+        g.CardCycle('color', 2)
+        assert card_el(sk, 'Sage' + ARROW) is not None, card_texts(sk)
+        g.ItemSave()
+        assert 'action=editevent' in task_params(sk)[-1] and 'uid=abc123%40google.com' in task_params(sk)[-1] and '&color=2' in task_params(sk)[-1], task_params(sk)[-1]
+        answer(sk, 'OK')
+        idx = event_meter(sk, 'Lezione')
+        assert 'Fill Color 51,182,121,255' in (m.opt('EvBg%d' % idx, 'Shape') or ''), m.opt('EvBg%d' % idx, 'Shape')
+
+        # Duplicate preserves the custom color ('2' Sage)
+        open_card(sk, 'EvBg%d' % idx)
+        g.ItemDuplicate()
+        assert card_el(sk, 'Sage' + ARROW) is not None, card_texts(sk)
+        press(sk)
+        g.CardClose()
+
+        # Reset Lezione back to Calendar color ('')
+        open_card(sk, 'EvBg%d' % idx)
+        g.ItemEdit()
+        assert card_el(sk, 'Sage' + ARROW) is not None, card_texts(sk)
+        press(sk)
+        g.CardMenu('color')
+        el_cal = card_el(sk, 'Calendar color')
+        assert el_cal is not None, card_texts(sk)
+        run_action(sk, m.opt(el_cal, 'LeftMouseUpAction'))
+        g.ItemSave()
+        assert task_params(sk)[-1].endswith('&color='), task_params(sk)[-1]
+        answer(sk, 'OK')
+        idx = event_meter(sk, 'Lezione')
+        assert 'Fill Color 3,155,229,255' in (m.opt('EvBg%d' % idx, 'Shape') or ''), m.opt('EvBg%d' % idx, 'Shape')
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_gs_create_and_edit_event_color_id():
+    import json
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    assert node, 'node is required to run tools/GoogleTasksFeed.gs'
+    gs = open(os.path.join(ROOT, 'tools', 'GoogleTasksFeed.gs'), encoding='utf-8').read()
+    harness = gs + r"""
+var calls = [];
+var PropertiesService = { getScriptProperties: function () { return { getProperty: function () { return null; } }; } };
+var Utilities = { formatDate: function () { return '20270301T080000Z'; } };
+var Tasks = {
+  Tasklists: {
+    list: function () { return { items: [{ id: 'L1', title: 'My Tasks' }] }; },
+    get: function () { return { id: 'L1' }; }
+  },
+  Tasks: { list: function () { return { items: [] }; } }
+};
+var Calendar = {
+  Calendars: { get: function () { return { timeZone: 'Europe/Rome' }; } },
+  Events: {
+    insert: function (r, c) { calls.push(['insert', r, c]); return { iCalUID: 'new@google.com' }; },
+    list: function (c, a) {
+      if (a.iCalUID) return { items: [{ id: 'ev1', iCalUID: a.iCalUID, start: { dateTime: '2027-03-03T09:00:00Z' }, end: { dateTime: '2027-03-03T10:00:00Z' } }] };
+      return { items: [
+        { id: 'e1', iCalUID: 'col1@google.com', colorId: '11', status: 'confirmed' },
+        { id: 'e2_inst', iCalUID: 'rec@google.com', recurringEventId: 'e2', originalStartTime: { dateTime: '2027-03-05T10:00:00.000Z' }, colorId: '2', status: 'confirmed' },
+        { id: 'e3', iCalUID: 'noc@google.com', status: 'confirmed' },
+        { id: 'e4', iCalUID: 'del@google.com', colorId: '5', status: 'cancelled' }
+      ] };
+    },
+    patch: function (r, c, id) { calls.push(['patch', r, c, id]); }
+  }
+};
+function w(p) { calls = []; return [write(p), calls]; }
+console.log(JSON.stringify({
+  feed: buildFeed(),
+  createCol: w({ action: 'createevent', title: 'Colored', start: '2027-03-03T09:00:00Z', end: '2027-03-03T10:00:00Z', color: '11' }),
+  createBad: w({ action: 'createevent', title: 'Colored', start: '2027-03-03T09:00:00Z', end: '2027-03-03T10:00:00Z', color: '12' }),
+  editCol: w({ action: 'editevent', uid: 'ev1@google.com', color: '7' }),
+  clearCol: w({ action: 'editevent', uid: 'ev1@google.com', color: '' }),
+  editBad: w({ action: 'editevent', uid: 'ev1@google.com', color: '0' })
+}));
+"""
+    res = subprocess.run([node, '-e', harness], capture_output=True, encoding='utf-8')
+    assert res.returncode == 0, res.stderr
+    out = json.loads(res.stdout)
+    feed = out['feed']
+    assert 'X-WC-VERSION:4\r\n' in feed, feed
+    assert 'X-WC-ECOLOR;UID=col1@google.com:11\r\n' in feed, feed
+    assert 'X-WC-ECOLOR;UID=rec@google.com;ORIG=2027-03-05T10:00:00Z:2\r\n' in feed, feed
+    assert 'noc@google.com' not in feed and 'del@google.com' not in feed, feed
+    assert out['createCol'] == ['OK new@google.com', [['insert', {
+        'summary': 'Colored', 'start': {'dateTime': '2027-03-03T09:00:00Z'},
+        'end': {'dateTime': '2027-03-03T10:00:00Z'}, 'colorId': '11'
+    }, 'primary']]], out['createCol']
+    assert out['createBad'] == ['ERROR bad color', []], out['createBad']
+    assert out['editCol'] == ['OK', [['patch', {'colorId': '7'}, 'primary', 'ev1']]], out['editCol']
+    assert out['clearCol'] == ['OK', [['patch', {'colorId': None}, 'primary', 'ev1']]], out['clearCol']
+    assert out['editBad'] == ['ERROR bad color', []], out['editBad']
 
 
 def test_lua_main_chunk_has_room_for_locals():

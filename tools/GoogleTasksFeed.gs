@@ -20,24 +20,25 @@
  *   ?action=edittask&list=..&task=..[&title=..][&due=YYYY-MM-DD][&notes=..]      -> OK
  *   ?action=movetask&list=..&task=..&tolist=<list id>        (to another list)    -> OK <task id>
  *   ?action=deletetask&list=..&task=..                                           -> OK
- *   ?action=createevent&cal=..&title=..&start=<UTC>&end=<UTC>[&location=..][&desc=..][&rrule=..]
+ *   ?action=createevent&cal=..&title=..&start=<UTC>&end=<UTC>[&location=..][&desc=..][&rrule=..][&color=<1..11>]
  *                      (or &date=YYYY-MM-DD&days=N for an all-day event)       -> OK <iCal UID>
  *   ?action=editevent|moveevent&cal=..&uid=<iCal UID>[&orig=..][&scope=all][&title=..]
  *                      [&location=..][&desc=..][&start=..&end=..|&date=..&days=..]
- *                      [&rrule=..][&tocal=<calendar id>]
+ *                      [&rrule=..][&tocal=<calendar id>][&color=<1..11 or empty>]
  *   ?action=deleteevent&cal=..&uid=..[&orig=..]&scope=one|all
  * "orig" is the original start of one occurrence of a recurring event (UTC, or the date
  * of an all-day event). "rrule" is FREQ=DAILY|WEEKLY|MONTHLY|YEARLY, optionally with
  * ;BYDAY=MO,TU,..., ;BYMONTH=<month> and ;BYMONTHDAY=<day>. An edit with scope=all changes
- * the whole series: its title, place and description, and its time of day (start and end
+ * the whole series: its title, place, description and color, and its time of day (start and end
  * of the occurrence orig, the same day). A new rrule (empty: the event no longer repeats)
  * or tocal (it moves to that calendar) is for the whole event: one that does not repeat,
  * or a series with scope=all; a series that no longer repeats keeps the occurrence orig
- * alone, at the start and end sent. An empty notes, location or desc clears it. Every
+ * alone, at the start and end sent. An empty notes, location, desc or color clears it. Every
  * answer is "OK ..." or "ERROR <reason>".
  *
  * The tasks feed also lists every task list (X-WC-LIST;ID=<id>:<title>, DEFAULT=1 for
- * "My Tasks"), so the skin can offer them.
+ * "My Tasks") and any per-event Google Calendar color (X-WC-ECOLOR;UID=<iCal UID>:<1..11>),
+ * so the skin can offer and draw them.
  *
  * The same address with ?feed=birthdays publishes the birthdays of your contacts, which
  * Google Calendar's iCal address leaves out (README, "Birthdays").
@@ -125,6 +126,9 @@ function badText(s) {
 
 // A repeat rule the skin offers: FREQ=..., optionally ;BYDAY=MO,TU,...
 var RRULE = /^FREQ=(DAILY|WEEKLY|MONTHLY|YEARLY)(;BYDAY=(MO|TU|WE|TH|FR|SA|SU)(,(MO|TU|WE|TH|FR|SA|SU))*)?(;BYMONTH=([1-9]|1[0-2]))?(;BYMONTHDAY=([1-9]|[12]\d|3[01]))?$/;
+
+// Google Calendar's 11 event colors (colorId '1'..'11')
+var COLOR_ID = /^([1-9]|1[01])$/;
 
 // Day after date (YYYY-MM-DD) plus n - 1 days: the exclusive end of an all-day event
 function addDays(date, n) {
@@ -218,6 +222,7 @@ function createEvent(p) {
   if (badTitle(p.title)) return 'ERROR bad title';
   if (badText(p.location) || badText(p.desc)) return 'ERROR text too long';
   if (p.rrule !== undefined && !RRULE.test(p.rrule)) return 'ERROR bad repeat';
+  if (p.color !== undefined && p.color !== '' && !COLOR_ID.test(p.color)) return 'ERROR bad color';
   var times = eventTimes(p);
   if (!times) return 'ERROR bad time';
   if (typeof times === 'string') return times;
@@ -225,6 +230,7 @@ function createEvent(p) {
   var res = { summary: p.title, start: times.start, end: times.end };
   if (p.location) res.location = p.location;
   if (p.desc) res.description = p.desc;
+  if (p.color) res.colorId = p.color;
   try {
     if (p.rrule) {
       res.recurrence = ['RRULE:' + p.rrule];
@@ -290,6 +296,10 @@ function editEvent(p) {
   if (badText(p.location) || badText(p.desc)) return 'ERROR text too long';
   if (p.location !== undefined) patch.location = p.location;
   if (p.desc !== undefined) patch.description = p.desc;
+  if (p.color !== undefined) {
+    if (p.color !== '' && !COLOR_ID.test(p.color)) return 'ERROR bad color';
+    patch.colorId = p.color ? p.color : null;
+  }
   if (p.rrule !== undefined && p.rrule !== '' && !RRULE.test(p.rrule)) return 'ERROR bad repeat';
   // (Google keeps one occurrence apart only with its own times and texts)
   if ((p.rrule !== undefined || p.tocal) && p.orig && p.scope !== 'all') return 'ERROR change it in Google Calendar';
@@ -410,9 +420,39 @@ function buildFeed() {
   var dueMin = new Date(now.getTime() - DAYS_BACK * 86400000).toISOString();
   var dueMax = new Date(now.getTime() + DAYS_AHEAD * 86400000).toISOString();
   // X-WC-VERSION: what this script can do (2: lists, notes, places, descriptions, repeats;
-  // 3: a new repeat or calendar of an event)
+  // 3: a new repeat or calendar of an event; 4: per-event Google Calendar colors)
   var out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//WeeklyCalendar//Google Tasks//EN',
-             'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Google Tasks', 'X-WC-VERSION:3'];
+             'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Google Tasks', 'X-WC-VERSION:4'];
+
+  // Per-event colors set in Google Calendar (which Google's iCal address omits)
+  if (typeof Calendar !== 'undefined') {
+    try {
+      var evs = allPages(function (args) {
+        args.timeMin = dueMin;
+        args.timeMax = dueMax;
+        args.singleEvents = false;
+        args.showDeleted = false;
+        args.maxResults = 2500;
+        return Calendar.Events.list('primary', args);
+      });
+      evs.forEach(function (ev) {
+        if (!ev.colorId || !ev.iCalUID || ev.status === 'cancelled') return;
+        var orig = '';
+        if (ev.recurringEventId && ev.originalStartTime) {
+          var o = ev.originalStartTime;
+          if (o.date) {
+            orig = ';ORIG=' + o.date;
+          } else if (o.dateTime) {
+            var ms = Date.parse(o.dateTime);
+            if (!isNaN(ms)) orig = ';ORIG=' + new Date(ms).toISOString().replace(/\.\d+Z$/, 'Z');
+          }
+        }
+        out.push('X-WC-ECOLOR;UID=' + ev.iCalUID + orig + ':' + ev.colorId);
+      });
+    } catch (err) {
+      // Calendar API not yet authorized or unavailable: tasks still work
+    }
+  }
 
   var lists = allPages(function (args) {
     args.maxResults = 100;

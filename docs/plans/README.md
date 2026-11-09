@@ -3,9 +3,8 @@
 Plans for features that are designed but not built yet:
 
 - [`settings-panel.md`](settings-panel.md) — Graphical settings card (gear button in the toolbar, live preview, saved in `Private.inc`).
-- [`event-colors.md`](event-colors.md) — Per-event Google Calendar colors (the 11 Google colors, read from feeds and chosen in the Create / Edit cards).
 
-The plans of the features already built (create, edit / delete, drag and resize events, convert task <-> event, timed task matching, quick jump and search) were removed when they shipped; git history keeps them.
+The plans of the features already built (create, edit / delete, drag and resize events, convert task <-> event, timed task matching, quick jump and search, per-event colors) were removed when they shipped; git history keeps them.
 
 ## Conventions that apply to every plan
 

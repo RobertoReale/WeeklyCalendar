@@ -22,7 +22,7 @@ and delete events and tasks without opening the browser.
 
 **Events**
 - Create one by clicking an empty spot of the hours, or the **+** button. A card like Google Calendar's opens.
-- Details, edit, duplicate and delete (with Undo). Repeats, places, descriptions and calendars are supported, and a recurring event can be changed one occurrence at a time or all together.
+- Details, edit, duplicate and delete (with Undo). Repeats, places, descriptions, calendars and per-event Google Calendar colours (all 11 colours, read from your calendar and chosen in the card) are supported, and a recurring event can be changed one occurrence at a time or all together.
 - Place suggestions while you type an address (OpenStreetMap).
 - Drag an event to another time or day, or drag its bottom edge to change how long it lasts.
 - Recurring events are expanded in the skin (`RRULE`, `RDATE`, `EXDATE`, modified occurrences) with time zone conversion.
@@ -165,7 +165,7 @@ inside the outer braces, save, run `authorize` again and deploy a new version.
   day number (a task), or **+** in the toolbar. Type the title and press **Enter**.
   Before saving you can switch *Event* / *Task*, tick *All day*, and change the date and times:
   click one and type it (`31/10`, `31 oct`, `tomorrow`, `fri`, `+2`; `9`, `930`, `9:30 pm`) or use the
-  mouse wheel over it. Add a place, a description, a repeat, a calendar; for a task, details and
+  mouse wheel over it. Add a place, a description, a repeat, a calendar and an event colour; for a task, details and
   its list. *More options* opens Google Calendar's own editor.
 - **Details**: click an event or task. From the card: **Edit**, **Duplicate**, **Delete**, open it
   in Google Calendar. A recurring event asks *This event* or *All events*. A deletion can be undone
