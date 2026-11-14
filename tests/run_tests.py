@@ -6842,6 +6842,51 @@ def test_lua_main_chunk_has_room_for_locals():
     assert room >= 15, 'only %d more locals fit in the main chunk of Calendar.lua' % room
 
 
+def test_detail_card_buttons_wrap_within_card():
+    def check_buttons(lang, labels):
+        sk = edit_skin(Language=lang)
+        try:
+            m = sk.mock
+            open_card(sk, 'EvBg%d' % event_meter(sk, 'Lezione'))
+            card_x = float(m.opt('CrCard', 'X')) + 12
+            card_y = float(m.opt('CrCard', 'Y')) + 12
+            card_w = float(m.opt('CrCard', 'W')) - 24
+            card_h = float(m.opt('CrCard', 'H')) - 24
+            boxes = {}
+            for lbl in labels:
+                meter = card_el(sk, lbl)
+                cx = float(m.opt(meter, 'X'))
+                cy = float(m.opt(meter, 'Y'))
+                w = float(m.opt(meter, 'W'))
+                h = float(m.opt(meter, 'H'))
+                x0, x1 = cx - w / 2, cx + w / 2
+                y0, y1 = cy - h / 2, cy + h / 2
+                assert x0 >= card_x and x1 <= card_x + card_w, (lang, lbl, x0, x1, card_x, card_x + card_w)
+                assert y0 >= card_y and y1 <= card_y + card_h, (lang, lbl, y0, y1, card_y, card_y + card_h)
+                boxes[lbl] = (x0, y0, x1, y1)
+            for i, a in enumerate(labels):
+                ax0, ay0, ax1, ay1 = boxes[a]
+                for b in labels[i + 1:]:
+                    bx0, by0, bx1, by1 = boxes[b]
+                    overlap_x = ax0 < bx1 and bx0 < ax1
+                    overlap_y = ay0 < by1 and by0 < ay1
+                    assert not (overlap_x and overlap_y), (lang, a, boxes[a], b, boxes[b])
+            sk.g.CardClose()
+            sk.check_clean()
+            return boxes
+        finally:
+            sk.close()
+
+    en = check_buttons('en', ('Open in Google', 'Open link', 'Duplicate', 'Countdown', 'Edit', 'Delete'))
+    # Countdown wraps onto the next row and shares it with Edit / Delete
+    assert en['Countdown'][1] > en['Open in Google'][1]
+    assert en['Countdown'][1] == en['Edit'][1] == en['Delete'][1]
+
+    it = check_buttons('it', ('Apri in Google', 'Apri link', 'Duplica', 'Conto alla rovescia', 'Modifica', 'Elimina'))
+    assert it['Conto alla rovescia'][1] > it['Apri in Google'][1]
+    assert it['Conto alla rovescia'][1] == it['Modifica'][1] == it['Elimina'][1]
+
+
 def main():
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith('test_') and callable(f)]
     failed = 0
