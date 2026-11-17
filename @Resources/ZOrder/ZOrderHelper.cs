@@ -811,6 +811,7 @@ static class ZOrderHelper
     class FindBox { public string config; public int n, rows; }
 
     static readonly string findPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Find.txt");
+    static readonly string undoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Undo.txt");
     static string fnFile;
     static volatile FindBox fn;
     static volatile IntPtr fnBox;
@@ -899,7 +900,7 @@ static class ZOrderHelper
     static void UpdateHook()
     {
         FindBox b = fn;
-        Hook(plRows != null || (b != null && b.rows > 0) || File.Exists(typedPath));
+        Hook(plRows != null || (b != null && b.rows > 0) || File.Exists(typedPath) || File.Exists(undoPath));
     }
 
     static void Hook(bool on)
@@ -942,8 +943,33 @@ static class ZOrderHelper
             if ((vk == 0x26 || vk == 0x28) && FindKey(vk)) return new IntPtr(1);
             if ((vk == 0x26 || vk == 0x28 || vk == 0x0D || vk == 0x1B) && PlaceKey(vk)) return new IntPtr(1);
             if (vk == 0x0D && ShiftEnterKey()) return new IntPtr(1);
+            if (vk == 0x5A && UndoKey()) return new IntPtr(1);
         }
         return CallNextHookEx(IntPtr.Zero, code, wp, lp);
+    }
+
+    // Ctrl+Z (0x5A) while the cursor is over the skin and no text box is open: undoes the last move/deletion
+    static bool UndoKey()
+    {
+        if ((GetAsyncKeyState(0x11) & 0x8000) == 0) return false; // Ctrl
+        if ((GetAsyncKeyState(0x10) & 0x8000) != 0 || (GetAsyncKeyState(0x12) & 0x8000) != 0) return false; // Shift, Alt
+        if (File.Exists(typedPath) || !File.Exists(undoPath)) return false;
+        POINT p;
+        if (!GetCursorPos(out p)) return false;
+        IntPtr w = GetAncestor(WindowFromPoint(p), GA_ROOT);
+        uint pid;
+        GetWindowThreadProcessId(w, out pid);
+        if (w == IntPtr.Zero || pid != rainmeterPid || ClassOf(w) != "RainmeterMeterWindow") return false;
+        Post(delegate
+        {
+            string config;
+            try { config = File.ReadAllText(undoPath, Utf8).Trim(); }
+            catch (IOException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+            if (config != "" && !config.Contains("\""))
+                Bang(string.Format("!CommandMeasure MeasureScript \"ItemUndo()\" \"{0}\"", config));
+        });
+        return true;
     }
 
     // Up / Down (0x26 / 0x28), Enter (0x0D) or Esc (0x1B) in the box: true when it is used up

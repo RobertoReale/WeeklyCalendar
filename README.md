@@ -176,6 +176,8 @@ inside the outer braces, save, run `authorize` again and deploy a new version.
   for 8 seconds (`UndoSeconds`) before it reaches Google.
 - **Drag**: move an event to another time or day (15-minute steps), drag its bottom edge to change
   its end, drag a task or an all-day event to another day. Right-click or leave the skin to cancel.
+  After a move or resize, click **Undo** in the snackbar or the **↶ Undo** button in the toolbar (or
+  press **Ctrl+Z** over the calendar) to put the item back where it was.
 
 Changes show at once. Google's iCal address can take a while to show a change to an event, so the
 skin keeps showing it until the feed has it. If Google refuses a change, the item goes back and the
@@ -214,6 +216,7 @@ repeat; tasks without a date are not shown.
 | Events before / after the visible hours | Click the `▲ n` / `▼ n` badge of the day |
 | Open an item | Click: its card. Middle-click: Google Calendar |
 | Open a day | Month view: click the day. Middle-click "+N more": the day in Google Calendar |
+| Undo a move, resize or deletion | Click **Undo** in the snackbar, **↶ Undo** in the toolbar, or press **Ctrl+Z** over the calendar |
 | Scroll a busy day's all-day row | Mouse wheel over it (once expanded) |
 | Resize the skin | Drag the grip in the bottom right corner, or right-click > *Size* |
 | Move the skin | Drag an empty part of the toolbar, the day names or the hours column |

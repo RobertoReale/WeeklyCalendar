@@ -6887,6 +6887,110 @@ def test_detail_card_buttons_wrap_within_card():
     assert it['Conto alla rovescia'][1] == it['Modifica'][1] == it['Elimina'][1]
 
 
+def test_undo_drag_and_resize_event_and_task():
+    sk = edit_skin(Language='it')
+    try:
+        m, g = sk.mock, sk.g
+        os.makedirs(os.path.join(sk.dir, '@Resources', 'ZOrder'), exist_ok=True)
+        undo_path = os.path.join(sk.dir, '@Resources', 'ZOrder', 'Undo.txt')
+        assert not m.shown('BtnUndo') and not m.shown('ToastBg')
+        assert not os.path.exists(undo_path)
+
+        # 1. Drag a timed event ("Lezione") from Wednesday 10:00 to Friday 11:45
+        i = event_meter(sk, 'Lezione')
+        s0 = clock_of(utc(2027, 3, 3, 10))
+        h0 = int(s0[:2])
+        g.DragEvent(i, 0)
+        g.DragOver(4)
+        k = slot_of(sk, '%02d:45' % (h0 + 1))
+        g.DragSlot(k)
+        g.DragSlotDrop(k)
+        assert list(event_meters(sk, 'Lezione')) == [4]
+        assert m.shown('ToastBg') and 'Evento spostato' in m.opt('ToastTx', 'Text')
+        assert m.opt('ToastAct', 'Text') == 'Annulla'
+        assert m.shown('BtnUndo') and 'Annulla' in m.opt('BtnUndoTxt', 'Text')
+        assert 'Lezione' in sk.tip('BtnUndo') and 'Ctrl+Z' in sk.tip('BtnUndo')
+        assert os.path.exists(undo_path)
+
+        # Finish the move request to Google, then let the 8s toast expire
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+        sk.at(2027, 3, 3, 10, 0, 10)
+        g.Tick()
+        assert not m.shown('ToastBg')
+        # Toolbar Undo button and Undo.txt (Ctrl+Z) remain available even after the toast disappears!
+        assert m.shown('BtnUndo') and os.path.exists(undo_path)
+
+        # Undo restores "Lezione" back to Wednesday at 10:00 and sends the reverse moveevent to Google
+        m.bangs.clear()
+        g.ItemUndo()
+        assert list(event_meters(sk, 'Lezione')) == [2]
+        assert task_params(sk) == ['-s -f -L -m 30 ' + SCRIPT_URL + '?action=moveevent&cal=me%40example.com'
+                                   '&uid=abc123%40google.com&start=2027-03-03T10%3A00%3A00Z&end=2027-03-03T11%3A00%3A00Z']
+        assert not m.shown('BtnUndo') and not os.path.exists(undo_path)
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+
+        # 2. Resize bottom edge of "Lezione", then undo
+        i = event_meter(sk, 'Lezione')
+        h_orig = int(m.opt('EvBg%d' % i, 'H'))
+        g.DragEvent(i, h_orig - 2, 20)
+        k_end = slot_of(sk, '%02d:30' % (h0 + 2))
+        g.DragSlot(k_end)
+        g.DragSlotDrop(k_end)
+        assert m.shown('ToastBg') and 'Orario modificato' in m.opt('ToastTx', 'Text')
+        assert int(m.opt('EvBg%d' % event_meter(sk, 'Lezione'), 'H')) > h_orig
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+        m.bangs.clear()
+        g.ItemUndo()
+        assert int(m.opt('EvBg%d' % event_meter(sk, 'Lezione'), 'H')) == h_orig
+        assert task_params(sk)[-1].endswith('&start=2027-03-03T10%3A00%3A00Z&end=2027-03-03T11%3A00%3A00Z')
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+
+        # 3. Drag an all-day event ("Gita") and a task ("Simulazione") in sequence, then undo both (LIFO)
+        chips = [j for j in range(1, 71) if m.shown('ADTx%d' % j) and m.opt('ADTx%d' % j, 'Text') == 'Gita']
+        assert [chip_col(sk, j) for j in chips] == [3, 4]
+        g.DragStart(chips[0])
+        g.DragOver(1)
+        g.DragDrop(1)
+        assert sorted(chip_col(sk, j) for j in range(1, 71) if m.shown('ADTx%d' % j) and m.opt('ADTx%d' % j, 'Text') == 'Gita') == [1, 2]
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+
+        t_chip = task_chip(sk)
+        t_col0 = chip_col(sk, t_chip)
+        assert t_col0 == 2
+        g.DragStart(t_chip)
+        g.DragOver(2)
+        g.DragOver(5)
+        g.DragDrop(5)
+        assert chip_col(sk, task_chip(sk)) == 5
+        assert m.shown('ToastBg') and 'Attività spostata' in m.opt('ToastTx', 'Text')
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+
+        # First undo restores the task ("Simulazione") to its original column
+        m.bangs.clear()
+        g.ItemUndo()
+        assert chip_col(sk, task_chip(sk)) == t_col0
+        assert task_params(sk)[-1].endswith('?action=move&list=L1&task=t-open&due=2027-03-03')
+        assert m.shown('BtnUndo')  # second undo ("Gita") is still in the stack!
+        m.measure_values['MeasureTaskAction'] = 'OK'
+        g.TaskResult()
+
+        # Second undo restores the all-day event ("Gita") to columns 3 and 4
+        m.bangs.clear()
+        g.ItemUndo()
+        assert sorted(chip_col(sk, j) for j in range(1, 71) if m.shown('ADTx%d' % j) and m.opt('ADTx%d' % j, 'Text') == 'Gita') == [3, 4]
+        assert task_params(sk)[-1].endswith('?action=moveevent&cal=me%40example.com&uid=trip%40google.com&date=2027-03-04&days=2')
+        assert not m.shown('BtnUndo') and not os.path.exists(undo_path)
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def main():
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith('test_') and callable(f)]
     failed = 0
