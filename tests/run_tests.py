@@ -3794,6 +3794,15 @@ def test_place_suggestions():
         assert by + bh <= fy - 6 and by >= 8 and bh == 6 + 3 * 46 + 24, (list_box(), field())
         assert bx == fx - 16 and bw == fw + 32
         assert int(m.opt('PlRow2', 'Y')) - int(m.opt('PlRow1', 'Y')) == 46 and int(m.opt('PlRow1', 'Y')) == by + 6
+        # PlRow's text box stays strictly above PlSub (1 line) while bottom padding covers the whole 46px row
+        ini_txt = open(INI_FILE, encoding='utf-8-sig').read()
+        for k in range(1, 6):
+            sec = re.search(r'(?ms)^\[PlRow%d\]\n(.*?)(?=^\[|\Z)' % k, ini_txt).group(1)
+            pad = [int(v) for v in re.search(r'(?m)^Padding=([0-9,]+)', sec).group(1).split(',')]
+            assert pad == [16, 7, 16, 21], (k, pad)
+        row_h = int(m.opt('PlRow1', 'H'))
+        assert row_h == 18 and 7 + row_h + 21 == 46
+        assert int(m.opt('PlRow1', 'Y')) + 7 + row_h <= int(m.opt('PlSub1', 'Y'))
         assert m.opt('PlRow1', 'LeftMouseUpAction') is None    # (from the .ini: PlacePick(1))
         # Up / Down in the box (the helper), the mouse over a row: that row is drawn chosen
         empty = 'Rectangle 0,0,1,1 | Fill Color 0,0,0,0 | StrokeWidth 0'
