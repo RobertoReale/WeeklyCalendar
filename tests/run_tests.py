@@ -2661,20 +2661,81 @@ def test_short_events_show_their_place():
 
 
 def test_low_box_keeps_its_line_inside():
-    # Every hour visible: a short event gets the smallest box (16 px); its one line is
-    # centered in it instead of running past the bottom
-    sk = edit_skin(StartHour='0', EndHour='24')
+    # Every hour visible: a short event gets the smallest box (16 px at 9pt, >= lh at 10pt);
+    # its one line stays strictly inside the box instead of running past the bottom
+    for pt in ('9', '10'):
+        sk = edit_skin(StartHour='0', EndHour='24', FontSize=pt)
+        try:
+            m, g = sk.mock, sk.g
+            extra = ("BEGIN:VEVENT\r\nUID:tiny@google.com\r\nDTSTART:20270301T163000Z\r\nDTEND:20270301T164500Z\r\n"
+                     "SUMMARY:Minimo\r\nEND:VEVENT\r\n")
+            open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(
+                EDIT_ICS.replace('END:VCALENDAR\r\n', extra + 'END:VCALENDAR\r\n'))
+            g.Reload(1)
+            i = list(event_meters(sk, 'Minimo').values())[0]
+            top, h = int(m.opt('EvBg%d' % i, 'Y')), int(m.opt('EvBg%d' % i, 'H'))
+            ty, th = int(m.opt('EvT%d' % i, 'Y')), int(m.opt('EvT%d' % i, 'H'))
+            assert h < 20 and top <= ty and ty + th <= top + h, (pt, top, h, ty, th)
+            sk.check_clean()
+        finally:
+            sk.close()
+
+
+def test_bottom_clipped_event_does_not_overflow_into_bottom_margin():
+    # Events starting right before EndHour (20:00) must stay strictly above gridBottom:
+    # - 19:45-21:45 (stub too short for text): box clipped above gridBottom, title hidden,
+    #   and the column's "▼ 1" indicator flags it so clicking scrolls it into full view.
+    # - 19:57-21:00 (< 4px inside grid): no stub drawn outside gridBottom, flagged in "▼ 1".
+    # - 19:30-21:00 (tall enough for one line): box and title stay strictly inside gridBottom.
+    sk = edit_skin(Width='1013', Height='755', StartHour='8', EndHour='20', FontSize='10', HideEmptyHours='0')
     try:
         m, g = sk.mock, sk.g
-        extra = ("BEGIN:VEVENT\r\nUID:tiny@google.com\r\nDTSTART:20270301T163000Z\r\nDTEND:20270301T164500Z\r\n"
-                 "SUMMARY:Minimo\r\nEND:VEVENT\r\n")
-        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(
-            EDIT_ICS.replace('END:VCALENDAR\r\n', extra + 'END:VCALENDAR\r\n'))
+        ics = (
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+            "BEGIN:VEVENT\r\nUID:clip15@google.com\r\nDTSTART:20270304T194500\r\nDTEND:20270304T214500\r\n"
+            "SUMMARY:Incontro con Arianna\r\nEND:VEVENT\r\n"
+            "BEGIN:VEVENT\r\nUID:clip03@google.com\r\nDTSTART:20270305T195700\r\nDTEND:20270305T210000\r\n"
+            "SUMMARY:Quasi fuori\r\nEND:VEVENT\r\n"
+            "BEGIN:VEVENT\r\nUID:clip30@google.com\r\nDTSTART:20270302T193000\r\nDTEND:20270302T210000\r\n"
+            "SUMMARY:Cena presto\r\nEND:VEVENT\r\n"
+            "END:VCALENDAR\r\n")
+        open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(ics)
         g.Reload(1)
-        i = list(event_meters(sk, 'Minimo').values())[0]
-        top, h = int(m.opt('EvBg%d' % i, 'Y')), int(m.opt('EvBg%d' % i, 'H'))
-        ty, th = int(m.opt('EvT%d' % i, 'Y')), int(m.opt('EvT%d' % i, 'H'))
-        assert h < 20 and top <= ty and ty + th <= top + h + 1, (top, h, ty, th)
+        grid_bottom = 755 - 28  # 727
+
+        # Every shown event box and text meter must stay strictly above gridBottom
+        for i in range(1, 81):
+            if m.shown('EvBg%d' % i):
+                top, h = int(m.opt('EvBg%d' % i, 'Y')), int(m.opt('EvBg%d' % i, 'H'))
+                assert top + h <= grid_bottom - 1, (i, top, h, grid_bottom)
+                if m.shown('EvT%d' % i):
+                    ty, th = int(m.opt('EvT%d' % i, 'Y')), int(m.opt('EvT%d' % i, 'H'))
+                    assert top <= ty and ty + th <= top + h, (i, top, h, ty, th)
+                if m.shown('EvD%d' % i):
+                    dy, dh = int(m.opt('EvD%d' % i, 'Y')), int(m.opt('EvD%d' % i, 'H'))
+                    assert top <= dy and dy + dh <= top + h, (i, top, h, dy, dh)
+
+        # Thursday (col 3): 19:45-21:45 has a clipped stub (no overflowing title) + "▼ 1" badge
+        stub = [i for i in range(1, 81) if m.shown('EvBg%d' % i) and 'Incontro con Arianna' in sk.tip('EvBg%d' % i)]
+        assert len(stub) == 1, stub
+        assert not m.shown('EvT%d' % stub[0]) and not m.shown('EvD%d' % stub[0])
+        assert m.shown('HidDn3') and m.opt('HidDn3', 'Text') == '▼ 1'
+        assert 'Incontro con Arianna' in sk.tip('HidDn3')
+
+        # Friday (col 4): 19:57-21:00 has < 4px inside the grid -> no stub drawn, shown in "▼ 1"
+        tiny = [i for i in range(1, 81) if m.shown('EvBg%d' % i) and 'Quasi fuori' in sk.tip('EvBg%d' % i)]
+        assert tiny == [], tiny
+        assert m.shown('HidDn4') and 'Quasi fuori' in sk.tip('HidDn4')
+
+        # Tuesday (col 1): 19:30-21:00 fits one line cleanly inside its clipped box
+        fit = event_meter(sk, 'Cena presto')
+        assert m.shown('EvT%d' % fit) and not m.shown('HidDn1')
+
+        # Clicking Thursday's "▼ 1" scrolls down so "Incontro con Arianna" shows with its title
+        run_action(sk, m.opt('HidDn3', 'LeftMouseUpAction'))
+        assert not m.shown('HidDn3')
+        shown_idx = event_meter(sk, 'Incontro con')
+        assert m.shown('EvT%d' % shown_idx)
         sk.check_clean()
     finally:
         sk.close()
