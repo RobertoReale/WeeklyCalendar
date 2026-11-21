@@ -7098,6 +7098,70 @@ def test_undo_drag_and_resize_event_and_task():
         sk.close()
 
 
+def test_task_location_and_task_feature_settings():
+    # Task location is stored in Google Tasks notes with a pin line alongside [P1]/[P2],
+    # and both TaskPriority and TaskLocation can be toggled from Settings.
+    sk = edit_skin(tasks='tasks_v2.ics')
+    try:
+        g, m = sk.lua.globals(), sk.mock
+        ed = g._WC.edit
+
+        # 1. Round-trip encoding/decoding of notes + location + priority (both orders)
+        packed = ed.taskNotes('Porta i documenti', 1, 'Via Roma 10')
+        assert packed == 'Porta i documenti\n[L: Via Roma 10]\n[P1]', packed
+        n1, p1 = ed.prioOf(packed)
+        n2, l1 = ed.locOf(n1)
+        assert (n2, p1, l1) == ('Porta i documenti', 1, 'Via Roma 10')
+
+        # Reverse order ([P2] before [L: ...]) also decodes cleanly
+        rev = 'Note\n[P2]\n[L: Milano]'
+        rn1, rp = ed.prioOf(rev)
+        rn2, rl = ed.locOf(rn1)
+        if not rp and rn2:
+            rn2, rp = ed.prioOf(rn2)
+        assert (rn2, rp, rl) == ('Note', 2, 'Milano')
+
+        # 2. Creating a task with location and priority encodes both into notes
+        g.CreateNew()
+        g.CreateType('task')
+        assert 'Add location' in card_texts(sk), card_texts(sk)
+        ed.card.title = 'Ritirare pacco'
+        ed.card.loc = 'Ufficio Postale'
+        g.CardMenu('prio')
+        g.CardPick(3)  # High priority
+        m.bangs.clear()
+        g.CreateSave()
+        url = task_params(sk)[-1]
+        assert 'action=createtask' in url and 'Ufficio%20Postale' in url and '%5BP1%5D' in url, url
+        m.measure_values['MeasureTaskAction'] = 'OK new-loc-task'
+        g.TaskResult()
+
+        # 3. Turning off TaskLocation and TaskPriority from Settings hides both in forms and cards
+        g.Settings()
+        g.SettingsTab('other')
+        g.SettingsToggle('TaskLocation')
+        g.SettingsToggle('TaskPriority')
+        g.SettingsSave()
+        assert not g._WC.cfg.taskLoc and not g._WC.cfg.taskPrio
+
+        g.CreateNew()
+        g.CreateType('task')
+        texts = card_texts(sk)
+        assert 'Add location' not in texts and 'No priority' not in texts, texts
+        g.CardClose()
+
+        # Re-enabling restores them live
+        g.Settings()
+        g.SettingsTab('other')
+        g.SettingsToggle('TaskLocation')
+        g.SettingsToggle('TaskPriority')
+        g.SettingsSave()
+        assert g._WC.cfg.taskLoc and g._WC.cfg.taskPrio
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def main():
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith('test_') and callable(f)]
     failed = 0

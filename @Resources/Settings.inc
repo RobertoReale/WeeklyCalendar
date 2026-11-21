@@ -136,6 +136,12 @@ ShowOverdueButton=1
 ;  AutoMoveOverdue=1: automatically moves unfinished tasks of past days to today (at startup
 ;  and after midnight) without clicking the "Move to today" button. 0 = manual (default).
 AutoMoveOverdue=0
+;  TaskPriority=1: enables priority levels (high / medium) on tasks, stored as [P1]/[P2] at the
+;  end of the task's notes (Google Tasks has no native priority field). 0 = off.
+TaskPriority=1
+;  TaskLocation=1: enables a location field on tasks, stored as [L: <place>] at the end of the
+;  task's notes (Google Tasks has no native location field). 0 = off.
+TaskLocation=1
 ;  Countdown: shows a pill in the toolbar with the days left until a target date (e.g. an exam).
 ;  You can also set or remove it with one click from any event/task's details card ("Countdown")
 ;  or from the Search / Go to date card (📌). Click the pill to jump to that date, middle-click
