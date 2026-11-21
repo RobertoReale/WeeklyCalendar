@@ -6897,6 +6897,43 @@ def test_settings_minimize_and_pools():
         sk.close()
 
 
+def test_auto_move_overdue_setting_and_midnight():
+    sk = overdue_skin(('a', '20270303'), AutoMoveOverdue='1')
+    try:
+        m, g = sk.mock, sk.g
+        # On 2027-03-03 the task is due today, so nothing moves
+        assert g._WC.edit.overdueN == 0
+        assert not m.shown('BtnUndo')
+        # Midnight passes -> 2027-03-04: Update() automatically moves the task to today
+        sk.at(2027, 3, 4, 0, 1, 0)
+        g.Update()
+        assert g._WC.edit.overdueN == 0
+        assert m.shown('BtnUndo')
+        assert g._WC.edit.pending['label'] == '1 task moved to today'
+        sk.check_clean()
+    finally:
+        sk.close()
+
+    # Default (AutoMoveOverdue=0) does not auto-move; enabling it in Settings and saving moves it
+    sk2 = overdue_skin(('a', '20270302'))
+    try:
+        m, g = sk2.mock, sk2.g
+        assert g._WC.edit.overdueN == 1
+        assert not m.shown('BtnUndo')
+        g.Settings()
+        g.SettingsTab('other')
+        g.SettingsToggle('AutoMoveOverdue')
+        # Still not moved while the Settings card is open (user might Cancel)
+        assert g._WC.edit.overdueN == 1
+        g.SettingsSave()
+        # Moved immediately after Save
+        assert g._WC.edit.overdueN == 0
+        assert m.shown('BtnUndo')
+        sk2.check_clean()
+    finally:
+        sk2.close()
+
+
 def test_lua_main_chunk_has_room_for_locals():
     # Lua 5.1 allows 200 local variables per function, the main chunk included: past it
     # Rainmeter refuses the whole script (and a press on the empty skin then moves it).

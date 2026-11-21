@@ -133,6 +133,9 @@ ShowMinimizeButton=1
 ;  ShowOverdueButton=1: when tasks of past days are not completed, a button in the toolbar brings
 ;  them all to today ("Move to today (3)"), with Undo. 0 = no button (the right-click menu has it too).
 ShowOverdueButton=1
+;  AutoMoveOverdue=1: automatically moves unfinished tasks of past days to today (at startup
+;  and after midnight) without clicking the "Move to today" button. 0 = manual (default).
+AutoMoveOverdue=0
 ;  Countdown: shows a pill in the toolbar with the days left until a target date (e.g. an exam).
 ;  You can also set or remove it with one click from any event/task's details card ("Countdown")
 ;  or from the Search / Go to date card (📌). Click the pill to jump to that date, middle-click
