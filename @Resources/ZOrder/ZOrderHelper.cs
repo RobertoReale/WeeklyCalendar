@@ -87,6 +87,7 @@ static class ZOrderHelper
     [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] static extern int GetMessage(out MSG msg, IntPtr hwnd, uint min, uint max);
     [DllImport("user32.dll")] static extern bool PeekMessage(out MSG msg, IntPtr hwnd, uint min, uint max, uint remove);
+    [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
     [DllImport("user32.dll")] static extern bool PostThreadMessage(uint thread, uint msg, IntPtr wp, IntPtr lp);
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr GetModuleHandle(string name);
@@ -109,7 +110,7 @@ static class ZOrderHelper
     const int WS_EX_TOPMOST = 0x8;
     const int GWL_STYLE = -16;
     const int ES_PASSWORD = 0x20;
-    const uint WM_SETTEXT = 0x000C, WM_GETTEXT = 0x000D, WM_GETTEXTLENGTH = 0x000E, EM_GETSEL = 0x00B0, EM_SETSEL = 0x00B1, EM_SCROLLCARET = 0x00B7, EM_REPLACESEL = 0x00C2;
+    const uint WM_SETTEXT = 0x000C, WM_GETTEXT = 0x000D, WM_GETTEXTLENGTH = 0x000E, EM_GETSEL = 0x00B0, EM_SETSEL = 0x00B1, EM_SCROLLCARET = 0x00B7, BM_CLICK = 0x00F5, WM_CHAR = 0x0102;
     const uint SMTO_ABORTIFHUNG = 0x2;
     const uint WM_COPYDATA = 0x004A, GA_ROOT = 2;
     static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
@@ -134,6 +135,7 @@ static class ZOrderHelper
     static readonly string noZOrderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NoZOrder.txt");
     static IntPtr typedBox;  // the box and the text last copied
     static string typedText;
+    static IntPtr seenBox;   // the box whose hook was already refreshed
     static IntPtr caretBox;  // the box whose cursor went after its text, and until when to keep it there
     static string caretText;
     static int caretUntil;
@@ -196,7 +198,22 @@ static class ZOrderHelper
             watcher.Deleted += wake;
             watcher.EnableRaisingEvents = true;
             WakeTyping();
-            Application.Run();
+            SessionSwitchEventHandler onSwitch = delegate(object s, SessionSwitchEventArgs e)
+            {
+                if (e.Reason == SessionSwitchReason.SessionUnlock) Post(delegate { RefreshHook(); });
+            };
+            PowerModeChangedEventHandler onPower = delegate(object s, PowerModeChangedEventArgs e)
+            {
+                if (e.Mode == PowerModes.Resume) Post(delegate { RefreshHook(); });
+            };
+            SystemEvents.SessionSwitch += onSwitch;
+            SystemEvents.PowerModeChanged += onPower;
+            try { Application.Run(); }
+            finally
+            {
+                SystemEvents.SessionSwitch -= onSwitch;
+                SystemEvents.PowerModeChanged -= onPower;
+            }
         }
     }
 
@@ -207,7 +224,26 @@ static class ZOrderHelper
         EnumChildWindows(window, (w, p) =>
         {
             string cls = ClassOf(w);
-            if ((cls == "Edit" || cls.Contains(".EDIT.")) && (GetWindowLong(w, GWL_STYLE) & ES_PASSWORD) == 0)
+            if ((cls.Equals("Edit", StringComparison.OrdinalIgnoreCase) || cls.IndexOf(".EDIT.", StringComparison.OrdinalIgnoreCase) >= 0)
+                && (GetWindowLong(w, GWL_STYLE) & ES_PASSWORD) == 0)
+            {
+                found = w;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    // The hidden OK button (AcceptButton) of InputText's InputBox, or zero
+    static IntPtr OkButtonOf(IntPtr window)
+    {
+        IntPtr found = IntPtr.Zero;
+        EnumChildWindows(window, (w, p) =>
+        {
+            string cls = ClassOf(w);
+            if ((cls.Equals("Button", StringComparison.OrdinalIgnoreCase) || cls.IndexOf(".BUTTON.", StringComparison.OrdinalIgnoreCase) >= 0)
+                && TextOf(w) == "OK")
             {
                 found = w;
                 return false;
@@ -274,8 +310,15 @@ static class ZOrderHelper
     // Starts the typing timer when one of its files exists (it stops itself when neither does)
     static void WakeTyping()
     {
+        bool typedNow = File.Exists(typedPath);
+        bool undoNow = File.Exists(undoPath);
+        bool typedOpened = typedNow && !hasTyped;
+        bool wasOn = hookOn;
+        hasTyped = typedNow;
+        hasUndo = undoNow;
         UpdateHook();
-        if (typing != null && !typing.Enabled && (File.Exists(typedPath) || File.Exists(resizePath))) typing.Start();
+        if (typedOpened && wasOn && hookOn) RefreshHook();
+        if (typing != null && !typing.Enabled && (typedNow || File.Exists(resizePath))) typing.Start();
     }
 
     // False when there is nothing to copy (no Typed.txt): the timer may stop
@@ -283,12 +326,16 @@ static class ZOrderHelper
     {
         if (rainmeterPid == 0 || !File.Exists(typedPath))
         {
+            hasTyped = false;
             typedBox = IntPtr.Zero;
+            seenBox = IntPtr.Zero;
+            hookFresh = false;
             PlacesEnd();
             FindEnd();
             UpdateHook();
             return false;
         }
+        hasTyped = true;
         UpdateHook();
         IntPtr fg = GetForegroundWindow();
         uint pid;
@@ -296,6 +343,12 @@ static class ZOrderHelper
         if (fg == IntPtr.Zero || pid != rainmeterPid || ClassOf(fg) == "RainmeterMeterWindow") return true;
         IntPtr box = TextBoxOf(fg);
         if (box == IntPtr.Zero || FocusOf(thread) != box) return true;
+        if (box != seenBox)
+        {
+            seenBox = box;
+            if (hookFresh) hookFresh = false;
+            else if (hookOn) RefreshHook();
+        }
         string text = TextOf(box);
         if (text == null) return true;
         if (text.IndexOf('\x7f') >= 0) text = DeleteWords(box, text);
@@ -803,6 +856,11 @@ static class ZOrderHelper
     static KeyboardProc keyProc; // referenced so the delegate is not garbage collected
     static uint hookThread;
     static bool hookOn;
+    static bool hookFresh;
+    static volatile bool hookInstalled;
+    static volatile bool hasTyped;
+    static volatile bool hasUndo;
+    static bool swallowEnterUp;
     const uint WM_APP = 0x8000;
 
     // ---- Live search & date jump (Find.txt) ----------------------------------------------
@@ -900,50 +958,106 @@ static class ZOrderHelper
     static void UpdateHook()
     {
         FindBox b = fn;
-        Hook(plRows != null || (b != null && b.rows > 0) || File.Exists(typedPath) || File.Exists(undoPath));
+        Hook(plRows != null || (b != null && b.rows > 0) || hasTyped || hasUndo);
     }
 
-    static void Hook(bool on)
+    static void EnsureHookThread()
     {
-        if (on == hookOn) return;
-        hookOn = on;
-        if (hookThread == 0)
+        if (hookThread != 0) return;
+        var ready = new ManualResetEvent(false);
+        var t = new Thread(delegate()
         {
-            if (!on) return;
-            var ready = new ManualResetEvent(false);
-            var t = new Thread(delegate()
+            MSG m;
+            PeekMessage(out m, IntPtr.Zero, 0, 0, 0); // (creates its message queue)
+            hookThread = GetCurrentThreadId();
+            ready.Set();
+            IntPtr hook = IntPtr.Zero;
+            while (GetMessage(out m, IntPtr.Zero, 0, 0) > 0)
             {
-                MSG m;
-                PeekMessage(out m, IntPtr.Zero, 0, 0, 0); // (creates its message queue)
-                hookThread = GetCurrentThreadId();
-                ready.Set();
-                IntPtr hook = IntPtr.Zero;
-                while (GetMessage(out m, IntPtr.Zero, 0, 0) > 0)
+                if (m.message == WM_APP + 1)
                 {
-                    if (m.message == WM_APP + 1 && hook == IntPtr.Zero) hook = SetWindowsHookEx(13, keyProc, GetModuleHandle(null), 0); // WH_KEYBOARD_LL
-                    else if (m.message == WM_APP + 2 && hook != IntPtr.Zero)
+                    if (hook == IntPtr.Zero) hook = SetWindowsHookEx(13, keyProc, GetModuleHandle(null), 0); // WH_KEYBOARD_LL
+                    hookInstalled = hook != IntPtr.Zero;
+                }
+                else if (m.message == WM_APP + 2)
+                {
+                    if (hook != IntPtr.Zero)
                     {
                         UnhookWindowsHookEx(hook);
                         hook = IntPtr.Zero;
                     }
+                    hookInstalled = false;
                 }
-            });
-            t.IsBackground = true;
-            t.Start();
-            ready.WaitOne(2000);
+                else if (m.message == WM_APP + 3)
+                {
+                    if (hook != IntPtr.Zero)
+                    {
+                        UnhookWindowsHookEx(hook);
+                        hook = IntPtr.Zero;
+                    }
+                    hook = SetWindowsHookEx(13, keyProc, GetModuleHandle(null), 0); // WH_KEYBOARD_LL
+                    hookInstalled = hook != IntPtr.Zero;
+                }
+            }
+        });
+        t.IsBackground = true;
+        t.Start();
+        ready.WaitOne(2000);
+    }
+
+    static void Hook(bool on)
+    {
+        if (on == hookOn && (!on || hookInstalled)) return;
+        hookOn = on;
+        if (on)
+        {
+            EnsureHookThread();
+            hookFresh = true;
+            if (hookThread != 0) PostThreadMessage(hookThread, WM_APP + 1, IntPtr.Zero, IntPtr.Zero);
         }
-        PostThreadMessage(hookThread, on ? WM_APP + 1 : WM_APP + 2, IntPtr.Zero, IntPtr.Zero);
+        else
+        {
+            hookFresh = false;
+            if (hookThread != 0) PostThreadMessage(hookThread, WM_APP + 2, IntPtr.Zero, IntPtr.Zero);
+        }
+    }
+
+    // Re-installs the hook (recovers if Windows silently dropped it after a lock/sleep/timeout)
+    static void RefreshHook()
+    {
+        if (!hookOn) return;
+        EnsureHookThread();
+        hookFresh = true;
+        if (hookThread != 0) PostThreadMessage(hookThread, WM_APP + 3, IntPtr.Zero, IntPtr.Zero);
     }
 
     static IntPtr OnKey(int code, IntPtr wp, IntPtr lp)
     {
-        if (code >= 0 && wp.ToInt64() == 0x100) // WM_KEYDOWN
+        if (code >= 0)
         {
+            long msg = wp.ToInt64();
             int vk = Marshal.ReadInt32(lp);
-            if ((vk == 0x26 || vk == 0x28) && FindKey(vk)) return new IntPtr(1);
-            if ((vk == 0x26 || vk == 0x28 || vk == 0x0D || vk == 0x1B) && PlaceKey(vk)) return new IntPtr(1);
-            if (vk == 0x0D && ShiftEnterKey()) return new IntPtr(1);
-            if (vk == 0x5A && UndoKey()) return new IntPtr(1);
+            if (msg == 0x100) // WM_KEYDOWN
+            {
+                if ((vk == 0x26 || vk == 0x28) && FindKey(vk)) return new IntPtr(1);
+                if ((vk == 0x26 || vk == 0x28 || vk == 0x0D || vk == 0x1B) && PlaceKey(vk))
+                {
+                    if (vk == 0x0D) swallowEnterUp = true;
+                    return new IntPtr(1);
+                }
+                if (vk == 0x0D && ShiftEnterKey())
+                {
+                    swallowEnterUp = true;
+                    return new IntPtr(1);
+                }
+                if (vk == 0x0D) swallowEnterUp = false;
+                if (vk == 0x5A && UndoKey()) return new IntPtr(1);
+            }
+            else if (msg == 0x101 && vk == 0x0D && swallowEnterUp) // WM_KEYUP
+            {
+                swallowEnterUp = false;
+                return new IntPtr(1);
+            }
         }
         return CallNextHookEx(IntPtr.Zero, code, wp, lp);
     }
@@ -951,9 +1065,9 @@ static class ZOrderHelper
     // Ctrl+Z (0x5A) while the cursor is over the skin and no text box is open: undoes the last move/deletion
     static bool UndoKey()
     {
+        if (hasTyped || !hasUndo) return false;
         if ((GetAsyncKeyState(0x11) & 0x8000) == 0) return false; // Ctrl
         if ((GetAsyncKeyState(0x10) & 0x8000) != 0 || (GetAsyncKeyState(0x12) & 0x8000) != 0) return false; // Shift, Alt
-        if (File.Exists(typedPath) || !File.Exists(undoPath)) return false;
         POINT p;
         if (!GetCursorPos(out p)) return false;
         IntPtr w = GetAncestor(WindowFromPoint(p), GA_ROOT);
@@ -979,8 +1093,9 @@ static class ZOrderHelper
         IntPtr box = plBox;
         if (rows == null || box == IntPtr.Zero) return false;
         if ((GetAsyncKeyState(0x11) & 0x8000) != 0 || (GetAsyncKeyState(0x12) & 0x8000) != 0) return false; // Ctrl, Alt
+        IntPtr fg = GetForegroundWindow();
         uint pid;
-        if (FocusOf(GetWindowThreadProcessId(GetForegroundWindow(), out pid)) != box) return false;
+        if (FocusOf(GetWindowThreadProcessId(fg, out pid)) != box) return false;
         if (vk == 0x1B)
         {
             Post(delegate
@@ -993,24 +1108,34 @@ static class ZOrderHelper
         }
         if (vk == 0x0D)
         {
-            // The chosen place goes into the box: the plugin then gets the Enter with it
+            // The chosen place goes into the box and submits it on the main thread
+            // (never blocking WH_KEYBOARD_LL with cross-process SendMessageTimeout / disk I/O)
             int s = plSel;
             if (s < 1 || s > rows.Length) return false;
-            IntPtr r;
-            SendMessageTimeout(box, WM_SETTEXT, IntPtr.Zero, rows[s - 1], SMTO_ABORTIFHUNG, 200, out r);
-            CaretToEnd(box, rows[s - 1]);
-            try
-            {
-                byte[] data = Utf8.GetBytes("WC\n" + rows[s - 1]);
-                using (var f = new FileStream(typedPath, FileMode.Truncate, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
-                {
-                    f.Write(data, 0, data.Length);
-                }
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            string chosen = rows[s - 1];
+            IntPtr fgWin = fg;
             plRows = null;
-            return false;
+            Post(delegate
+            {
+                IntPtr r;
+                SendMessageTimeout(box, WM_SETTEXT, IntPtr.Zero, chosen, SMTO_ABORTIFHUNG, 200, out r);
+                CaretToEnd(box, chosen);
+                try
+                {
+                    byte[] data = Utf8.GetBytes("WC\n" + chosen);
+                    using (var f = new FileStream(typedPath, FileMode.Truncate, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
+                    {
+                        f.Write(data, 0, data.Length);
+                    }
+                    typedBox = box;
+                    typedText = chosen;
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+                IntPtr okBtn = OkButtonOf(fgWin);
+                if (okBtn != IntPtr.Zero) PostMessage(okBtn, BM_CLICK, IntPtr.Zero, IntPtr.Zero);
+            });
+            return true;
         }
         // Down from the last one, or Up from the first, goes back to the text typed
         int sel = plSel + (vk == 0x28 ? 1 : -1);
@@ -1024,41 +1149,29 @@ static class ZOrderHelper
         return true;
     }
 
-    // Shift+Enter in a multiline box (desc, notes): inserts a new line instead of closing the box
+    // Shift+Enter in a multiline box (desc, notes): inserts a new line instead of closing the box.
+    // Runs inside WH_KEYBOARD_LL, so it never calls blocking SendMessageTimeout or file writes.
     static bool ShiftEnterKey()
     {
-        if ((GetAsyncKeyState(0x10) & 0x8000) == 0) return false; // Shift
+        if ((GetAsyncKeyState(0x10) & 0x8000) == 0 && (GetAsyncKeyState(0xA0) & 0x8000) == 0 && (GetAsyncKeyState(0xA1) & 0x8000) == 0) return false; // Shift
         if ((GetAsyncKeyState(0x12) & 0x8000) != 0) return false; // Alt
-        if (!File.Exists(typedPath)) return false;
+        uint rpid = rainmeterPid;
+        if (rpid == 0) return false;
         IntPtr fg = GetForegroundWindow();
+        if (fg == IntPtr.Zero) return false;
         uint pid;
         uint thread = GetWindowThreadProcessId(fg, out pid);
-        if (fg == IntPtr.Zero || pid != rainmeterPid || ClassOf(fg) == "RainmeterMeterWindow") return false;
+        if (pid != rpid || ClassOf(fg) == "RainmeterMeterWindow") return false;
         IntPtr box = TextBoxOf(fg);
         if (box == IntPtr.Zero || FocusOf(thread) != box) return false;
+        if (!hasTyped && !File.Exists(typedPath)) return false;
         RECT rc;
         if (!GetWindowRect(box, out rc)) return false;
         if (rc.Bottom - rc.Top < 35) return true; // in a single-line box, ignore Shift+Enter (do not submit)
-        IntPtr r;
-        SendMessageTimeout(box, EM_REPLACESEL, new IntPtr(1), "\r\n", SMTO_ABORTIFHUNG, 200, out r);
-        SendMessageTimeout(box, EM_SCROLLCARET, IntPtr.Zero, IntPtr.Zero, SMTO_ABORTIFHUNG, 200, out r);
-        string text = TextOf(box);
-        if (text != null)
-        {
-            if (text.IndexOf('\x7f') >= 0) text = DeleteWords(box, text);
-            try
-            {
-                byte[] data = Utf8.GetBytes("WC\n" + text);
-                using (var f = new FileStream(typedPath, FileMode.Truncate, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
-                {
-                    f.Write(data, 0, data.Length);
-                }
-                typedBox = box;
-                typedText = text;
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
+        // Post WM_CHAR '\n' (0x0A): Win32 multiline Edit inserts \r\n and scrolls the caret
+        // without triggering WinForms Form.AcceptButton, never blocks WH_KEYBOARD_LL, and
+        // stays strictly ordered before any subsequent keystrokes.
+        PostMessage(box, WM_CHAR, new IntPtr(0x0A), IntPtr.Zero);
         return true;
     }
 
