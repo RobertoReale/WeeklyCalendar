@@ -168,8 +168,10 @@ inside the outer braces, save, run `authorize` again and deploy a new version.
 - **Create**: click an empty spot of the hours (an event at that time), of the all-day row or a
   day number (a task), or **+** in the toolbar. Type the title and press **Enter**.
   Before saving you can switch *Event* / *Task*, tick *All day*, and change the date and times:
-  click one and type it (`31/10`, `31 oct`, `tomorrow`, `fri`, `+2`; `9`, `930`, `9:30 pm`) or use the
-  mouse wheel over it. Add a place, a description, a repeat, a calendar and an event colour; for a task, details and
+  click the date to pick any day from a monthly calendar (click the month/year header to jump across
+  months and years, scroll the mouse wheel, or right-click / click *Type* to type `31/10`, `31 oct`,
+  `tomorrow`, `fri`, `+2`); click a time to type it (`9`, `930`, `9:30 pm`), or use the mouse wheel
+  over either. Add a place, a description, a repeat, a calendar and an event colour; for a task, details and
   its list. *More options* opens Google Calendar's own editor.
 - **Details**: click an event or task. From the card: **Edit**, **Duplicate**, **Delete**, open it
   in Google Calendar. A recurring event asks *This event* or *All events*. A deletion can be undone

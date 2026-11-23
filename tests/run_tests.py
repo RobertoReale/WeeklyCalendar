@@ -1748,7 +1748,7 @@ def test_one_tooltip_carrier():
 SCRIPT_URL = 'https://script.google.com/macros/s/TEST/exec'
 HOLIDAY_URL = ('https://calendar.google.com/calendar/ical/it.italian%23holiday%40group.v.calendar.google.com'
                '/public/basic.ics')
-CARD_METERS = ['CrCard', 'CrDismiss', 'CrDraft', 'CrDraftTx'] + ['CrTx%d' % k for k in range(1, 33)]
+CARD_METERS = ['CrCard', 'CrDismiss', 'CrDraft', 'CrDraftTx'] + ['CrTx%d' % k for k in range(1, 61)]
 
 
 def ini_order():
@@ -1757,12 +1757,12 @@ def ini_order():
 
 
 def card_texts(sk):
-    return [sk.mock.opt('CrTx%d' % k, 'Text') for k in range(1, 33) if sk.mock.shown('CrTx%d' % k)]
+    return [sk.mock.opt('CrTx%d' % k, 'Text') for k in range(1, 61) if sk.mock.shown('CrTx%d' % k)]
 
 
 def card_el(sk, text):
     """The card meter showing text."""
-    return [m for m in ('CrTx%d' % k for k in range(1, 33))
+    return [m for m in ('CrTx%d' % k for k in range(1, 61))
             if sk.mock.shown(m) and sk.mock.opt(m, 'Text') == text][0]
 
 
@@ -1865,7 +1865,7 @@ def test_create_event_card_and_draft():
         start = card_el(sk, '10:00')
         assert m.opt(start, 'MouseScrollUpAction') == '[!CommandMeasure MeasureScript "CreateAdjust(\'start\', 1)"]'
         assert sk.tip(start) == 'Click: type - Wheel: change'
-        assert sk.tip(card_el(sk, 'Wed 3 Mar')) == 'Click: type - Wheel: change'
+        assert sk.tip(card_el(sk, 'Wed 3 Mar')) == 'Click: pick date - Right-click: type - Wheel: change'
         g.CreateAdjust('start', 1)
         assert '10:15' in card_texts(sk) and '11:15' in card_texts(sk)
         for _ in range(8):
@@ -2281,14 +2281,15 @@ def test_type_the_date_in_the_card():
         for text in ('', 'abc', '31/02', '29 feb 2027', '32', '0', '13/13', 'ott', '1 2 3 4', '31 ott xyz', '310',
                      '1/1/123', 'gi', '31/4'):
             assert parse(text, base, today) is None, (text, parse(text, base, today))
-        # a click on the date chip opens the box with the date shown; Enter moves the event
+        # a click on the date chip opens the calendar picker; right-click (or Type in the picker) opens the text box
         g.CreateAt(2, zone_y(sk, 2, '10:20'))                      # Wed 3 Mar, 10:00 - 11:00
         chip = card_el(sk, 'Wed 3 Mar')
-        assert m.opt(chip, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "CardTime(\'date\')"]'
-        assert m.opt(chip, 'MouseActionCursorName') == 'Text'
+        assert m.opt(chip, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "CardDatePicker()"]'
+        assert m.opt(chip, 'RightMouseUpAction') == '[!CommandMeasure MeasureScript "CardTime(\'date\')"]'
+        assert m.opt(chip, 'MouseActionCursorName') == 'Hand'
         m.bangs.clear()
         press(sk)
-        run_action(sk, m.opt(chip, 'LeftMouseUpAction'))
+        run_action(sk, m.opt(chip, 'RightMouseUpAction'))
         assert ['!CommandMeasure', 'MeasureTimeInput', 'ExecuteBatch 1'] in m.bangs
         assert m.opt('MeasureTimeInput', 'DefaultValue') == 'Wed 3 Mar'
         assert int(m.opt('MeasureTimeInput', 'W')) >= 84
@@ -2300,13 +2301,13 @@ def test_type_the_date_in_the_card():
         # Enter without a change, or a date that cannot be read: nothing changes
         for typed in ('Thu 4 Mar', '31/02'):
             press(sk)
-            run_action(sk, m.opt(card_el(sk, 'Thu 4 Mar'), 'LeftMouseUpAction'))
+            run_action(sk, m.opt(card_el(sk, 'Thu 4 Mar'), 'RightMouseUpAction'))
             m.vars['CreateTime'] = typed
             g.TimeSubmit()
             assert 'Thu 4 Mar' in card_texts(sk), (typed, card_texts(sk))
         # Esc: nothing changes; the wheel still works
         press(sk)
-        run_action(sk, m.opt(card_el(sk, 'Thu 4 Mar'), 'LeftMouseUpAction'))
+        run_action(sk, m.opt(card_el(sk, 'Thu 4 Mar'), 'RightMouseUpAction'))
         g.TimeInputClosed()
         g.CreateAdjust('date', 1)
         assert 'Fri 5 Mar' in card_texts(sk)
@@ -2328,7 +2329,7 @@ def test_type_the_date_in_the_card():
         # a task: the date only, typed as well
         g.CreateType('task')
         press(sk)
-        run_action(sk, m.opt(card_el(sk, 'Fri 5 Mar'), 'LeftMouseUpAction'))
+        run_action(sk, m.opt(card_el(sk, 'Fri 5 Mar'), 'RightMouseUpAction'))
         m.vars['CreateTime'] = '9/3'
         g.TimeSubmit()
         assert 'Tue 9 Mar' in card_texts(sk), card_texts(sk)
@@ -2341,7 +2342,7 @@ def test_type_the_date_in_the_card():
     try:
         sk.g.CreateAt(2, zone_y(sk, 2, '10:20'))
         chip = card_el(sk, 'mer 3 mar')
-        assert sk.tip(chip) == 'Clic: scrivi - Rotellina: cambia'
+        assert sk.tip(chip) == 'Clic: scegli data - Clic destro: scrivi - Rotellina: cambia'
         sk.g.CardClose()
         sk.check_clean()
     finally:
@@ -6878,9 +6879,9 @@ def test_settings_minimize_and_pools():
         m, g = sk.mock, sk.g
         sk.start(2027, 3, 3, 12)
         secs = ini_sections()
-        for k in range(21, 33):
+        for k in range(21, 61):
             assert ('CrTx%d' % k) in secs
-        assert g._WC.edit.CR_TX == 32
+        assert g._WC.edit.CR_TX == 60
         # Minimize while panel is open undoes preview
         g.Settings()
         g.SettingsTab('mouse')
@@ -7157,6 +7158,105 @@ def test_task_location_and_task_feature_settings():
         g.SettingsToggle('TaskPriority')
         g.SettingsSave()
         assert g._WC.cfg.taskLoc and g._WC.cfg.taskPrio
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
+def test_calendar_date_picker():
+    # 1. Duplicate flow (the main use case): pick a day months/years later via the month/year grid
+    sk = edit_skin()
+    try:
+        m, g = sk.mock, sk.g
+        day_fn = sk.lua.eval('function(y, m, d) return math.floor(os.time({year=y,month=m,day=d,hour=12}) / 86400) end')
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Lezione'))
+        g.ItemDuplicate()
+        chip = card_el(sk, 'Wed 3 Mar')
+        assert m.opt(chip, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "CardDatePicker()"]'
+        press(sk)
+        run_action(sk, m.opt(chip, 'LeftMouseUpAction'))
+        texts = card_texts(sk)
+        assert 'March 2027 ▾' in texts and 'Today' in texts and 'Type' in texts and 'Cancel' in texts, texts
+        # Weekday headers respect FirstDay=1 (Monday first)
+        wd_start = texts.index('MON')
+        assert texts[wd_start:wd_start + 7] == ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+        # 42 day cells + 3 header + 7 weekdays + 3 footer = 55 texts (fits in CrTx60)
+        assert len(texts) == 55, len(texts)
+        assert m.opt('CrCard', 'MouseScrollUpAction') == '[!CommandMeasure MeasureScript "DatePickStep(-1)"]'
+        assert m.opt('CrCard', 'MouseScrollDownAction') == '[!CommandMeasure MeasureScript "DatePickStep(1)"]'
+
+        # Step months with arrows (and verify year rollover Dec -> Jan -> Dec)
+        run_action(sk, m.opt(card_el(sk, '›'), 'LeftMouseUpAction'))
+        assert 'April 2027 ▾' in card_texts(sk)
+        for _ in range(9):
+            g.DatePickStep(1)
+        assert 'January 2028 ▾' in card_texts(sk)
+        g.DatePickStep(-1)
+        assert 'December 2027 ▾' in card_texts(sk)
+
+        # Toggle to 12-month grid, jump a year ahead, pick September 2028, then pick day 15
+        run_action(sk, m.opt(card_el(sk, 'December 2027 ▾'), 'LeftMouseUpAction'))
+        mtexts = card_texts(sk)
+        assert '2027 ▴' in mtexts and 'September' in mtexts and 'January' in mtexts and 'December' in mtexts, mtexts
+        run_action(sk, m.opt(card_el(sk, '›'), 'LeftMouseUpAction'))
+        assert '2028 ▴' in card_texts(sk)
+        run_action(sk, m.opt(card_el(sk, 'September'), 'LeftMouseUpAction'))
+        assert 'September 2028 ▾' in card_texts(sk)
+
+        target_day = day_fn(2028, 9, 15)
+        day_meter = [mt for mt in ('CrTx%d' % k for k in range(1, 61))
+                     if m.shown(mt) and m.opt(mt, 'LeftMouseUpAction') == '[!CommandMeasure MeasureScript "DatePickDay(%d)"]' % target_day]
+        assert len(day_meter) == 1 and m.opt(day_meter[0], 'Text') == '15'
+        assert '15 Sep 2028' in sk.tip(day_meter[0]), sk.tip(day_meter[0])
+        run_action(sk, m.opt(day_meter[0], 'LeftMouseUpAction'))
+        # Back to form: date chip includes the non-current year 2028, title & times kept
+        texts = card_texts(sk)
+        assert 'Fri 15 Sep 2028' in texts and 'Lezione' in texts, texts
+        assert m.opt('CrCard', 'MouseScrollUpAction') == '[!SetVariable WCPressed 1]'
+
+        # Save creates the duplicated event on 2028-09-15
+        g.CreateSave()
+        url = task_params(sk)[-1]
+        assert 'action=createevent' in url and '2028-09-15' in url, url
+        sk.check_clean()
+    finally:
+        sk.close()
+
+    # 2. Today button, Type button, Cancel button, and Edit form support
+    sk = edit_skin(FirstDay='0', Language='it', Theme='dark')
+    try:
+        m, g = sk.mock, sk.g
+        open_card(sk, 'EvBg%d' % event_meter(sk, 'Lezione'))
+        g.ItemEdit()
+        press(sk)
+        # Move away from today first, then open picker in Italian with FirstDay=0 (DOM first)
+        g.CreateStep(45)
+        run_action(sk, m.opt(card_el(sk, 'sab 17 apr'), 'LeftMouseUpAction'))
+        texts = card_texts(sk)
+        assert 'Aprile 2027 ▾' in texts and 'Oggi' in texts and 'Scrivi' in texts and 'Annulla' in texts, texts
+        wd_start = texts.index('DOM')
+        assert texts[wd_start:wd_start + 7] == ['DOM', 'LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB']
+        # Cancel keeps sab 17 apr unchanged
+        run_action(sk, m.opt(card_el(sk, 'Annulla'), 'LeftMouseUpAction'))
+        assert 'sab 17 apr' in card_texts(sk)
+        # Reopen and click Oggi -> returns to Wed 3 Mar (mer 3 mar)
+        run_action(sk, m.opt(card_el(sk, 'sab 17 apr'), 'LeftMouseUpAction'))
+        run_action(sk, m.opt(card_el(sk, 'Oggi'), 'LeftMouseUpAction'))
+        assert 'mer 3 mar' in card_texts(sk)
+        # Reopen and click Scrivi -> closes picker and opens MeasureTimeInput
+        run_action(sk, m.opt(card_el(sk, 'mer 3 mar'), 'LeftMouseUpAction'))
+        m.bangs.clear()
+        run_action(sk, m.opt(card_el(sk, 'Scrivi'), 'LeftMouseUpAction'))
+        assert ['!CommandMeasure', 'MeasureTimeInput', 'ExecuteBatch 1'] in m.bangs
+        m.vars['CreateTime'] = '20/11/2028'
+        g.TimeSubmit()
+        assert 'lun 20 nov 2028' in card_texts(sk), card_texts(sk)
+        # Reopening Type on a non-current year prefills the year too
+        press(sk)
+        run_action(sk, m.opt(card_el(sk, 'lun 20 nov 2028'), 'RightMouseUpAction'))
+        assert m.opt('MeasureTimeInput', 'DefaultValue') == 'lun 20 nov 2028'
+        g.TimeInputClosed()
+        g.CardClose()
         sk.check_clean()
     finally:
         sk.close()
