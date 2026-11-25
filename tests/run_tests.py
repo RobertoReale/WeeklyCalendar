@@ -1016,6 +1016,39 @@ def test_event_description_tooltip_is_cleaned():
         sk.close()
 
 
+def test_double_quotes_preserved_in_titles_descriptions_and_escaped_in_urls():
+    sk = create_skin()
+    try:
+        m, g = sk.mock, sk.g
+        add_event(sk, 1,
+                  'BEGIN:VEVENT\nUID:q1@google.com\n'
+                  'DTSTART:%s\nDTEND:%s\n'
+                  'SUMMARY:Comprare "Animals 50"\n'
+                  'DESCRIPTION:<p>Edizione &quot;Sandstone&quot; &amp; &quot;LP&quot;</p>\n'
+                  'URL:https://example.com/?q="pink"\n'
+                  'END:VEVENT\n' % (utc_of_local(2027, 3, 3, 14, compact=True),
+                                    utc_of_local(2027, 3, 3, 15, compact=True)))
+        g.Reload(1)
+        i = event_meter(sk, 'Comprare "Animals 50"')
+        tip = sk.tip('EvBg%d' % i)
+        assert tip.startswith('Comprare "Animals 50"#CRLF#'), tip
+        assert 'Edizione "Sandstone" & "LP"' in tip, tip
+        texts = open_card(sk, 'EvBg%d' % i)
+        assert any('Comprare "Animals 50"' in t for t in texts), texts
+        assert any('Edizione "Sandstone" & "LP"' in t for t in texts), texts
+        # Single-string action bang in openAct() escapes " as %22 so quoting cannot break
+        open_link_el = card_el(sk, 'Open link')
+        assert m.opt(open_link_el, 'LeftMouseUpAction').startswith('["https://example.com/?q=%22pink%22"]'), \
+            m.opt(open_link_el, 'LeftMouseUpAction')
+        # Editing keeps real double quotes in DefaultValue (does not corrupt them into single quotes)
+        g.ItemEdit()
+        assert m.opt('MeasureCreateInput', 'DefaultValue') == 'Comprare "Animals 50"'
+        g.CardClose()
+        sk.check_clean()
+    finally:
+        sk.close()
+
+
 def test_click_opens_event_in_google_calendar():
     sk = google_skin()
     try:
@@ -2393,7 +2426,7 @@ def test_create_event_submit():
         assert not m.shown('CrCard') and not m.shown('CrDraft')
 
         def ripasso():
-            return [t for t in sk.event_titles() if t.startswith("Ripasso 'capitolo 3'")]
+            return [t for t in sk.event_titles() if t.startswith('Ripasso "capitolo 3"')]
         assert len(ripasso()) == 1, sk.event_titles()
         i = event_meter(sk, 'Ripasso')
         assert 'Saved - waiting for the calendar to sync' in sk.tip('EvBg%d' % i)
@@ -2412,7 +2445,7 @@ def test_create_event_submit():
         g.CreateAt(2, zone_y(sk, 2, '16:00'))
         m.vars['CreateTitle'] = 'Seconda "prova"'
         g.CreateSubmit()
-        assert any(t.startswith("Seconda 'prova'") for t in sk.event_titles())
+        assert any(t.startswith('Seconda "prova"') for t in sk.event_titles())
         m.measure_values['MeasureTaskAction'] = 'ERROR Calendar usage limits exceeded.'
         m.bangs.clear()
         g.TaskResult()
@@ -2422,11 +2455,11 @@ def test_create_event_submit():
         assert m.shown('CrCard') and ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] not in m.bangs
         assert 'Not saved: Calendar usage limits exceeded.' in card_texts(sk), card_texts(sk)
         assert m.opt('TbSync', 'Text').endswith('change not saved'), m.opt('TbSync', 'Text')
-        run_action(sk, m.opt(card_el(sk, "Seconda 'prova'"), 'LeftMouseUpAction'))
+        run_action(sk, m.opt(card_el(sk, 'Seconda "prova"'), 'LeftMouseUpAction'))
         assert ['!CommandMeasure', 'MeasureCreateInput', 'ExecuteBatch 1'] in m.bangs
-        assert m.opt('MeasureCreateInput', 'DefaultValue') == "Seconda 'prova'"
+        assert m.opt('MeasureCreateInput', 'DefaultValue') == 'Seconda "prova"'
         # Enter on the title as it was saves the real one (with its quotes)
-        m.vars['CreateTitle'] = "Seconda 'prova'"
+        m.vars['CreateTitle'] = 'Seconda \\"prova\\"'
         g.CreateSubmit()
         assert task_params(sk)[-1].split('&title=')[1].startswith(enc('Seconda "prova"') + '&'), task_params(sk)[-1]
         # Enter on an empty title only closes the box
@@ -3542,7 +3575,7 @@ def test_task_lists_details_and_moves():
         assert 'Enter: done - Shift+Enter: new line' in card_texts(sk)
         m.vars['CreateTitle'] = ' riga 1\r\nriga \\"2\\" '      # Rainmeter gives a typed " as \"
         g.CreateSubmit()
-        assert "riga 1 riga '2'" in card_texts(sk) and 'Add details' not in card_texts(sk)
+        assert 'riga 1 riga "2"' in card_texts(sk) and 'Add details' not in card_texts(sk)
         g.CardTitle()
         assert m.opt('MeasureCreateInput', 'FontSize') == '13' and m.opt('MeasureCreateInput', 'InputLimit') == '500'
         m.vars['CreateTitle'] = 'Consegna'

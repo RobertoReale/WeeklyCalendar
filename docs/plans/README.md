@@ -46,9 +46,10 @@ These are the traps of this codebase. Each one has already caused a bug once.
   on the next update, and a redraw about 20-40 ms; the Lua mock does not show this. Time a
   change with `os.clock()` from `!CommandMeasure MeasureScript "..."` (it measures wall time).
   `layout()` and `layoutMonth()` must redraw once (`finishLayout()`).
-- **Text into options goes through `safe()`.** `#` starts a Rainmeter variable, `[` `]` are
-  section references, and `"` breaks bang quoting. Links drop their `#fragment` (see
-  `expandEvent`).
+- **Text into options goes through `safe()`.** `#` starts a Rainmeter variable and `[` `]` are
+  section references; double quotes `"` are kept for display options because `set()` calls
+  multi-argument `SKIN:Bang('!SetOption', ...)` (single-string action bangs like `openAct()`
+  escape `"` as `%22`). Links drop their `#fragment` (see `expandEvent`).
 - **Colours come from `cfg`** (theme plus overrides, see `THEMES` and `readSettings`). Never
   hard-code a light-theme colour; new colours need a `light` and a `dark` value in `THEMES`.
 - **Strings come from `LANGS.en` and `LANGS.it`.** Add both. Context menu titles are
