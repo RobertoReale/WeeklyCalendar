@@ -502,8 +502,8 @@ function buildFeed() {
 }
 
 // The birthdays of your contacts (?feed=birthdays): Google Calendar keeps them as
-// "birthday" events of your primary calendar but leaves them out of its iCal address.
-// Needs the Google Calendar API service (README, "Birthdays").
+// recurring "birthday" events of your primary calendar (annual RRULE) but leaves them
+// out of its iCal address. Needs the Google Calendar API service (README, "Birthdays").
 function buildBirthdays() {
   if (typeof Calendar === 'undefined') {
     return 'ERROR add the Google Calendar API service to the Tasks script (README, "Birthdays")';
@@ -514,9 +514,8 @@ function buildBirthdays() {
   try {
     items = allPages(function (args) {
       args.eventTypes = ['birthday'];
-      args.singleEvents = true;  // one entry per year, as the skin shows them
-      args.timeMin = new Date(now.getTime() - DAYS_BACK * 86400000).toISOString();
-      args.timeMax = new Date(now.getTime() + DAYS_AHEAD * 86400000).toISOString();
+      args.singleEvents = false; // keep each birthday's RRULE so every past and future year shows
+      args.showDeleted = false;
       args.maxResults = 2500;
       return Calendar.Events.list('primary', args);
     });
@@ -527,11 +526,20 @@ function buildBirthdays() {
              'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Birthdays'];
   items.forEach(function (ev) {
     if (ev.status === 'cancelled' || !ev.start || !ev.start.date) return;
+    var uid = (ev.recurringEventId || ev.id) + '@birthdays.google.com';
     out.push('BEGIN:VEVENT',
-             'UID:' + ev.id + '@birthdays.google.com',
+             'UID:' + uid,
              'DTSTAMP:' + stamp,
              'DTSTART;VALUE=DATE:' + ev.start.date.replace(/-/g, ''));
     if (ev.end && ev.end.date) out.push('DTEND;VALUE=DATE:' + ev.end.date.replace(/-/g, ''));
+    if (ev.recurringEventId && ev.originalStartTime && ev.originalStartTime.date) {
+      out.push('RECURRENCE-ID;VALUE=DATE:' + ev.originalStartTime.date.replace(/-/g, ''));
+    } else if (ev.recurrence && ev.recurrence.length) {
+      ev.recurrence.forEach(function (line) {
+        var s = String(line).replace(/[\r\n]+/g, '');
+        if (/^(RRULE|RDATE|EXDATE)[;:]/i.test(s)) out.push(s);
+      });
+    }
     out.push('SUMMARY:' + esc(ev.summary || ''));
     if (ev.htmlLink) out.push('URL:' + ev.htmlLink);  // a click opens it in Google Calendar
     out.push('END:VEVENT');

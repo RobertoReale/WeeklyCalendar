@@ -16,24 +16,24 @@ and delete events and tasks without opening the browser.
 - Day, 3-day, week and month views, switched from the toolbar.
 - Quick search & Go to date: click the magnifying glass icon in the toolbar (or click the month/year title / week badge, or right-click > *Search / Go to date...*) to search events and tasks or jump to any date (`15/12`, `marzo 2027`, `+14`).
 - Countdown pill: pin any future event, task or date as a countdown in the toolbar (e.g. `Esame Analisi · -14g` / `Exam · -14d`), with one click to jump to that date.
-- Up to 6 calendars, each in its own colour. Public holidays and birthdays too.
+- Up to 6 calendars, each in its own colour. Public holidays and contacts' birthdays (across any past or future year) too.
 - Tooltips with the full title, time, place and description of every item.
 - English and Italian.
 
 **Events**
-- Create one by clicking an empty spot of the hours, or the **+** button. A card like Google Calendar's opens.
-- Details, edit, duplicate and delete (with Undo). Repeats, places, descriptions, calendars and per-event Google Calendar colours (all 11 colours, read from your calendar and chosen in the card) are supported, and a recurring event can be changed one occurrence at a time or all together.
-- Place suggestions while you type an address (OpenStreetMap).
-- Drag an event to another time or day, or drag its bottom edge to change how long it lasts.
+- Create one by clicking an empty spot of the hours, or the **+** button. A card like Google Calendar's opens, with a monthly calendar date picker (or natural date typing).
+- Details, edit, duplicate, convert between event and task, and delete (with Undo). Repeats, places, multi-line descriptions (`Shift+Enter`), calendars and per-event Google Calendar colours (all 11 colours, read from your calendar and chosen in the card) are supported, and a recurring event can be changed one occurrence at a time or all together.
+- Place suggestions while you type an address (OpenStreetMap), for both events and tasks.
+- Drag an event to another time or day, or drag its bottom edge to change how long it lasts — with **Undo** (`↶` button or `Ctrl+Z`).
 - Recurring events are expanded in the skin (`RRULE`, `RDATE`, `EXDATE`, modified occurrences) with time zone conversion.
 
 **Tasks** (Google Tasks)
-- Tasks appear like in Google Calendar: ○ open, ✓ completed, with a short tag for their list (`ShowTaskList`). Click the circle to complete one.
-- Drag a task to another day, move it to another list, add details.
-- Priorities: a coloured dot, and the important tasks first in their day.
+- Tasks appear like in Google Calendar: ○ open, ✓ completed, with a short tag for their list (`ShowTaskList`); timed tasks appear at their scheduled time. Click the circle to complete one.
+- Drag a task to another day, move it to another list, convert it to an event, add multi-line details (`Shift+Enter`), a location (with place suggestions), and a priority.
+- Priorities and locations: a coloured dot puts important tasks first in their day, and places show on the card and tooltip (`TaskPriority`, `TaskLocation`).
 - Completed tasks fold into one line per day ("✓ 3 completed"), or show their titles, or are hidden.
-- **Move to today**: one click brings the unfinished tasks of past days to today, with Undo.
-- A busy day never hides anything: "+N more" expands the row, and a day that still does not fit scrolls with the mouse wheel.
+- **Move to today**: one click brings the unfinished tasks of past days to today (with Undo), or turn on `AutoMoveOverdue` to move them automatically at startup and after midnight.
+- A busy day never hides anything: "+N more" expands the row (up to 10 rows), and a day that still does not fit scrolls with the mouse wheel.
 
 **On your desktop**
 - Settings panel: click the gear icon in the toolbar (or right-click > *Settings...*) to change views, theme, calendar colours, opacity, mouse actions and more with live preview.
@@ -100,7 +100,7 @@ publishes the birthdays. It takes about 5 minutes, once:
 1. On [script.google.com](https://script.google.com/) click **New project**, replace the sample code
    with the whole of `tools\GoogleTasksFeed.gs` and save (Ctrl+S).
 2. In the sidebar, click **+** next to **Services**, add **Google Tasks API**, then
-   **Google Calendar API** (needed for events and birthdays).
+   **Google Calendar API** (needed for events, per-event colours and birthdays).
    <details><summary>If that dialog does not open</summary>
 
    **Project Settings** (gear icon) > tick *Show "appsscript.json" manifest file in editor*, open
@@ -137,13 +137,15 @@ Recommended: without a secret, anyone who has the web app URL can change your ta
 If the two values differ, every change is refused ("bad token" in the toolbar's tooltip).
 
 ### Birthdays
-Google's iCal address leaves out your contacts' birthdays; the Tasks script publishes them (it needs
-the **Google Calendar API** service). Put the script's web app URL followed by `?feed=birthdays` in
+Google's iCal address leaves out your contacts' birthdays; the Tasks script publishes them with
+their annual recurrence (`RRULE`), so they appear in any past or future year (it needs the
+**Google Calendar API** service). Put the script's web app URL followed by `?feed=birthdays` in
 a free slot:
 ```ini
 IcalUrl4=https://script.google.com/macros/s/.../exec?feed=birthdays
 ```
-Optional: `EventColor4=51,182,121,255` in `Settings.inc` gives them Google's birthday green.
+Optional: `EventColor4=51,182,121,255` in `Private.inc` / `Settings.inc` (or via the Settings panel)
+gives them Google's birthday green.
 
 ### Updating the Tasks script
 When the toolbar or a card says **update the Tasks script**, the skin needs a newer
@@ -167,15 +169,17 @@ inside the outer braces, save, run `authorize` again and deploy a new version.
 ### Creating and editing
 - **Create**: click an empty spot of the hours (an event at that time), of the all-day row or a
   day number (a task), or **+** in the toolbar. Type the title and press **Enter**.
-  Before saving you can switch *Event* / *Task*, tick *All day*, and change the date and times:
+  Before saving you can switch *Event* / *Task* (you can also convert an existing task or
+  non-recurring event in the edit card), tick *All day*, and change the date and times:
   click the date to pick any day from a monthly calendar (click the month/year header to jump across
-  months and years, scroll the mouse wheel, or right-click / click *Type* to type `31/10`, `31 oct`,
-  `tomorrow`, `fri`, `+2`); click a time to type it (`9`, `930`, `9:30 pm`), or use the mouse wheel
-  over either. Add a place, a description, a repeat, a calendar and an event colour; for a task, details and
-  its list. *More options* opens Google Calendar's own editor.
-- **Details**: click an event or task. From the card: **Edit**, **Duplicate**, **Delete**, open it
-  in Google Calendar. A recurring event asks *This event* or *All events*. A deletion can be undone
-  for 8 seconds (`UndoSeconds`) before it reaches Google.
+  months and years, scroll the mouse wheel, use `<` / `>` for the day before / after, or right-click
+  / click *Type* to type `31/10`, `31 oct`, `tomorrow`, `fri`, `+2`); click a time to type it (`9`,
+  `930`, `9:30 pm`), or use the mouse wheel over either. Add a place, a description (`Shift+Enter`
+  for a new line), a repeat, a calendar and an event colour; for a task, details, location, priority
+  and its list. *More options* opens Google Calendar's own editor.
+- **Details**: click an event or task. From the card: **Edit**, **Duplicate**, **Delete**,
+  **Countdown**, open it in Google Calendar, or open its link. A recurring event asks *This event*
+  or *All events*. A deletion can be undone for 8 seconds (`UndoSeconds`) before it reaches Google.
 - **Drag**: move an event to another time or day (15-minute steps), drag its bottom edge to change
   its end, drag a task or an all-day event to another day. Right-click or leave the skin to cancel.
   After a move or resize, click **Undo** in the snackbar or the **↶ Undo** button in the toolbar (or
@@ -194,11 +198,15 @@ repeat; tasks without a date are not shown.
   its time: right-click it > *Mark complete*.
 - **Completed tasks** (`CompletedTasks`): `count` shows one line, **✓ 3 completed**: its tooltip
   lists them, a click shows them in the day. `titles` shows each one struck through, `hide` none.
-- **Priority**: in a task's card, click *No priority* to go to *Medium*, *High* and back. Google
-  Tasks has no priority field, so it is kept as a last line `[P1]` (high) or `[P2]` (medium) of the
-  task's notes: it follows you to other devices, and the skin hides it.
+- **Priority & Location**: in a task's card, click *No priority* to cycle *Medium*, *High* and off,
+  and add a location (with OpenStreetMap place suggestions). Because Google Tasks has no native
+  priority or location fields, they are stored as trailing `[P1]` / `[P2]` and `[L: <place>]` lines
+  of the task's notes: they follow you to other devices, and the skin hides the tags. Either feature
+  can be disabled (`TaskPriority=0`, `TaskLocation=0`).
 - **Move to today (3)** in the toolbar brings the unfinished tasks of past days (up to 60 days back)
-  to today, with **Undo** for a few seconds. It shows only when there are some.
+  to today, with **Undo** for a few seconds. It shows only when there are some. Set
+  `AutoMoveOverdue=1` (or toggle it in Settings) to move them automatically at startup and after
+  midnight.
 - **A busy day**: the last row says **+5 more**, and its tooltip lists them. Click it to expand the
   row. If the day still does not fit, scroll its rows with the mouse wheel (a thin bar at the right
   shows where you are) or click **+N more** again to go to the last ones. ▲ at the left collapses it.
@@ -219,6 +227,7 @@ repeat; tasks without a date are not shown.
 | Open an item | Click: its card. Middle-click: Google Calendar |
 | Open a day | Month view: click the day. Middle-click "+N more": the day in Google Calendar |
 | Undo a move, resize or deletion | Click **Undo** in the snackbar, **↶ Undo** in the toolbar, or press **Ctrl+Z** over the calendar |
+| New line in description / details | **Shift+Enter** while typing (`Enter` finishes) |
 | Scroll a busy day's all-day row | Mouse wheel over it (once expanded) |
 | Resize the skin | Drag the grip in the bottom right corner, or right-click > *Size* |
 | Move the skin | Drag an empty part of the toolbar, the day names or the hours column |
@@ -239,31 +248,35 @@ with a live preview (**Defaults** resets them). All settings are also documented
 | `Language` | `en` | `en` or `it` |
 | `Theme` | `light` | `light` or `dark`; any single colour can be overridden |
 | `View` | `week` | First view: `day`, `3day`, `week`, `month` (the toolbar remembers your choice) |
-| `FirstDay` | `1` | First day of the week: 1 Monday, 0 Sunday |
+| `FirstDay` | `1` | First day of the week: `1` Monday, `0` Sunday, `6` Saturday |
 | `Width`, `Height` | `1400`, `800` | Size (the grip and the menu override it) |
+| `FontSize` | `9` | Base text size in points |
 | `StartHour`, `EndHour` | `8`, `20` | Hours shown |
 | `AutoScroll`, `AutoScrollHour` | `1`, `14` | Shift the hours down in the afternoon |
 | `HideEmptyHours` | `1` | Leave out the hours without events |
 | `AllDayRows` | `3` | All-day rows before "+N more" (1-10) |
+| `RefreshMinutes` | `10` | Sync interval in minutes |
 | `CompletedTasks` | `count` | `count`, `titles` or `hide` |
 | `ShowTaskList` | `short` | Task list on the chip: `short`, `full` or `hide` |
+| `TaskPriority`, `TaskLocation` | `1`, `1` | Enable priority (`[P1]`/`[P2]`) and location (`[L: ...]`) fields on tasks |
 | `EventColor1` ... `6` | Google's colours | Colour of each calendar |
 | `ClickAction` | `card` | Left click: `card`, `calendar` (Google Calendar) or `link` (the event's link) |
 | `BgOpacity`, `IdleBgOpacity` | `100`, `90` | Background opacity (%) with the mouse over the skin, and away |
 | `IdleOpacity`, `IdleSeconds` | `60`, `3` | The whole skin fades this much when the mouse has been away this long |
 | `ShowMinimizeButton`, `MiniEvents` | `1`, `3` | Minimize button; events listed on the tile |
-| `ShowOverdueButton` | `1` | The **Move to today** button |
+| `ShowOverdueButton`, `AutoMoveOverdue` | `1`, `0` | Show the **Move to today** button; automatically move overdue tasks to today |
 | `CountdownDate`, `CountdownTitle` | empty | Target date (`YYYY-MM-DD` or `DD/MM/YYYY`) and optional label for the toolbar countdown pill |
 | `ClickToCreate`, `ShowCreateButton` | `1`, `1` | Create by clicking an empty spot, the **+** button |
 | `DragToMove`, `RightClickCard` | `1`, `1` | Drag to move; right-click for the card |
-| `UndoSeconds` | `8` | Time to undo a deletion |
+| `UndoSeconds`, `NewEventMinutes` | `8`, `60` | Time to undo a deletion; default length of a new event (15-minute steps) |
 | `PlaceSuggestions`, `PlaceSearchNear` | `1`, empty | Place suggestions, and the town they are nearest to |
 | `ShowDeclined` | `1` | Show declined invitations (outlined) |
 | `ZPos`, `KeepDialogsOnTop` | `-2`, `1` | Keep the calendar on the desktop, below the windows you open |
 
 **The helper.** `@Resources\ZOrder` holds a tiny helper that the skin compiles on first load with
 the C# compiler included in Windows. It keeps dialogs above the calendar, keeps what you type in a
-card when you click elsewhere instead of pressing Enter, follows the cursor while you resize,
+card when you click elsewhere instead of pressing Enter, handles `Shift+Enter` new lines in
+descriptions/details and `Ctrl+Z` undo over the calendar, follows the cursor while you resize,
 searches the place suggestions (it sends only what you type in the place box, to
 [Photon](https://photon.komoot.io/), [OpenStreetMap](https://www.openstreetmap.org/copyright) data),
 and puts back a calendar dropped over the taskbar. It uses no CPU while idle and exits with Rainmeter.

@@ -1396,10 +1396,16 @@ var Tasks = { Tasklists: { list: function () { return { items: [] }; } } };
 var Calendar = { Events: { list: function (cal, a) {
   calls.push([cal, a]);
   if (!a.pageToken) return { nextPageToken: 'p2', items: [
-    { id: 'b1_20270304', summary: "Marco's birthday, 30", start: { date: '2027-03-04' }, end: { date: '2027-03-05' },
+    { id: 'b1', summary: "Marco's birthday", start: { date: '1997-03-04' }, end: { date: '1997-03-05' },
+      recurrence: ['RRULE:FREQ=YEARLY'],
       htmlLink: 'https://www.google.com/calendar/event?eid=YjE' },
     { id: 'b2', summary: 'Gone', status: 'cancelled', start: { date: '2027-03-05' } } ] };
-  return { items: [ { id: 'b3', summary: 'Anna', start: { date: '2027-06-01' } } ] };
+  return { items: [
+    { id: 'b3', summary: 'Leap', start: { date: '2000-02-29' }, end: { date: '2000-03-01' },
+      recurrence: ['RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=-1', 'BAD:ignored'] },
+    { id: 'b1_20270304', recurringEventId: 'b1', originalStartTime: { date: '2027-03-04' },
+      summary: "Marco's birthday (party)", start: { date: '2027-03-06' }, end: { date: '2027-03-07' } },
+    { id: 'b4', summary: 'Anna', start: { date: '2027-06-01' } } ] };
 } } };
 var withCal = doGet({ parameter: { feed: 'birthdays' } }).text;
 var tasks = doGet({ parameter: {} }).text;
@@ -1413,12 +1419,23 @@ process.stdout.write(JSON.stringify({ ics: withCal, tasks: tasks, calls: calls, 
     out = json.loads(res.stdout)
     ics = out['ics']
     assert 'X-WR-CALNAME:Birthdays\r\n' in ics and 'X-WR-CALNAME:Google Tasks' in out['tasks']
-    assert ('BEGIN:VEVENT\r\nUID:b1_20270304@birthdays.google.com\r\nDTSTAMP:20270301T080000Z\r\n'
-            'DTSTART;VALUE=DATE:20270304\r\nDTEND;VALUE=DATE:20270305\r\n'
-            "SUMMARY:Marco's birthday\\, 30\r\nURL:https://www.google.com/calendar/event?eid=YjE\r\nEND:VEVENT\r\n") in ics, ics
-    assert 'Gone' not in ics and 'UID:b3@birthdays.google.com\r\nDTSTAMP:20270301T080000Z\r\nDTSTART;VALUE=DATE:20270601\r\nSUMMARY:Anna\r\n' in ics
+    assert ('BEGIN:VEVENT\r\nUID:b1@birthdays.google.com\r\nDTSTAMP:20270301T080000Z\r\n'
+            'DTSTART;VALUE=DATE:19970304\r\nDTEND;VALUE=DATE:19970305\r\n'
+            'RRULE:FREQ=YEARLY\r\n'
+            "SUMMARY:Marco's birthday\r\nURL:https://www.google.com/calendar/event?eid=YjE\r\nEND:VEVENT\r\n") in ics, ics
+    assert ('UID:b3@birthdays.google.com\r\nDTSTAMP:20270301T080000Z\r\n'
+            'DTSTART;VALUE=DATE:20000229\r\nDTEND;VALUE=DATE:20000301\r\n'
+            'RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=-1\r\nSUMMARY:Leap\r\n') in ics, ics
+    assert 'BAD:ignored' not in ics
+    assert ('UID:b1@birthdays.google.com\r\nDTSTAMP:20270301T080000Z\r\n'
+            'DTSTART;VALUE=DATE:20270306\r\nDTEND;VALUE=DATE:20270307\r\n'
+            'RECURRENCE-ID;VALUE=DATE:20270304\r\n'
+            "SUMMARY:Marco's birthday (party)\r\n") in ics, ics
+    assert 'Gone' not in ics and 'UID:b4@birthdays.google.com\r\nDTSTAMP:20270301T080000Z\r\nDTSTART;VALUE=DATE:20270601\r\nSUMMARY:Anna\r\n' in ics
     first = out['calls'][0]
-    assert first[0] == 'primary' and first[1]['eventTypes'] == ['birthday'] and first[1]['singleEvents'] is True
+    assert (first[0] == 'primary' and first[1]['eventTypes'] == ['birthday']
+            and first[1]['singleEvents'] is False and first[1]['showDeleted'] is False
+            and 'timeMin' not in first[1] and 'timeMax' not in first[1]), first
     assert out['calls'][1][1]['pageToken'] == 'p2'
     assert out['failing'] == 'ERROR Not allowed' and out['noService'].startswith('ERROR add the Google Calendar API')
 
@@ -1429,8 +1446,12 @@ def test_birthdays_feed_in_the_skin():
     try:
         open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(
             'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-WR-CALNAME:Birthdays\r\n'
-            'BEGIN:VEVENT\r\nUID:b1@birthdays.google.com\r\nDTSTART;VALUE=DATE:20270304\r\nDTEND;VALUE=DATE:20270305\r\n'
+            'BEGIN:VEVENT\r\nUID:b1@birthdays.google.com\r\nDTSTART;VALUE=DATE:19970304\r\nDTEND;VALUE=DATE:19970305\r\n'
+            'RRULE:FREQ=YEARLY\r\n'
             "SUMMARY:Marco's birthday\r\nURL:https://www.google.com/calendar/event?eid=YjE\r\nEND:VEVENT\r\n"
+            'BEGIN:VEVENT\r\nUID:b2@birthdays.google.com\r\nDTSTART;VALUE=DATE:20000229\r\nDTEND;VALUE=DATE:20000301\r\n'
+            'RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=-1\r\n'
+            "SUMMARY:Leap birthday\r\nEND:VEVENT\r\n"
             'END:VCALENDAR\r\n')
         sk.start(2027, 3, 3, 12)
         m, g = sk.mock, sk.g
@@ -1442,6 +1463,13 @@ def test_birthdays_feed_in_the_skin():
         assert 'Delete' not in texts and 'Edit' not in texts
         assert any('Birthdays come from Google Contacts' in t for t in texts), texts
         g.CardClose()
+        # Annual birthdays show in past and future years beyond any 60-day window (and Feb 29 falls on Feb 28)
+        sk.at(2025, 3, 4, 12); g.GoToday()
+        assert "Marco's birthday" in sk.all_day()
+        sk.at(2026, 2, 28, 12); g.GoToday()
+        assert "Leap birthday" in sk.all_day()
+        sk.at(2028, 2, 29, 12); g.GoToday()
+        assert "Leap birthday" in sk.all_day()
         # The script says what is missing
         open(os.path.join(sk.dir, 'DownloadFile', 'calendar1.ics'), 'w', encoding='utf-8', newline='').write(
             'ERROR add the Google Calendar API service to the Tasks script (README, "Birthdays")')
